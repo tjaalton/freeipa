@@ -35,5 +35,7 @@ freeipa (3.1.2-1) UNRELEASED; urgency=low
     platform specific path.
   * fix-install-layout.diff: Pass an option to setup-client.py to
     install the python bits to the correct path.
+  * fix-ntpdate-opts.diff: Drop -U from nptdate opts, we don't have
+    that.
 
  -- Timo Aaltonen <tjaalton@ubuntu.com>  Tue, 01 Nov 2011 10:52:25 -0400
