@@ -76,7 +76,7 @@ Date:   Fri Oct 28 15:57:04 2011 +0300
 +    def is_enabled(self):
 +        ret = True
 +        try:
-+            (sout,serr,rcode) = ipautil.run(["/sbin/chkconfig", self.service_name])
++            (sout,serr,rcode) = ipautil.run(["/usr/sbin/service", self.service_name, "status"])
 +            if sout.find("off") >= 0:
 +                ret = False
 +            if sout.find("unknown service") >= 0:
@@ -86,16 +86,16 @@ Date:   Fri Oct 28 15:57:04 2011 +0300
 +        return ret
 +
 +    def enable(self):
-+        ipautil.run(["/sbin/chkconfig", self.service_name, "on"])
++        return True
 +
 +    def disable(self):
-+        ipautil.run(["/sbin/chkconfig", self.service_name, "off"])
++        return True
 +
 +    def install(self):
-+        ipautil.run(["/sbin/chkconfig", "--add", self.service_name])
++        return True
 +
 +    def remove(self):
-+        ipautil.run(["/sbin/chkconfig", "--del", self.service_name])
++        return True
 +
 +class DebianAuthConfig(base.AuthConfig):
 +    """
