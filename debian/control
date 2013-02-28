@@ -99,7 +99,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  ntp,
  python-ldap,
  python-krbv,
- sssd (>= 1.8.0),
+ sssd (>= 1.9.2),
  wget,
 Suggests:
  libpam-krb5,
