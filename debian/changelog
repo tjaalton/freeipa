@@ -11,7 +11,6 @@ freeipa (3.1.2-1) UNRELEASED; urgency=low
   * Migrate to source format 3.0 (quilt).
   * Migrate to dh.
   * Fix dependencies.
-  * Add add_debian.py.patch, platform support code.
   * Add no-testcert.patch to not fail make-testcert.
   * Bump compat and debhelper build-depends to 9.
   * Add missing files to freeipa.install.
@@ -37,5 +36,6 @@ freeipa (3.1.2-1) UNRELEASED; urgency=low
     install the python bits to the correct path.
   * fix-ntpdate-opts.diff: Drop -U from nptdate opts, we don't have
     that.
+  * Add support for Debian platform.
 
  -- Timo Aaltonen <tjaalton@ubuntu.com>  Tue, 01 Nov 2011 10:52:25 -0400
