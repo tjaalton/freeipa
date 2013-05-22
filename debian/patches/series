@@ -10,5 +10,4 @@ fix-ntpdate-opts.diff
 fix-symlink-exclusion.diff
 fix-ldap-conf-path.diff
 check-dbus-before-starting.diff
-convert-base-platform.diff
 add-debian-platform.diff
