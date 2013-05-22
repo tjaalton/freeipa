@@ -1,6 +1,6 @@
 --- a/Makefile
 +++ b/Makefile
-@@ -76,9 +76,9 @@ client-install: client client-dirs
+@@ -82,9 +82,9 @@ client-install: client client-dirs
  	done
  	cd install/po && $(MAKE) install || exit 1;
  	if [ "$(DESTDIR)" = "" ]; then \

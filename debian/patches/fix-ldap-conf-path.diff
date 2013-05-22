@@ -1,13 +1,11 @@
-Index: freeipa/ipa-client/ipa-install/ipa-client-install
-===================================================================
---- freeipa.orig/ipa-client/ipa-install/ipa-client-install	2013-02-12 23:09:34.000000000 +0000
-+++ freeipa/ipa-client/ipa-install/ipa-client-install	2013-02-21 01:19:38.000000000 +0000
-@@ -770,7 +770,7 @@
-             {'name':'TLS_CACERT', 'type':'option', 'value':CACERT},
-             {'name':'empty', 'type':'empty'}]
+--- a/ipa-client/ipa-install/ipa-client-install
++++ b/ipa-client/ipa-install/ipa-client-install
+@@ -854,7 +854,7 @@ def configure_openldap_conf(fstore, cli_
+             {'action':'addifnotset', 'name':'TLS_CACERT', 'type':'option',
+                 'value':CACERT},]
  
 -    target_fname = '/etc/openldap/ldap.conf'
 +    target_fname = '/etc/ldap/ldap.conf'
      fstore.backup_file(target_fname)
-     ldapconf.newConf(target_fname, opts)
-     os.chmod(target_fname, 0644)
+ 
+     error_msg = "Configuring {path} failed with: {err}"

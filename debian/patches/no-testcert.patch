@@ -7,7 +7,7 @@ they need a working certificate server running
 
 --- a/Makefile
 +++ b/Makefile
-@@ -96,7 +96,7 @@ lint: bootstrap-autogen
+@@ -102,7 +102,7 @@ lint: bootstrap-autogen
  
  
  test:

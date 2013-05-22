@@ -5,7 +5,7 @@ use the debian layout when installing python modules
 
 --- a/Makefile
 +++ b/Makefile
-@@ -140,7 +140,7 @@ server-install: server
+@@ -146,7 +146,7 @@ server-install: server
  	if [ "$(DESTDIR)" = "" ]; then \
  		$(PYTHON) setup.py install; \
  	else \

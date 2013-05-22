@@ -1,6 +1,6 @@
 --- a/Makefile
 +++ b/Makefile
-@@ -44,7 +44,7 @@ ifneq ($(DEVELOPER_MODE),0)
+@@ -50,7 +50,7 @@ ifneq ($(DEVELOPER_MODE),0)
  LINT_OPTIONS=--no-fail
  endif
  
