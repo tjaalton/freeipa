@@ -1,4 +1,4 @@
-freeipa (3.2.0-1) UNRELEASED; urgency=low
+freeipa (3.2.1-1) UNRELEASED; urgency=low
 
   [ Michele Baldessari ]
   * Initial release (Closes: #12345)
