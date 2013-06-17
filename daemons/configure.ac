@@ -22,37 +22,10 @@ AM_CONDITIONAL([HAVE_GCC], [test "$ac_cv_prog_gcc" = yes])
 AC_SUBST(VERSION)
 
 dnl ---------------------------------------------------------------------------
-dnl - Check for NSPR
+dnl - Check for NSPR/NSS
 dnl ---------------------------------------------------------------------------
-AC_CHECK_HEADER(nspr4/nspr.h)
-AC_CHECK_HEADER(nspr/nspr.h)
-if test "x$ac_cv_header_nspr4_nspr_h" = "xno" && test "x$ac_cv_header_nspr_nspr_h" = "xno" ; then
-	AC_MSG_ERROR([Required NSPR header not available (nspr-devel)])
-fi
-if test "x$ac_cv_header_nspr4_nspr_h" = "xyes" ; then
-	NSPR4="-I/usr/include/nspr4"
-fi
-if test "x$ac_cv_header_nspr_nspr_h" = "xyes" ; then
-	NSPR4="-I/usr/include/nspr"
-fi
-
-dnl ---------------------------------------------------------------------------
-dnl - Check for NSS
-dnl ---------------------------------------------------------------------------
-SAVE_CPPFLAGS=$CPPFLAGS
-CPPFLAGS=$NSPR4
-AC_CHECK_HEADER(nss3/nss.h)
-AC_CHECK_HEADER(nss/nss.h)
-CPPFLAGS=$SAVE_CPPFLAGS
-if test "x$ac_cv_header_nss3_nss_h" = "xno" && test "x$ac_cv_header_nss_nss_h" = "xno" ; then
-	AC_MSG_ERROR([Required NSS header not available (nss-devel)])
-fi
-if test "x$ac_cv_header_nss3_nss_h" = "xyes" ; then
-	NSS3="-I/usr/include/nss3"
-fi
-if test "x$ac_cv_header_nss_nss_h" = "xyes" ; then
-	NSS3="-I/usr/include/nss"
-fi
+PKG_CHECK_MODULES([NSPR], [nspr], [], [AC_MSG_ERROR([libnspr not found])])
+PKG_CHECK_MODULES([NSS], [nss], [], [AC_MSG_ERROR([libnss not found])])
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for DS slapi plugin
@@ -60,7 +33,7 @@ dnl ---------------------------------------------------------------------------
 
 # Need to hack CPPFLAGS to be able to correctly detetct slapi-plugin.h
 SAVE_CPPFLAGS=$CPPFLAGS
-CPPFLAGS=$NSPR4
+CPPFLAGS=$NSPR_CFLAGS
 AC_CHECK_HEADER(dirsrv/slapi-plugin.h)
 if test "x$ac_cv_header_dirsrv_slapi-plugin_h" = "xno" ; then
 	AC_MSG_ERROR([Required 389-ds header not available (389-ds-base-devel)])
@@ -79,70 +52,24 @@ dnl ---------------------------------------------------------------------------
 dnl - Check for KRB5
 dnl ---------------------------------------------------------------------------
 
-KRB5_LIBS=
 AC_CHECK_HEADER(krb5.h, [], [AC_MSG_ERROR([krb5.h not found])])
-
-krb5_impl=mit
-
-if test "x$ac_cv_header_krb5_h" = "xyes" ; then
-  dnl lazy check for Heimdal Kerberos
-  AC_CHECK_HEADERS(heim_err.h)
-  if test $ac_cv_header_heim_err_h = yes ; then
-    krb5_impl=heimdal
-  else
-    krb5_impl=mit
-  fi
-
-  if test "x$krb5_impl" = "xmit"; then
-    AC_CHECK_LIB(k5crypto, main,
-      [krb5crypto=k5crypto],
-      [krb5crypto=crypto])
-
-    AC_CHECK_LIB(krb5, main,
-      [have_krb5=yes
-	KRB5_LIBS="-lkrb5 -l$krb5crypto -lcom_err"],
-      [have_krb5=no],
-      [-l$krb5crypto -lcom_err])
-
-  elif test "x$krb5_impl" = "xheimdal"; then
-    AC_CHECK_LIB(des, main,
-      [krb5crypto=des],
-      [krb5crypto=crypto])
-
-    AC_CHECK_LIB(krb5, main,
-      [have_krb5=yes
-	KRB5_LIBS="-lkrb5 -l$krb5crypto -lasn1 -lroken -lcom_err"],
-      [have_krb5=no],
-      [-l$krb5crypto -lasn1 -lroken -lcom_err])
-
-    AC_DEFINE(HAVE_HEIMDAL_KERBEROS, 1,
-      [define if you have HEIMDAL Kerberos])
-
-  else
-    have_krb5=no
-    AC_MSG_WARN([Unrecognized Kerberos5 Implementation])
-  fi
-
-  if test "x$have_krb5" = "xyes" ; then
-    ol_link_krb5=yes
-
-    AC_DEFINE(HAVE_KRB5, 1,
-      [define if you have Kerberos V])
-
-  else
-    AC_MSG_ERROR([Required Kerberos 5 support not available])
-  fi
-
-fi
-
+AC_CHECK_HEADER(krad.h, [], [AC_MSG_ERROR([krad.h not found])])
+AC_CHECK_LIB(krb5, main, [], [AC_MSG_ERROR([libkrb5 not found])])
+AC_CHECK_LIB(k5crypto, main, [krb5crypto=k5crypto], [krb5crypto=crypto])
+AC_CHECK_LIB(krad, main, [], [AC_MSG_ERROR([libkrad not found])])
+KRB5_LIBS="-lkrb5 -l$krb5crypto -lcom_err"
+KRAD_LIBS="-lkrad"
+krb5kdcdir="${localstatedir}/kerberos/krb5kdc"
 AC_SUBST(KRB5_LIBS)
+AC_SUBST(KRAD_LIBS)
+AC_SUBST(krb5kdcdir)
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for Mozilla LDAP and OpenLDAP SDK
 dnl ---------------------------------------------------------------------------
 
 SAVE_CPPFLAGS=$CPPFLAGS
-CPPFLAGS="$NSPR4 $NSS3"
+CPPFLAGS="$NSPR_CFLAGS $NSS_CFLAGS"
 AC_CHECK_HEADER(svrcore.h)
 AC_CHECK_HEADER(svrcore/svrcore.h)
 if test "x$ac_cv_header_svrcore_h" = "xno" && test "x$ac_cv_header_svrcore_svrcore_h" = "xno" ; then
@@ -190,7 +117,7 @@ AC_ARG_WITH([openldap],
                             [compile plugins with openldap instead of mozldap])],
             [], [])
 
-LDAP_CFLAGS="${OPENLDAP_CFLAGS} $NSPR4 $NSS3 -DUSE_OPENLDAP"
+LDAP_CFLAGS="${OPENLDAP_CFLAGS} $NSPR_CFLAGS $NSS_CFLAGS -DUSE_OPENLDAP"
 LDAP_LIBS="${OPENLDAP_LIBS}"
 AC_DEFINE_UNQUOTED(WITH_OPENLDAP, 1, [Use OpenLDAP libraries])
 
@@ -263,6 +190,11 @@ AC_CHECK_LIB([pdb],[pdb_enum_upn_suffixes],
              [$SAMBA40EXTRA_LIBPATH])
 
 dnl ---------------------------------------------------------------------------
+dnl Check for libverto
+dnl ---------------------------------------------------------------------------
+PKG_CHECK_MODULES([LIBVERTO], [libverto])
+
+dnl ---------------------------------------------------------------------------
 dnl - Check for check unit test framework http://check.sourceforge.net/
 dnl ---------------------------------------------------------------------------
 PKG_CHECK_MODULES([CHECK], [check >= 0.9.5], [have_check=1], [have_check=])
@@ -308,6 +240,20 @@ dnl -- dirsrv is needed for the extdom unit tests --
 PKG_CHECK_MODULES([DIRSRV], [dirsrv  >= 1.3.0])
 dnl -- sss_idmap is needed by the extdom exop --
 PKG_CHECK_MODULES([SSSIDMAP], [sss_idmap])
+
+dnl ---------------------------------------------------------------------------
+dnl - Check for systemd unit directory
+dnl ---------------------------------------------------------------------------
+PKG_CHECK_EXISTS([systemd], [], [AC_MSG_ERROR([systemd not found])])
+AC_ARG_WITH([systemdsystemunitdir],
+            AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
+            [], [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
+AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
+
+dnl ---------------------------------------------------------------------------
+dnl - Check for program paths
+dnl ---------------------------------------------------------------------------
+AC_PATH_PROG(UNLINK, unlink, [AC_MSG_ERROR([unlink not found])])
 
 dnl ---------------------------------------------------------------------------
 dnl - Set the data install directory since we don't use pkgdatadir
@@ -373,6 +319,7 @@ AC_CONFIG_FILES([
     Makefile
     ipa-kdb/Makefile
     ipa-sam/Makefile
+    ipa-otpd/Makefile
     ipa-slapi-plugins/Makefile
     ipa-slapi-plugins/ipa-cldap/Makefile
     ipa-slapi-plugins/ipa-dns/Makefile
@@ -394,19 +341,22 @@ echo "
                     IPA Server $VERSION
                     ========================
 
-	prefix:                   ${prefix}
-	exec_prefix:              ${exec_prefix}
+        prefix:                   ${prefix}
+        exec_prefix:              ${exec_prefix}
         libdir:                   ${libdir}
         bindir:                   ${bindir}
         sbindir:                  ${sbindir}
         sysconfdir:               ${sysconfdir}
         localstatedir:            ${localstatedir}
         datadir:                  ${datadir}
-	source code location:	  ${srcdir}
-	compiler:		  ${CC}
-	cflags:		          ${CFLAGS}
+        krb5kdcdir:               ${krb5kdcdir}
+        systemdsystemunitdir:     ${systemdsystemunitdir}
+        source code location:     ${srcdir}
+        compiler:                 ${CC}
+        cflags:                   ${CFLAGS}
         LDAP libs:                ${LDAP_LIBS}
         KRB5 libs:                ${KRB5_LIBS}
+        KRAD libs:                ${KRAD_LIBS}
         OpenSSL libs:             ${SSL_LIBS}
         Maintainer mode:          ${USE_MAINTAINER_MODE}
 "

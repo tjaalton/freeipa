@@ -30,10 +30,11 @@ define([
         './jquery',
         './phases',
         './reg',
+        './spec_util',
         './text',
         './facet',
         './add'],
-    function(lang, builder, IPA, $, phases, reg, text) {
+    function(lang, builder, IPA, $, phases, reg, su, text) {
 
 var exp = {};
 
@@ -241,10 +242,15 @@ exp.facet_policies = IPA.facet_policies = function(spec) {
     return that;
 };
 
-exp.details_facet = IPA.details_facet = function(spec, no_init) {
+exp.details_facet_pre_op = function(spec, context) {
 
-    spec = spec || {};
+    var entity = context.entity;
+    su.context_entity(spec, context);
+
     spec.name = spec.name || 'details';
+    spec.title = spec.title || entity.metadata.label_singular;
+    spec.label = spec.label || entity.metadata.label_singular;
+    spec.tab_label = spec.tab_label || '@i18n:facets.details';
 
     spec.actions = spec.actions || [];
     spec.actions.unshift(
@@ -277,6 +283,12 @@ exp.details_facet = IPA.details_facet = function(spec, no_init) {
     spec.state = spec.state || {};
     spec.state.evaluators = spec.state.evaluators || [];
     spec.state.evaluators.push(IPA.dirty_state_evaluator);
+    return spec;
+};
+
+exp.details_facet = IPA.details_facet = function(spec, no_init) {
+
+    spec = spec || {};
 
     var that = IPA.facet(spec, true);
 
@@ -1221,6 +1233,7 @@ exp.disabled_summary_cond = IPA.disabled_summary_cond = function() {
 
 exp.register = function() {
     var a = reg.action;
+    var f = reg.facet;
 
     a.register('select', exp.select_action);
     a.register('refresh', exp.refresh_action);
@@ -1230,6 +1243,14 @@ exp.register = function() {
     a.register('enable', exp.enable_action);
     a.register('disable', exp.disable_action);
     a.register('delete', exp.delete_action);
+
+    f.register({
+        type: 'details',
+        factory: IPA.details_facet,
+        pre_ops: [
+            exp.details_facet_pre_op
+        ]
+    });
 };
 
 phases.on('registration', exp.register);

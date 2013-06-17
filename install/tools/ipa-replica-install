@@ -35,10 +35,11 @@ from ipapython import ipautil
 from ipaserver.install import dsinstance, installutils, krbinstance, service
 from ipaserver.install import bindinstance, httpinstance, ntpinstance, certs
 from ipaserver.install import memcacheinstance
+from ipaserver.install import otpdinstance
 from ipaserver.install.replication import replica_conn_check, ReplicationManager
-from ipaserver.install.installutils import HostnameLocalhost, resolve_host
-from ipaserver.install.installutils import ReplicaConfig, expand_replica_info, read_replica_info
-from ipaserver.install.installutils import get_host_name, BadHostError
+from ipaserver.install.installutils import (HostnameLocalhost, resolve_host,
+        ReplicaConfig, expand_replica_info, read_replica_info ,get_host_name,
+        BadHostError, private_ccache)
 from ipaserver.plugins.ldap2 import ldap2
 from ipaserver.install import cainstance
 from ipalib import api, errors, util
@@ -672,6 +673,11 @@ def main():
 
     krb = install_krb(config, setup_pkinit=options.setup_pkinit)
     http = install_http(config, auto_redirect=options.ui_redirect)
+
+    otpd = otpdinstance.OtpdInstance()
+    otpd.create_instance('OTPD', config.host_name, config.dirman_password,
+                         ipautil.realm_to_suffix(config.realm_name))
+
     if CA:
         CA.configure_certmonger_renewal()
         CA.import_ra_cert(dir + "/ra.p12")
@@ -731,9 +737,10 @@ Run /usr/sbin/ipa-server-install --uninstall to clean up.
 
 if __name__ == '__main__':
     try:
-        installutils.run_script(main, log_file_name=log_file_name,
-                operation_name='ipa-replica-install',
-                fail_message=fail_message)
+        with private_ccache():
+            installutils.run_script(main, log_file_name=log_file_name,
+                    operation_name='ipa-replica-install',
+                    fail_message=fail_message)
     finally:
         # always try to remove decrypted replica file
         try:

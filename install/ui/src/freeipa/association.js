@@ -24,15 +24,21 @@
 
 define([
     'dojo/Deferred',
+    './metadata',
     './ipa',
     './jquery',
     './navigation',
     './phases',
     './reg',
+    './spec_util',
     './text',
+    './facet',
     './search',
     './dialog'],
-        function(Deferred, IPA, $, navigation, phases, reg, text) {
+        function(Deferred, metadata_provider, IPA, $, navigation,
+                 phases, reg, su, text) {
+
+var exp = {};
 
 IPA.associator = function (spec) {
 
@@ -760,16 +766,53 @@ IPA.association_table_field = function (spec) {
     return that;
 };
 
-IPA.association_facet = function (spec, no_init) {
+exp.association_facet_pre_op = function(spec, context) {
 
-    spec = spec || {};
+    var has_indirect_attribute_member = function(spec) {
 
-    /*
-       Link parameter is used to turn off the links in selfservice mode.
+        var indirect_members = entity.metadata.attribute_members[spec.attribute_member + 'indirect'];
+        var has_indirect = !!(indirect_members && indirect_members.indexOf(spec.other_entity) > -1);
+        return has_indirect;
+    };
+
+    var entity = context.entity;
+    su.context_entity(spec, context);
+    spec.entity = entity;
+
+    var index = spec.name.indexOf('_');
+    spec.attribute_member = spec.attribute_member ||
+        spec.name.substring(0, index);
+    spec.other_entity = spec.other_entity ||
+        spec.name.substring(index+1);
+
+    spec.add_title = '@i18n:association.add.'+spec.attribute_member;
+    spec.remove_title = '@i18n:association.remove.'+spec.attribute_member;
+
+    spec.facet_group = spec.facet_group || spec.attribute_member;
+
+    spec.label = spec.label || entity.metadata.label_singular;
+
+    spec.tab_label = spec.tab_label ||
+                    metadata_provider.get('@mo:'+spec.other_entity+'.label') ||
+                    spec.other_entity;
+
+    if (has_indirect_attribute_member(spec)) {
+
+        spec.indirect_attribute_member = spec.attribute_member + 'indirect';
+    }
+
+    if (spec.facet_group === 'memberindirect' ||
+        spec.facet_group === 'memberofindirect') {
+
+        spec.read_only = true;
+    }
+
+     /*
+       Link parameter is used to turn off the links in self-service mode.
        Default it to true if not set so that facets that would not otherwise
        link by default get links set.
 
-       link must be set before the call to the base class, to affect the  table.
+       link must be set before the call to the base class, to affect the table.
      */
     spec.link = spec.link === undefined ? true : spec.link;
     spec.managed_entity = IPA.get_entity(spec.other_entity);
@@ -822,6 +865,19 @@ IPA.association_facet = function (spec, no_init) {
         IPA.selected_state_evaluator,
         IPA.association_type_state_evaluator,
         IPA.read_only_state_evaluator);
+
+    entity.policies.add_policy(IPA.build({
+        $factory: IPA.facet_update_policy,
+        source_facet: 'search',
+        dest_facet: spec.name
+    }));
+
+    return spec;
+};
+
+exp.association_facet = IPA.association_facet = function (spec, no_init) {
+
+    spec = spec || {};
 
     var that = IPA.table_facet(spec, true);
 
@@ -1025,10 +1081,22 @@ IPA.association_facet = function (spec, no_init) {
                 other_entity: that.other_entity,
                 values: dialog.get_selected_values(),
                 method: that.add_method,
-                on_success: function() {
+                on_success: function(data) {
                     that.refresh();
                     dialog.close();
-                    IPA.notify_success('@i18n:association.added');
+                    var succeeded = data.result.completed;
+
+                    if (!succeeded) {
+                        succeeded = 0;
+                        for (var i = 0; i< data.result.results.length; i++) {
+                            if (data.result.results[i].completed === 1) {
+                                succeeded++;
+                            }
+                        }
+                    }
+
+                    var msg = text.get('@i18n:association.added').replace('${count}', succeeded);
+                    IPA.notify_success(msg);
                 },
                 on_error: function() {
                     that.refresh();
@@ -1077,9 +1145,22 @@ IPA.association_facet = function (spec, no_init) {
                 other_entity: that.other_entity,
                 values: values,
                 method: that.remove_method,
-                on_success: function() {
+                on_success: function(data) {
                     that.refresh();
-                    IPA.notify_success('@i18n:association.removed');
+
+                    var succeeded = data.result.completed;
+
+                    if (!succeeded) {
+                        succeeded = 0;
+                        for (var i = 0; i< data.result.results.length; i++) {
+                            if (data.result.results[i].completed === 1) {
+                                succeeded++;
+                            }
+                        }
+                    }
+
+                    var msg = text.get('@i18n:association.removed').replace('${count}', succeeded);
+                    IPA.notify_success(msg);
                 },
                 on_error: function() {
                     that.refresh();
@@ -1156,9 +1237,22 @@ IPA.association_facet = function (spec, no_init) {
     return that;
 };
 
-IPA.attribute_facet = function(spec, no_init) {
+exp.attribute_facet_pre_op = function(spec, context) {
 
-    spec = spec || {};
+    var entity = context.entity;
+    su.context_entity(spec, context);
+
+    spec.title = spec.title || entity.metadata.label_singular;
+    spec.label = spec.label || entity.metadata.label_singular;
+
+    var attr_metadata = IPA.get_entity_param(entity.name, spec.attribute);
+    spec.tab_label = spec.tab_label || attr_metadata.label;
+
+    entity.policies.add_policy(IPA.build({
+        $factory: IPA.facet_update_policy,
+        source_facet: 'search',
+        dest_facet: spec.name
+    }));
 
     //default buttons and their actions
     spec.actions = spec.actions || [];
@@ -1211,6 +1305,13 @@ IPA.attribute_facet = function(spec, no_init) {
 
     spec.columns = spec.columns || [ spec.attribute ];
     spec.table_name = spec.table_name || spec.attribute;
+
+    return spec;
+};
+
+exp.attribute_facet = IPA.attribute_facet = function(spec, no_init) {
+
+    spec = spec || {};
 
     var that = IPA.table_facet(spec, true);
 
@@ -1447,10 +1548,27 @@ IPA.attr_read_only_evaluator = function(spec) {
 phases.on('registration', function() {
     var w = reg.widget;
     var f = reg.field;
+    var fa = reg.facet;
 
     w.register('association_table', IPA.association_table_widget);
     f.register('association_table', IPA.association_table_field);
+
+    fa.register({
+        type: 'association',
+        factory: exp.association_facet,
+        pre_ops: [
+            exp.association_facet_pre_op
+        ]
+    });
+
+    fa.register({
+        type: 'attribute',
+        factory: exp.attribute_facet,
+        pre_ops: [
+            exp.attribute_facet_pre_op
+        ]
+    });
 });
 
-return {};
+return exp;
 });

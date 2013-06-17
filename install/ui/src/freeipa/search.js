@@ -26,23 +26,14 @@ define([
         './jquery',
         './phases',
         './reg',
+        './spec_util',
         './text',
         './facet'],
-    function(IPA, $, phases, reg, text) {
+    function(IPA, $, phases, reg, su, text, mod_facet) {
 
 var exp = {};
 
-IPA.search_facet = function(spec, no_init) {
-
-    spec = spec || {};
-
-    spec.name = spec.name || 'search';
-    spec.managed_entity = spec.managed_entity ? IPA.get_entity(spec.managed_entity) : spec.entity;
-
-    spec.disable_breadcrumb =
-        spec.disable_breadcrumb === undefined ? true : spec.disable_breadcrumb;
-    spec.disable_facet_tabs =
-        spec.disable_facet_tabs === undefined ? true : spec.disable_facet_tabs;
+exp.search_facet_control_buttons_pre_op = function(spec, context) {
 
     spec.actions = spec.actions || [];
     spec.actions.unshift(
@@ -77,6 +68,33 @@ IPA.search_facet = function(spec, no_init) {
     spec.state.evaluators.push(
         IPA.selected_state_evaluator,
         IPA.self_service_state_evaluator);
+    return spec;
+};
+
+exp.search_facet_pre_op = function(spec, context) {
+
+    var entity = context.entity;
+    su.context_entity(spec, context);
+
+    spec.name = spec.name || 'search';
+    spec.title = spec.title || entity.metadata.label;
+    spec.label = spec.label || entity.metadata.label;
+    spec.tab_label = spec.tab_label || '@i18n:facets.search';
+
+    spec.managed_entity = spec.managed_entity ? IPA.get_entity(spec.managed_entity) : spec.entity;
+
+    spec.disable_breadcrumb =
+        spec.disable_breadcrumb === undefined ? true : spec.disable_breadcrumb;
+    spec.disable_facet_tabs =
+        spec.disable_facet_tabs === undefined ? true : spec.disable_facet_tabs;
+
+    exp.search_facet_control_buttons_pre_op(spec, context);
+    return spec;
+};
+
+IPA.search_facet = function(spec, no_init) {
+
+    spec = spec || {};
 
     var that = IPA.table_facet(spec, true);
 
@@ -337,7 +355,9 @@ IPA.search_deleter_dialog = function(spec) {
         batch.on_success = function(data, text_status, xhr) {
             that.facet.refresh();
             that.facet.on_update.notify([],that.facet);
-            IPA.notify_success('@i18n:search.deleted');
+            var succeeded = batch.commands.length - batch.errors.errors.length;
+            var msg = text.get('@i18n:search.deleted').replace('${count}', succeeded);
+            IPA.notify_success(msg);
         };
 
         batch.on_error = function() {
@@ -352,16 +372,30 @@ IPA.search_deleter_dialog = function(spec) {
     return that;
 };
 
-/*TODO.  this has much copied code from above.  Refactor the search_facet
-To either be nested or not nested. */
-IPA.nested_search_facet = function(spec) {
+exp.nested_search_facet_preop = function(spec, context) {
 
-    spec = spec || {};
+    var entity = context.entity;
+    su.context_entity(spec, context);
 
-    spec.managed_entity = IPA.get_entity(spec.nested_entity);
+    spec.name = spec.name || 'search';
+    spec.title = spec.title || entity.metadata.label_singular;
+    spec.label = spec.label || entity.metadata.label;
+    spec.tab_label = spec.tab_label || '@i18n:facets.search';
+
+    spec.managed_entity = spec.nested_entity;
 
     spec.disable_breadcrumb = false;
     spec.disable_facet_tabs = false;
+
+    exp.search_facet_control_buttons_pre_op(spec, context);
+    return spec;
+};
+
+/*TODO.  this has much copied code from above.  Refactor the search_facet
+To either be nested or not nested. */
+exp.nested_search_facet = IPA.nested_search_facet = function(spec) {
+
+    spec = spec || {};
 
     var that = IPA.search_facet(spec);
 
@@ -514,12 +548,29 @@ IPA.batch_enable_action = function(spec) {
 exp.register = function() {
 
     var a = reg.action;
+    var f = reg.facet;
 
     a.register('batch_remove', IPA.batch_remove_action);
     a.register('add', IPA.add_action);
     a.register('batch_items', IPA.batch_items_action);
     a.register('batch_disable', IPA.batch_disable_action);
     a.register('batch_enable', IPA.batch_enable_action);
+
+    f.register({
+        type: 'search',
+        factory: IPA.search_facet,
+        pre_ops: [
+            exp.search_facet_pre_op
+        ]
+    });
+
+    f.register({
+        type: 'nested_search',
+        factory: IPA.nested_search_facet,
+        pre_ops: [
+            exp.nested_search_facet_preop
+        ]
+    });
 };
 
 phases.on('registration', exp.register);

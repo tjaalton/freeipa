@@ -19,7 +19,7 @@
  */
 
 define([
-    'freeipa/_base/metadata_provider',
+    'freeipa/metadata',
     'freeipa/ipa',
     'freeipa/jquery',
     'freeipa/details',
@@ -37,14 +37,6 @@ var details_container;
 module('details', {
     setup: function() {
         IPA.ajax_options.async = false;
-
-        reg.facet.register({
-            type: 'details',
-            factory: IPA.details_facet,
-            pre_ops: [
-                mod_facet.facet_preops.details
-            ]
-        });
 
         mod_facet.register();
         mod_details.register();
