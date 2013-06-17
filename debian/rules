@@ -65,7 +65,7 @@ endif
 	# fix permissions
 	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
 
-	dh_install --list-missing
+	dh_install --fail-missing
 
 %:
 	dh $@ --with quilt,autoreconf,python2

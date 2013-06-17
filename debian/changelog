@@ -14,7 +14,7 @@ freeipa (3.2.0-1) UNRELEASED; urgency=low
   * Add no-testcert.patch to not fail make-testcert.
   * Bump compat and debhelper build-depends to 9.
   * Add missing files to freeipa.install.
-  * Add --list-missing for dh_install.
+  * Add --fail-missing for dh_install.
   * copyright: Updated, with OpenSSL exception.
   * control: Add python-libipa-hbac to build-depends.
   * control: Add ${shlibs:Depends} to python-freeipa depends.
