@@ -1,2 +1,2 @@
 version=3
-http://freeipa.org/downloads/src/freeipa-(.*)\.tar\.gz
+http://freeipa.org/page/Downloads http://freeipa.org/downloads/src/freeipa-(.+).tar.gz
