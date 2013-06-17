@@ -11,3 +11,4 @@ fix-symlink-exclusion.diff
 fix-ldap-conf-path.diff
 check-dbus-before-starting.diff
 add-debian-platform.diff
+port-ipa-client-automount.diff

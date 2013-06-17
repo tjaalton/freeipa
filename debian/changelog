@@ -37,6 +37,7 @@ freeipa (3.2.0-1) UNRELEASED; urgency=low
   * fix-ntpdate-opts.diff: Drop -U from nptdate opts, we don't have
     that.
   * Add support for Debian platform.
+  * port-ipa-client-automount.diff: Patch i-c-a so it works on Debian.
 
   [ Nick Hatch ]
   * Added three patches
