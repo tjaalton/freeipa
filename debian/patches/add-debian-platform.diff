@@ -73,7 +73,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        raise NotImplementedError
 --- /dev/null
 +++ b/ipapython/platform/debian/service.py
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,107 @@
 +import time
 +
 +from ipapython import ipautil
@@ -97,11 +97,19 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    def stop(self, instance_name='', capture_output=True):
 +        ipautil.run(["/usr/sbin/service", self.service_name, "stop",
 +                     instance_name], capture_output=capture_output)
++        if 'context' in api.env and api.env.context in ['ipactl', 'installer']:
++            update_service_list = True
++        else:
++            update_service_list = False
 +        super(DebianService, self).stop(instance_name)
 +
 +    def start(self, instance_name='', capture_output=True, wait=True):
 +        ipautil.run(["/usr/sbin/service", self.service_name, "start",
 +                     instance_name], capture_output=capture_output)
++        if 'context' in api.env and api.env.context in ['ipactl', 'installer']:
++            update_service_list = True
++        else:
++            update_service_list = False
 +        if wait and self.is_running(instance_name):
 +            self.__wait_for_open_ports(instance_name)
 +        super(DebianService, self).start(instance_name)
