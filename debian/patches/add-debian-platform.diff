@@ -52,7 +52,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +check_selinux_status = redhat.check_selinux_status
 --- /dev/null
 +++ b/ipapython/platform/debian/auth.py
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,42 @@
 +from ipapython.platform import base
 +
 +class DebianAuthConfig(base.AuthConfig):
@@ -69,8 +69,32 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    and making the best out of the rest of them.
 +    """
 +
++    def __build_args(self):
++        args = ['--force']
++        for (option, value) in self.parameters.items():
++            if option == "sssdauth":
++                option = "sss"
++            # only sssd supported, filter the dupe
++            elif option in ["sssd", "krb5", "ldap", "update"]:
++                 option = ""
++            if type(value) is bool:
++                if value:
++                    if not "package" in args:
++                        args.append("--package %s" % (option))
++                    else:
++                        args.append("%s" % (option))
++                else:
++                    if not any("remove" in s for s in args):
++                        args.append("--remove %s" % (option))
++                    else:
++                        args.append("%s" % (option))
++
++
 +    def execute(self):
-+        raise NotImplementedError
++        env = "DEBCONF_FRONTEND=noninteractive"
++        args = self.__build_args()
++        ipautil.run(["/usr/sbin/pam-auth-update"]+args,env)
++
 --- /dev/null
 +++ b/ipapython/platform/debian/service.py
 @@ -0,0 +1,107 @@
