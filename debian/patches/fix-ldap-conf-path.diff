@@ -1,0 +1,11 @@
+--- a/ipa-client/ipa-install/ipa-client-install
++++ b/ipa-client/ipa-install/ipa-client-install
+@@ -854,7 +854,7 @@ def configure_openldap_conf(fstore, cli_
+             {'action':'addifnotset', 'name':'TLS_CACERT', 'type':'option',
+                 'value':CACERT},]
+ 
+-    target_fname = '/etc/openldap/ldap.conf'
++    target_fname = '/etc/ldap/ldap.conf'
+     fstore.backup_file(target_fname)
+ 
+     error_msg = "Configuring {path} failed with: {err}"
