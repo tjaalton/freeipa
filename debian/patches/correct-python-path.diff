@@ -7,5 +7,5 @@
 -PYTHON ?= $(shell rpm -E %__python)
 +PYTHON ?= $(shell rpm -E %__python || echo /usr/bin/python)
  
- all: bootstrap-autogen server
+ all: bootstrap-autogen server tests
  	@for subdir in $(SUBDIRS); do \
