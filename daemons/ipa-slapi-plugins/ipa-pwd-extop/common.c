@@ -366,7 +366,6 @@ static struct ipapwd_krbcfg *ipapwd_getConfig(void)
     slapi_entry_free(config_entry);
 
     /* get the ipa etc/ipaConfig entry */
-    config->allow_lm_hash = false;
     config->allow_nt_hash = false;
     ret = ipapwd_getEntry(ipa_etc_config_dn, &config_entry, NULL);
     if (ret != LDAP_SUCCESS) {
@@ -376,10 +375,6 @@ static struct ipapwd_krbcfg *ipapwd_getConfig(void)
         tmparray = slapi_entry_attr_get_charray(config_entry,
                                                 "ipaConfigString");
         for (i = 0; tmparray && tmparray[i]; i++) {
-            if (strcasecmp(tmparray[i], "AllowLMhash") == 0) {
-                config->allow_lm_hash = true;
-                continue;
-            }
             if (strcasecmp(tmparray[i], "AllowNThash") == 0) {
                 config->allow_nt_hash = true;
                 continue;
@@ -755,6 +750,7 @@ done:
 int ipapwd_CheckPolicy(struct ipapwd_data *data)
 {
     struct ipapwd_policy pol = {0};
+    struct ipapwd_policy tmppol = {0};
     time_t acct_expiration;
     time_t pwd_expiration;
     time_t last_pwd_change;
@@ -765,11 +761,8 @@ int ipapwd_CheckPolicy(struct ipapwd_data *data)
     pol.max_pwd_life = IPAPWD_DEFAULT_PWDLIFE;
     pol.min_pwd_length = IPAPWD_DEFAULT_MINLEN;
 
-    if (data->changetype != IPA_CHANGETYPE_NORMAL) {
-        /* We must skip policy checks (Admin change) but
-         * force a password change on the next login.
-         * But not if Directory Manager */
-        if (data->changetype == IPA_CHANGETYPE_ADMIN) {
+    switch(data->changetype) {
+        case IPA_CHANGETYPE_ADMIN:
             /* The expiration date needs to be older than the current time
              * otherwise the KDC may not immediately register the password
              * as expired. The last password change needs to match the
@@ -777,16 +770,32 @@ int ipapwd_CheckPolicy(struct ipapwd_data *data)
              */
             data->timeNow -= 1;
             data->expireTime = data->timeNow;
-        }
-
-        /* do not load policies */
-    } else {
-
-        /* find the entry with the password policy */
-        ret = ipapwd_getPolicy(data->dn, data->target, &pol);
-        if (ret) {
-            LOG_TRACE("No password policy, use defaults");
-        }
+            break;
+        case IPA_CHANGETYPE_NORMAL:
+            /* Find the entry with the password policy */
+            ret = ipapwd_getPolicy(data->dn, data->target, &pol);
+            if (ret) {
+                LOG_TRACE("No password policy, use defaults");
+            }
+            break;
+        case IPA_CHANGETYPE_DSMGR:
+            /* PassSync agents and Directory Manager can administratively
+             * change the password without expiring it.
+             *
+             * Find password policy for the entry to properly set expiration.
+             * Do not store it in resulting policy to avoid aplying password
+             * quality checks on administratively set passwords
+             */
+            ret = ipapwd_getPolicy(data->dn, data->target, &tmppol);
+            if (ret) {
+                LOG_TRACE("No password policy, use defaults");
+            } else {
+                pol.max_pwd_life = tmppol.max_pwd_life;
+            }
+            break;
+        default:
+            LOG_TRACE("Unknown password change type, use defaults");
+            break;
     }
 
     tmpstr = slapi_entry_attr_get_charptr(data->target,
@@ -914,7 +923,6 @@ int ipapwd_SetPassword(struct ipapwd_krbcfg *krbcfg,
     Slapi_Value **pwvals = NULL;
     struct tm utctime;
     char timestr[GENERALIZED_TIME_LENGTH+1];
-    char *lm = NULL;
     char *nt = NULL;
     int is_smb = 0;
     int is_ipant = 0;
@@ -951,7 +959,7 @@ int ipapwd_SetPassword(struct ipapwd_krbcfg *krbcfg,
     ret = ipapwd_gen_hashes(krbcfg, data,
                             data->password,
                             is_krb, is_smb, is_ipant,
-                            &svals, &nt, &lm, &ntvals, &errMesg);
+                            &svals, &nt, &ntvals, &errMesg);
     if (ret) {
         goto free_and_return;
     }
@@ -989,11 +997,6 @@ int ipapwd_SetPassword(struct ipapwd_krbcfg *krbcfg,
                               "krbPasswordExpiration", timestr);
 		}
 	}
-
-    if (lm && is_smb) {
-        slapi_mods_add_string(smods, LDAP_MOD_REPLACE,
-                              "sambaLMPassword", lm);
-    }
 
     if (nt && is_smb) {
         slapi_mods_add_string(smods, LDAP_MOD_REPLACE,
@@ -1055,7 +1058,6 @@ int ipapwd_SetPassword(struct ipapwd_krbcfg *krbcfg,
     LOG_TRACE("<= result: %d\n", ret);
 
 free_and_return:
-    if (lm) slapi_ch_free((void **)&lm);
     if (nt) slapi_ch_free((void **)&nt);
     if (modtime) slapi_ch_free((void **)&modtime);
     slapi_mods_free(&smods);

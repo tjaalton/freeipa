@@ -137,9 +137,8 @@ class ReplicaPrepare(admintool.AdminTool):
                 "could not find directory instance: %s" % config_dir)
 
     def check_pkcs12(self, pkcs12_file, pkcs12_pin):
-        pin_file = ipautil.write_tmp_file(pkcs12_pin)
         installutils.check_pkcs12(
-            pkcs12_info=(pkcs12_file, pin_file.name),
+            pkcs12_info=(pkcs12_file, pkcs12_pin),
             ca_file='/etc/ipa/ca.crt',
             hostname=self.replica_fqdn)
 
@@ -210,7 +209,7 @@ class ReplicaPrepare(admintool.AdminTool):
                 raise admintool.ScriptError("Invalid reverse zone")
 
         if options.http_pkcs12:
-            if not options.http_pin:
+            if options.http_pin is None:
                 options.http_pin = installutils.read_password(
                     "Enter %s unlock" % options.http_pkcs12,
                     confirm=False, validate=False)
@@ -220,7 +219,7 @@ class ReplicaPrepare(admintool.AdminTool):
             self.check_pkcs12(options.http_pkcs12, options.http_pin)
 
         if options.dirsrv_pkcs12:
-            if not options.dirsrv_pin:
+            if options.dirsrv_pin is None:
                 options.dirsrv_pin = installutils.read_password(
                     "Enter %s unlock" % options.dirsrv_pkcs12,
                     confirm=False, validate=False)
@@ -230,7 +229,7 @@ class ReplicaPrepare(admintool.AdminTool):
             self.check_pkcs12(options.dirsrv_pkcs12, options.dirsrv_pin)
 
         if options.pkinit_pkcs12:
-            if not options.pkinit_pin:
+            if options.pkinit_pin is None:
                 options.pkinit_pin = installutils.read_password(
                     "Enter %s unlock" % options.pkinit_pkcs12,
                     confirm=False, validate=False)
@@ -240,7 +239,7 @@ class ReplicaPrepare(admintool.AdminTool):
 
         if (not ipautil.file_exists(
                     dogtag.configured_constants().CS_CFG_PATH) and
-                not options.dirsrv_pin):
+                options.dirsrv_pin is None):
             self.log.info("If you installed IPA with your own certificates "
                 "using PKCS#12 files you must provide PKCS#12 files for any "
                 "replicas you create as well.")

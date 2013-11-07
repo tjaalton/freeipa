@@ -170,6 +170,7 @@ struct ipasam_privates {
 	char *server_princ;
 	char *client_princ;
 	struct sss_idmap_ctx *idmap_ctx;
+	uint32_t supported_enctypes;
 };
 
 
@@ -2025,6 +2026,10 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 	if (!res) {
 		return false;
 	}
+	if (td->trust_direction == 0) {
+		/* attribute wasn't present, set default value */
+		td->trust_direction = LSA_TRUST_DIRECTION_INBOUND | LSA_TRUST_DIRECTION_OUTBOUND;
+	}
 
 	res = get_uint32_t_from_ldap_msg(ldap_state, entry,
 					 LDAP_ATTRIBUTE_TRUST_ATTRIBUTES,
@@ -2032,12 +2037,20 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 	if (!res) {
 		return false;
 	}
+	if (td->trust_attributes == 0) {
+		/* attribute wasn't present, set default value */
+		td->trust_attributes = LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE;
+	}
 
 	res = get_uint32_t_from_ldap_msg(ldap_state, entry,
 					 LDAP_ATTRIBUTE_TRUST_TYPE,
 					 &td->trust_type);
 	if (!res) {
 		return false;
+	}
+	if (td->trust_type == 0) {
+		/* attribute wasn't present, set default value */
+		td->trust_type = LSA_TRUST_TYPE_UPLEVEL;
 	}
 
 	td->trust_posix_offset = talloc_zero(td, uint32_t);
@@ -2062,11 +2075,7 @@ static bool fill_pdb_trusted_domain(TALLOC_CTX *mem_ctx,
 		return false;
 	}
 	if (*td->supported_enc_type == 0) {
-		*td->supported_enc_type = KERB_ENCTYPE_DES_CBC_CRC |
-					  KERB_ENCTYPE_DES_CBC_MD5 |
-					  KERB_ENCTYPE_RC4_HMAC_MD5 |
-					  KERB_ENCTYPE_AES128_CTS_HMAC_SHA1_96 |
-					  KERB_ENCTYPE_AES256_CTS_HMAC_SHA1_96;
+		*td->supported_enc_type = ldap_state->ipasam_privates->supported_enctypes;
 	}
 
 	if (!smbldap_talloc_single_blob(td, priv2ld(ldap_state), entry,
@@ -2229,11 +2238,14 @@ static NTSTATUS ipasam_set_trusted_domain(struct pdb_methods *methods,
 	LDAPMod **mods;
 	bool res;
 	char *trusted_dn = NULL;
-	int ret, i;
+	int ret, i, count;
 	NTSTATUS status;
 	TALLOC_CTX *tmp_ctx;
 	char *trustpw;
 	char *sid;
+	char **in_blacklist = NULL;
+	char **out_blacklist = NULL;
+	uint32_t enctypes, trust_offset;
 
 	DEBUG(10, ("ipasam_set_trusted_domain called for domain %s\n", domain));
 
@@ -2250,10 +2262,12 @@ static NTSTATUS ipasam_set_trusted_domain(struct pdb_methods *methods,
 	}
 
 	mods = NULL;
-	smbldap_make_mod(priv2ld(ldap_state), entry, &mods, "objectClass",
-			 LDAP_OBJ_TRUSTED_DOMAIN);
-	smbldap_make_mod(priv2ld(ldap_state), entry, &mods, "objectClass",
-			 LDAP_OBJ_ID_OBJECT);
+	if (entry == NULL) {
+		smbldap_make_mod(priv2ld(ldap_state), entry, &mods, "objectClass",
+				 LDAP_OBJ_TRUSTED_DOMAIN);
+		smbldap_make_mod(priv2ld(ldap_state), entry, &mods, "objectClass",
+				 LDAP_OBJ_ID_OBJECT);
+	}
 
 	if (entry != NULL) {
 		sid = get_single_attribute(tmp_ctx, priv2ld(ldap_state), entry,
@@ -2314,26 +2328,32 @@ static NTSTATUS ipasam_set_trusted_domain(struct pdb_methods *methods,
 		}
 	}
 
+	trust_offset = 0;
 	if (td->trust_posix_offset != NULL) {
-		res = smbldap_make_mod_uint32_t(priv2ld(ldap_state), entry,
-						&mods,
-						LDAP_ATTRIBUTE_TRUST_POSIX_OFFSET,
-						*td->trust_posix_offset);
-		if (!res) {
-			status = NT_STATUS_UNSUCCESSFUL;
-			goto done;
-		}
+		trust_offset = *td->trust_posix_offset;
 	}
 
+	res = smbldap_make_mod_uint32_t(priv2ld(ldap_state), entry,
+					&mods,
+					LDAP_ATTRIBUTE_TRUST_POSIX_OFFSET,
+					trust_offset);
+	if (!res) {
+		status = NT_STATUS_UNSUCCESSFUL;
+		goto done;
+	}
+
+	enctypes = ldap_state->ipasam_privates->supported_enctypes;
 	if (td->supported_enc_type != NULL) {
-		res = smbldap_make_mod_uint32_t(priv2ld(ldap_state), entry,
-						&mods,
-						LDAP_ATTRIBUTE_SUPPORTED_ENC_TYPE,
-						*td->supported_enc_type);
-		if (!res) {
-			status = NT_STATUS_UNSUCCESSFUL;
-			goto done;
-		}
+		enctypes = *td->supported_enc_type;
+	}
+
+	res = smbldap_make_mod_uint32_t(priv2ld(ldap_state), entry,
+					&mods,
+					LDAP_ATTRIBUTE_SUPPORTED_ENC_TYPE,
+					enctypes);
+	if (!res) {
+		status = NT_STATUS_UNSUCCESSFUL;
+		goto done;
 	}
 
 	if (td->trust_auth_outgoing.data != NULL) {
@@ -2354,31 +2374,45 @@ static NTSTATUS ipasam_set_trusted_domain(struct pdb_methods *methods,
 				      &td->trust_forest_trust_info);
 	}
 
+
+	/* Only add default blacklists for incoming and outgoing SIDs but don't modify existing ones */
+	in_blacklist = get_attribute_values(tmp_ctx, ldap_state->smbldap_state->ldap_struct, entry,
+						LDAP_ATTRIBUTE_SID_BLACKLIST_INCOMING, &count);
+	out_blacklist = get_attribute_values(tmp_ctx, ldap_state->smbldap_state->ldap_struct, entry,
+						LDAP_ATTRIBUTE_SID_BLACKLIST_OUTGOING, &count);
+
 	for (i = 0; ipa_mspac_well_known_sids[i]; i++) {
-		smbldap_make_mod(priv2ld(ldap_state), entry, &mods,
-				      LDAP_ATTRIBUTE_SID_BLACKLIST_INCOMING,
-				      ipa_mspac_well_known_sids[i]);
-		smbldap_make_mod(priv2ld(ldap_state), entry, &mods,
-				      LDAP_ATTRIBUTE_SID_BLACKLIST_OUTGOING,
-				      ipa_mspac_well_known_sids[i]);
+		if (in_blacklist == NULL) {
+			smbldap_make_mod(priv2ld(ldap_state), entry, &mods,
+					      LDAP_ATTRIBUTE_SID_BLACKLIST_INCOMING,
+					      ipa_mspac_well_known_sids[i]);
+		}
+		if (out_blacklist == NULL) {
+			smbldap_make_mod(priv2ld(ldap_state), entry, &mods,
+					      LDAP_ATTRIBUTE_SID_BLACKLIST_OUTGOING,
+					      ipa_mspac_well_known_sids[i]);
+		}
 	}
 
 	smbldap_talloc_autofree_ldapmod(tmp_ctx, mods);
 
-	trusted_dn = trusted_domain_dn(tmp_ctx, ldap_state, domain);
-	if (trusted_dn == NULL) {
-		status = NT_STATUS_NO_MEMORY;
-		goto done;
-	}
-	if (entry == NULL) {
-		ret = smbldap_add(ldap_state->smbldap_state, trusted_dn, mods);
-	} else {
-		ret = smbldap_modify(ldap_state->smbldap_state, trusted_dn, mods);
-	}
-	if (ret != LDAP_SUCCESS) {
-		DEBUG(1, ("error writing trusted domain data!\n"));
-		status = NT_STATUS_UNSUCCESSFUL;
-		goto done;
+	if (mods != NULL) {
+		trusted_dn = trusted_domain_dn(tmp_ctx, ldap_state, domain);
+		if (trusted_dn == NULL) {
+			status = NT_STATUS_NO_MEMORY;
+			goto done;
+		}
+
+		if (entry == NULL) {
+			ret = smbldap_add(ldap_state->smbldap_state, trusted_dn, mods);
+		} else {
+			ret = smbldap_modify(ldap_state->smbldap_state, trusted_dn, mods);
+		}
+		if (ret != LDAP_SUCCESS) {
+			DEBUG(1, ("error writing trusted domain data!\n"));
+			status = NT_STATUS_UNSUCCESSFUL;
+			goto done;
+		}
 	}
 
 	if (entry == NULL) { /* FIXME: allow password updates here */
@@ -2603,10 +2637,9 @@ static bool init_sam_from_td(struct samu *user, struct pdb_trusted_domain *td,
 	char *name;
 	char *trustpw = NULL;
 	char *trustpw_utf8 = NULL;
-	char *trustpw_utf8_uc = NULL;
 	char *tmp_str = NULL;
 	int ret;
-	struct ntlm_keys ntlm_keys;
+	uint8_t nt_key[16];
 	size_t converted_size;
 	bool res;
 	char *sid_str;
@@ -2672,23 +2705,13 @@ static bool init_sam_from_td(struct samu *user, struct pdb_trusted_domain *td,
 		goto done;
 	}
 
-	if (!push_utf8_talloc(user, &trustpw_utf8_uc, tmp_str, &converted_size)) {
-		res = false;
-		goto done;
-	}
-
-	ret = encode_ntlm_keys(trustpw_utf8, trustpw_utf8_uc, true, true,
-			       &ntlm_keys);
+	ret = encode_nt_key(trustpw_utf8, nt_key);
 	if (ret != 0) {
 		res = false;
 		goto done;
 	}
 
-	if (!pdb_set_lanman_passwd(user, ntlm_keys.lm, PDB_SET)) {
-		res = false;
-		goto done;
-	}
-	if (!pdb_set_nt_passwd(user, ntlm_keys.nt, PDB_SET)) {
+	if (!pdb_set_nt_passwd(user, nt_key, PDB_SET)) {
 		res = false;
 		goto done;
 	}
@@ -2706,10 +2729,6 @@ done:
 	if (tmp_str != NULL) {
 		memset(tmp_str, 0, strlen(tmp_str));
 		talloc_free(tmp_str);
-	}
-	if (trustpw_utf8_uc != NULL) {
-		memset(trustpw_utf8_uc, 0, strlen(trustpw_utf8_uc));
-		talloc_free(trustpw_utf8_uc);
 	}
 
 	return res;
@@ -3576,6 +3595,106 @@ static NTSTATUS ipasam_get_domain_name(struct ldapsam_privates *ldap_state,
 	return NT_STATUS_OK;
 }
 
+static NTSTATUS ipasam_get_enctypes(struct ldapsam_privates *ldap_state,
+				    TALLOC_CTX *mem_ctx,
+				    uint32_t *enctypes)
+{
+	int ret;
+	LDAPMessage *result;
+	LDAPMessage *entry = NULL;
+	int count, i;
+	char **enctype_list, *dn;
+	krb5_enctype enctype;
+	krb5_error_code err;
+	struct smbldap_state *smbldap_state = ldap_state->smbldap_state;
+	const char *attr_list[] = {
+					"krbDefaultEncSaltTypes",
+					NULL
+				  };
+
+	dn = talloc_asprintf(mem_ctx, "cn=%s,cn=kerberos,%s",
+			     ldap_state->ipasam_privates->realm,
+			     ldap_state->ipasam_privates->base_dn);
+
+	if (dn == NULL) {
+		DEBUG(1, ("Failed to construct DN to the realm's kerberos container\n"));
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	ret = smbldap_search(smbldap_state, dn, LDAP_SCOPE_BASE,
+			     "objectclass=krbrealmcontainer", attr_list, 0,
+			     &result);
+	if (ret != LDAP_SUCCESS) {
+		DEBUG(1, ("Failed to get kerberos realm encryption types: %s\n",
+			  ldap_err2string (ret)));
+		talloc_free(dn);
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	count = ldap_count_entries(smbldap_state->ldap_struct, result);
+
+	if (count != 1) {
+		DEBUG(1, ("Unexpected number of results [%d] for realm "
+			  "search.\n", count));
+		ldap_msgfree(result);
+		talloc_free(dn);
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	entry = ldap_first_entry(smbldap_state->ldap_struct, result);
+	if (entry == NULL) {
+		DEBUG(0, ("Could not get krbrealmcontainer entry\n"));
+		ldap_msgfree(result);
+		talloc_free(dn);
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	enctype_list = get_attribute_values(dn, smbldap_state->ldap_struct, entry,
+					    "krbDefaultEncSaltTypes", &count);
+	ldap_msgfree(result);
+	if (enctype_list == NULL) {
+		talloc_free(dn);
+		return NT_STATUS_UNSUCCESSFUL;
+	}
+
+	*enctypes = 0;
+	for (i = 0; i < count ; i++) {
+		char *enc = strchr(enctype_list[i], ':');
+		if (enc != NULL) {
+			*enc = '\0';
+		}
+		err = krb5_string_to_enctype(enctype_list[i], &enctype);
+		if (enc != NULL) {
+			*enc = ':';
+		}
+		if (err) {
+			continue;
+		}
+		switch (enctype) {
+			case ENCTYPE_DES_CBC_CRC:
+				*enctypes |= KERB_ENCTYPE_DES_CBC_CRC;
+				break;
+			case ENCTYPE_DES_CBC_MD5:
+				*enctypes |= KERB_ENCTYPE_DES_CBC_MD5;
+				break;
+			case ENCTYPE_ARCFOUR_HMAC:
+				*enctypes |= KERB_ENCTYPE_RC4_HMAC_MD5;
+				break;
+			case ENCTYPE_AES128_CTS_HMAC_SHA1_96:
+				*enctypes |= KERB_ENCTYPE_AES128_CTS_HMAC_SHA1_96;
+				break;
+			case ENCTYPE_AES256_CTS_HMAC_SHA1_96:
+				*enctypes |= KERB_ENCTYPE_AES256_CTS_HMAC_SHA1_96;
+				break;
+			default:
+				break;
+		}
+	}
+
+	talloc_free(dn);
+	return NT_STATUS_OK;
+}
+
 static NTSTATUS ipasam_get_realm(struct ldapsam_privates *ldap_state,
 				 TALLOC_CTX *mem_ctx,
 				 char **realm)
@@ -4105,7 +4224,6 @@ done:
 	return status;
 }
 
-
 static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
 				const char *location)
 {
@@ -4121,6 +4239,7 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
 	LDAPMessage *result = NULL;
 	LDAPMessage *entry = NULL;
 	enum idmap_error_code err;
+	uint32_t enctypes = 0;
 
 	status = make_pdb_method(pdb_method);
 	if (!NT_STATUS_IS_OK(status)) {
@@ -4243,6 +4362,7 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
 	if (ldap_state->ipasam_privates->flat_name == NULL) {
 		DEBUG(0, ("Missing mandatory attribute %s.\n",
 			  LDAP_ATTRIBUTE_FLAT_NAME));
+		ldap_msgfree(result);
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 
@@ -4250,8 +4370,9 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
 			     idmap_talloc_free,
 			     &ldap_state->ipasam_privates->idmap_ctx);
 	if (err != IDMAP_SUCCESS) {
-	    DEBUG(1, ("Failed to setup idmap context.\n"));
-	    return NT_STATUS_UNSUCCESSFUL;
+		DEBUG(1, ("Failed to setup idmap context.\n"));
+		ldap_msgfree(result);
+		return NT_STATUS_UNSUCCESSFUL;
 	}
 
 	fallback_group_sid = get_fallback_group_sid(ldap_state,
@@ -4260,6 +4381,7 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
 					result);
 	if (fallback_group_sid == NULL) {
 		DEBUG(0, ("Cannot find SID of fallback group.\n"));
+		ldap_msgfree(result);
 		return NT_STATUS_INVALID_PARAMETER;
 	}
 	sid_copy(&ldap_state->ipasam_privates->fallback_primary_group,
@@ -4289,9 +4411,24 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
 
 		status = save_sid_to_secret(ldap_state);
 		if (!NT_STATUS_IS_OK(status)) {
+			ldap_msgfree(result);
 			return status;
 		}
 	}
+
+	ldap_msgfree(result);
+
+	status = ipasam_get_enctypes(ldap_state,
+				     ldap_state->ipasam_privates,
+				     &enctypes);
+
+	if (!NT_STATUS_IS_OK(status)) {
+		enctypes = KERB_ENCTYPE_RC4_HMAC_MD5 |
+			   KERB_ENCTYPE_AES128_CTS_HMAC_SHA1_96 |
+			   KERB_ENCTYPE_AES256_CTS_HMAC_SHA1_96;
+	}
+
+	ldap_state->ipasam_privates->supported_enctypes = enctypes;
 
 	(*pdb_method)->getsampwnam = ldapsam_getsampwnam;
 	(*pdb_method)->search_users = ldapsam_search_users;

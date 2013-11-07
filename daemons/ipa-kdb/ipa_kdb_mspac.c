@@ -37,6 +37,8 @@ struct ipadb_adtrusts {
     int len_sid_blacklist_incoming;
     struct dom_sid *sid_blacklist_outgoing;
     int len_sid_blacklist_outgoing;
+    struct ipadb_adtrusts *parent;
+    char *parent_name;
 };
 
 struct ipadb_mspac {
@@ -826,6 +828,8 @@ static krb5_error_code ipadb_get_pac(krb5_context kcontext,
         goto done;
     }
 
+    /* PAC_LOGON_NAME and PAC_TYPE_UPN_DNS_INFO are automatically added
+     * by krb5_pac_sign() later on */
 
     /* == Search PAC info == */
     kerr = ipadb_deref_search(ipactx, ied->entry_dn, LDAP_SCOPE_BASE,
@@ -1357,6 +1361,18 @@ static krb5_error_code filter_logon_info(krb5_context context,
         return EINVAL;
     }
 
+    /* Check if this domain has been filtered out by the trust itself*/
+    if (domain->parent != NULL) {
+        for(k = 0; k < domain->parent->len_sid_blacklist_incoming; k++) {
+            result = dom_sid_check(info->info->info3.base.domain_sid,
+                                   &domain->parent->sid_blacklist_incoming[k], true);
+            if (result) {
+                filter_logon_info_log_message(info->info->info3.base.domain_sid);
+                return EINVAL;
+            }
+        }
+    }
+
     /* According to MS-KILE 25.0, info->info->info3.sids may be non zero, so check
      * should include different possibilities into account
      * */
@@ -1458,9 +1474,150 @@ done:
     return kerr;
 }
 
+static krb5_error_code get_delegation_info(krb5_context context,
+                                TALLOC_CTX *memctx, krb5_data *pac_blob,
+                                struct PAC_CONSTRAINED_DELEGATION_CTR *info)
+{
+    DATA_BLOB pac_data;
+    enum ndr_err_code ndr_err;
+
+    pac_data.length = pac_blob->length;
+    pac_data.data = (uint8_t *)pac_blob->data;
+
+    ndr_err = ndr_pull_union_blob(&pac_data, memctx, info,
+                                  PAC_TYPE_CONSTRAINED_DELEGATION,
+                                  (ndr_pull_flags_fn_t)ndr_pull_PAC_INFO);
+    if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+        return KRB5_KDB_INTERNAL_ERROR;
+    }
+
+    return 0;
+}
+
+static krb5_error_code save_delegation_info(krb5_context context,
+                                TALLOC_CTX *memctx,
+                                struct PAC_CONSTRAINED_DELEGATION_CTR *info,
+                                krb5_data *pac_blob)
+{
+    DATA_BLOB pac_data;
+    enum ndr_err_code ndr_err;
+
+    ndr_err = ndr_push_union_blob(&pac_data, memctx, info,
+                                  PAC_TYPE_CONSTRAINED_DELEGATION,
+                                  (ndr_push_flags_fn_t)ndr_push_PAC_INFO);
+    if (!NDR_ERR_CODE_IS_SUCCESS(ndr_err)) {
+        return KRB5_KDB_INTERNAL_ERROR;
+    }
+
+    free(pac_blob->data);
+    pac_blob->data = malloc(pac_data.length);
+    if (pac_blob->data == NULL) {
+        pac_blob->length = 0;
+        return ENOMEM;
+    }
+    memcpy(pac_blob->data, pac_data.data, pac_data.length);
+    pac_blob->length = pac_data.length;
+
+    return 0;
+}
+
+static krb5_error_code ipadb_add_transited_service(krb5_context context,
+                                                   krb5_db_entry *proxy,
+                                                   krb5_db_entry *server,
+                                                   krb5_pac old_pac,
+                                                   krb5_pac new_pac)
+{
+    struct PAC_CONSTRAINED_DELEGATION_CTR info;
+    krb5_data pac_blob = { 0 , 0, NULL };
+    krb5_error_code kerr;
+    TALLOC_CTX *tmpctx;
+    uint32_t i;
+    char *tmpstr;
+
+    tmpctx = talloc_new(NULL);
+    if (!tmpctx) {
+        kerr = ENOMEM;
+        goto done;
+    }
+
+    kerr = krb5_pac_get_buffer(context, old_pac,
+                               KRB5_PAC_DELEGATION_INFO, &pac_blob);
+    if (kerr != 0 && kerr != ENOENT) {
+        goto done;
+    }
+
+    if (pac_blob.length != 0) {
+        kerr = get_delegation_info(context, tmpctx, &pac_blob, &info);
+        if (kerr != 0) {
+            goto done;
+        }
+    } else {
+        info.info = talloc_zero(tmpctx, struct PAC_CONSTRAINED_DELEGATION);
+        if (!info.info) {
+            kerr = ENOMEM;
+            goto done;
+        }
+    }
+
+    krb5_free_data_contents(context, &pac_blob);
+    memset(&pac_blob, 0, sizeof(krb5_data));
+
+    kerr = krb5_unparse_name(context, proxy->princ, &tmpstr);
+    if (kerr != 0) {
+        goto done;
+    }
+
+    info.info->proxy_target.string = talloc_strdup(tmpctx, tmpstr);
+    krb5_free_unparsed_name(context, tmpstr);
+    if (!info.info->proxy_target.string) {
+        kerr = ENOMEM;
+        goto done;
+    }
+
+    i = info.info->num_transited_services;
+
+    info.info->transited_services = talloc_realloc(tmpctx,
+                                                info.info->transited_services,
+                                                struct lsa_String, i + 1);
+    if (!info.info->transited_services) {
+        kerr = ENOMEM;
+        goto done;
+    }
+
+    kerr = krb5_unparse_name(context, server->princ, &tmpstr);
+    if (kerr != 0) {
+        goto done;
+    }
+
+    info.info->transited_services[i].string = talloc_strdup(tmpctx, tmpstr);
+    krb5_free_unparsed_name(context, tmpstr);
+    if (!info.info->transited_services[i].string) {
+        kerr = ENOMEM;
+        goto done;
+    }
+    info.info->num_transited_services = i + 1;
+
+    kerr = save_delegation_info(context, tmpctx, &info, &pac_blob);
+    if (kerr != 0) {
+        goto done;
+    }
+
+    kerr = krb5_pac_add_buffer(context, new_pac,
+                               KRB5_PAC_DELEGATION_INFO, &pac_blob);
+    if (kerr) {
+        goto done;
+    }
+
+done:
+    krb5_free_data_contents(context, &pac_blob);
+    talloc_free(tmpctx);
+    return kerr;
+}
+
 static krb5_error_code ipadb_verify_pac(krb5_context context,
                                         unsigned int flags,
                                         krb5_const_principal client_princ,
+                                        krb5_db_entry *proxy,
                                         krb5_db_entry *server,
                                         krb5_db_entry *krbtgt,
                                         krb5_keyblock *server_key,
@@ -1512,7 +1669,7 @@ static krb5_error_code ipadb_verify_pac(krb5_context context,
         goto done;
     }
 
-    /* Now that the PAc is verified augment it with additional info if
+    /* Now that the PAC is verified augment it with additional info if
      * it is coming from a different realm */
     if (is_cross_realm) {
         kerr = krb5_pac_get_buffer(context, old_pac,
@@ -1556,11 +1713,26 @@ static krb5_error_code ipadb_verify_pac(krb5_context context,
             continue;
         }
 
+        if (types[i] == KRB5_PAC_DELEGATION_INFO &&
+            (flags & KRB5_KDB_FLAG_CONSTRAINED_DELEGATION)) {
+            /* skip it here, we will add it explicitly later */
+            continue;
+        }
+
         kerr = krb5_pac_get_buffer(context, old_pac, types[i], &data);
         if (kerr == 0) {
             kerr = krb5_pac_add_buffer(context, new_pac, types[i], &data);
             krb5_free_data_contents(context, &data);
         }
+        if (kerr) {
+            krb5_pac_free(context, new_pac);
+            goto done;
+        }
+    }
+
+    if (flags & KRB5_KDB_FLAG_CONSTRAINED_DELEGATION) {
+        kerr = ipadb_add_transited_service(context, proxy, server,
+                                           old_pac, new_pac);
         if (kerr) {
             krb5_pac_free(context, new_pac);
             goto done;
@@ -1880,7 +2052,7 @@ krb5_error_code ipadb_sign_authdata(krb5_context context,
                 goto done;
             }
 
-            kerr = ipadb_verify_pac(context, flags, ks_client_princ,
+            kerr = ipadb_verify_pac(context, flags, ks_client_princ, client,
                                     server, krbtgt, server_key, krbtgt_key,
                                     authtime, pac_auth_data, &pac);
             if (kerr != 0) {
@@ -1963,6 +2135,8 @@ void ipadb_mspac_struct_free(struct ipadb_mspac **mspac)
             free((*mspac)->trusts[i].domain_sid);
             free((*mspac)->trusts[i].sid_blacklist_incoming);
             free((*mspac)->trusts[i].sid_blacklist_outgoing);
+            free((*mspac)->trusts[i].parent_name);
+            (*mspac)->trusts[i].parent = NULL;
         }
         free((*mspac)->trusts);
     }
@@ -2051,18 +2225,42 @@ done:
     return ret;
 }
 
+static void ipadb_free_sid_blacklists(char ***sid_blacklist_incoming, char ***sid_blacklist_outgoing)
+{
+    int i;
+
+    if (sid_blacklist_incoming && *sid_blacklist_incoming) {
+        for (i = 0; *sid_blacklist_incoming && (*sid_blacklist_incoming)[i]; i++) {
+            free((*sid_blacklist_incoming)[i]);
+        }
+        free(*sid_blacklist_incoming);
+        *sid_blacklist_incoming = NULL;
+    }
+
+    if (sid_blacklist_outgoing && *sid_blacklist_outgoing) {
+        for (i = 0; *sid_blacklist_outgoing && (*sid_blacklist_outgoing)[i]; i++) {
+            free((*sid_blacklist_outgoing)[i]);
+        }
+        free(*sid_blacklist_outgoing);
+        *sid_blacklist_outgoing = NULL;
+    }
+}
+
 krb5_error_code ipadb_mspac_get_trusted_domains(struct ipadb_context *ipactx)
 {
     struct ipadb_adtrusts *t;
     LDAP *lc = ipactx->lcontext;
-    char *attrs[] = { "ipaNTTrustPartner", "ipaNTFlatName",
+    char *attrs[] = { "cn", "ipaNTTrustPartner", "ipaNTFlatName",
                       "ipaNTTrustedDomainSID", "ipaNTSIDBlacklistIncoming",
                       "ipaNTSIDBlacklistOutgoing", NULL };
     char *filter = "(objectclass=ipaNTTrustedDomain)";
     krb5_error_code kerr;
     LDAPMessage *res = NULL;
     LDAPMessage *le;
+    LDAPRDN rdn;
     char *base = NULL;
+    char *dnstr = NULL;
+    char *dnl = NULL;
     char **sid_blacklist_incoming = NULL;
     char **sid_blacklist_outgoing = NULL;
     int ret, n, i;
@@ -2085,6 +2283,13 @@ krb5_error_code ipadb_mspac_get_trusted_domains(struct ipadb_context *ipactx)
     }
 
     for (le = ldap_first_entry(lc, res); le; le = ldap_next_entry(lc, le)) {
+        dnstr = ldap_get_dn(lc, le);
+
+        if (dnstr == NULL) {
+            ret = ENOMEM;
+            goto done;
+        }
+
         n = ipactx->mspac->num_trusts;
         ipactx->mspac->num_trusts++;
         t = realloc(ipactx->mspac->trusts,
@@ -2095,7 +2300,9 @@ krb5_error_code ipadb_mspac_get_trusted_domains(struct ipadb_context *ipactx)
         }
         ipactx->mspac->trusts = t;
 
-        ret = ipadb_ldap_attr_to_str(lc, le, "ipaNTTrustPartner",
+        memset(&t[n], 0, sizeof(t[n]));
+
+        ret = ipadb_ldap_attr_to_str(lc, le, "cn",
                                      &t[n].domain_name);
         if (ret) {
             ret = EINVAL;
@@ -2129,6 +2336,7 @@ krb5_error_code ipadb_mspac_get_trusted_domains(struct ipadb_context *ipactx)
             if (ret == ENOENT) {
                 /* This attribute is optional */
                 ret = 0;
+                sid_blacklist_incoming = NULL;
             } else {
                 ret = EINVAL;
                 goto done;
@@ -2142,6 +2350,7 @@ krb5_error_code ipadb_mspac_get_trusted_domains(struct ipadb_context *ipactx)
             if (ret == ENOENT) {
                 /* This attribute is optional */
                 ret = 0;
+                sid_blacklist_outgoing = NULL;
             } else {
                 ret = EINVAL;
                 goto done;
@@ -2154,6 +2363,49 @@ krb5_error_code ipadb_mspac_get_trusted_domains(struct ipadb_context *ipactx)
         if (ret) {
             goto done;
         }
+        ipadb_free_sid_blacklists(&sid_blacklist_incoming,
+                                  &sid_blacklist_outgoing);
+
+        /* Parse first two RDNs of the entry to find its parent */
+        dnl = strcasestr(dnstr, base);
+        if (dnl == NULL) {
+            goto done;
+        }
+
+        /* Note that after ldap_str2rdn() call dnl will point to end of one RDN
+         * which would be '\0' for trust root domain and ',' for subdomain */
+        dnl--; dnl[0] = '\0';
+        ret = ldap_str2rdn(dnstr, &rdn, &dnl, LDAP_DN_FORMAT_LDAPV3);
+        if (ret) {
+            goto done;
+        }
+
+        ldap_rdnfree(rdn);
+
+        if (dnl[0] != '\0') {
+            dnl++;
+            ret = ldap_str2rdn(dnl, &rdn, &dnl, LDAP_DN_FORMAT_LDAPV3);
+            if (ret) {
+                goto done;
+            }
+            t[n].parent_name = strndup(rdn[0]->la_value.bv_val, rdn[0]->la_value.bv_len);
+            ldap_rdnfree(rdn);
+        }
+
+        free(dnstr);
+        dnstr = NULL;
+    }
+
+    /* Traverse through all trusts and resolve parents */
+    t = ipactx->mspac->trusts;
+    for (i = 0; i < ipactx->mspac->num_trusts; i++) {
+        if (t[i].parent_name != NULL) {
+            for (n = 0; n < ipactx->mspac->num_trusts; n++) {
+                if (strcasecmp(t[i].parent_name, t[n].domain_name) == 0) {
+                    t[i].parent = &t[n];
+                }
+            }
+        }
     }
 
     ret = 0;
@@ -2162,15 +2414,10 @@ done:
     if (ret != 0) {
         krb5_klog_syslog(LOG_ERR, "Failed to read list of trusted domains");
     }
+    free(dnstr);
     free(base);
-    for (i = 0; sid_blacklist_incoming && sid_blacklist_incoming[i]; i++) {
-        free(sid_blacklist_incoming[i]);
-    }
-    free(sid_blacklist_incoming);
-    for (i = 0; sid_blacklist_outgoing && sid_blacklist_outgoing[i]; i++) {
-        free(sid_blacklist_outgoing[i]);
-    }
-    free(sid_blacklist_outgoing);
+    ipadb_free_sid_blacklists(&sid_blacklist_incoming,
+                              &sid_blacklist_outgoing);
     ldap_msgfree(res);
     return ret;
 }
@@ -2331,4 +2578,67 @@ krb5_error_code ipadb_reinit_mspac(struct ipadb_context *ipactx, bool force_rein
 done:
     ldap_msgfree(result);
     return kerr;
+}
+
+krb5_error_code ipadb_check_transited_realms(krb5_context kcontext,
+					     const krb5_data *tr_contents,
+					     const krb5_data *client_realm,
+					     const krb5_data *server_realm)
+{
+	struct ipadb_context *ipactx;
+	bool has_transited_contents, has_client_realm, has_server_realm;
+        int i;
+        krb5_error_code ret;
+
+        ipactx = ipadb_get_context(kcontext);
+        if (!ipactx || !ipactx->mspac) {
+            return KRB5_KDB_DBNOTINITED;
+        }
+
+	has_transited_contents = false;
+	has_client_realm = false;
+	has_server_realm = false;
+
+	/* First, compare client or server realm with ours */
+	if (strncasecmp(client_realm->data, ipactx->realm, client_realm->length) == 0) {
+		has_client_realm = true;
+	}
+	if (strncasecmp(server_realm->data, ipactx->realm, server_realm->length) == 0) {
+		has_server_realm = true;
+	}
+
+	if ((tr_contents->length == 0) || (tr_contents->data[0] == '\0')) {
+		/* For in-realm case allow transition */
+		if (has_client_realm && has_server_realm) {
+			return 0;
+		}
+		/* Since transited realm is empty, we don't need to check for it, it is a direct trust case */
+		has_transited_contents = true;
+	}
+
+	if (!ipactx->mspac || !ipactx->mspac->trusts) {
+		return KRB5_PLUGIN_NO_HANDLE;
+	}
+
+	/* Iterate through list of trusts and check if any of input belongs to any of the trust */
+	for(i=0; i < ipactx->mspac->num_trusts ; i++) {
+		if (!has_transited_contents &&
+		    (strncasecmp(tr_contents->data, ipactx->mspac->trusts[i].domain_name, tr_contents->length) == 0)) {
+			has_transited_contents = true;
+		}
+		if (!has_client_realm &&
+		    (strncasecmp(client_realm->data, ipactx->mspac->trusts[i].domain_name, client_realm->length) == 0)) {
+			has_client_realm = true;
+		}
+		if (!has_server_realm &&
+		    (strncasecmp(server_realm->data, ipactx->mspac->trusts[i].domain_name, server_realm->length) == 0)) {
+			has_server_realm = true;
+		}
+	}
+
+	ret = KRB5KRB_AP_ERR_ILL_CR_TKT;
+	if (has_client_realm && has_transited_contents && has_server_realm) {
+		ret = 0;
+	}
+	return ret;
 }

@@ -121,7 +121,7 @@ Requires: mod_auth_kerb >= 5.4-16
 %else
 Requires: mod_auth_kerb >= 5.4-8
 %endif
-Requires: mod_nss
+Requires: mod_nss >= 1.0.8-24
 Requires: python-ldap
 Requires: python-krbV
 Requires: acl
@@ -165,10 +165,6 @@ Conflicts: bind < 9.8.2-0.4.rc2
 # Versions of nss-pam-ldapd < 0.8.4 require a mapping from uniqueMember to
 # member.
 Conflicts: nss-pam-ldapd < 0.8.4
-
-# mod_proxy provides a single API to communicate over SSL. If mod_ssl
-# is even loaded into Apache then it grabs this interface.
-Conflicts: mod_ssl
 
 Obsoletes: ipa-server >= 1.0
 
@@ -229,7 +225,7 @@ Requires: pam_krb5
 Requires: wget
 Requires: libcurl >= 7.21.7-2
 Requires: xmlrpc-c >= 1.27.4
-Requires: sssd >= 1.11.0-0.1.beta2
+Requires: sssd >= 1.11.1
 Requires: certmonger >= 0.65
 Requires: nss-tools
 Requires: bind-utils
@@ -423,8 +419,8 @@ install -m 644 init/ipa_memcached.conf %{buildroot}%{_sysconfdir}/sysconfig/ipa_
 mkdir -p %{buildroot}%{_usr}/share/ipa/ui/js/plugins
 
 # NOTE: systemd specific section
-mkdir -p %{buildroot}%{_sysconfdir}/tmpfiles.d/
-install -m 0644 init/systemd/ipa.conf.tmpfiles %{buildroot}%{_sysconfdir}/tmpfiles.d/ipa.conf
+mkdir -p %{buildroot}%{_prefix}/lib/tmpfiles.d
+install -m 0644 init/systemd/ipa.conf.tmpfiles %{buildroot}%{_prefix}/lib/tmpfiles.d/%{name}.conf
 # END
 
 mkdir -p %{buildroot}%{_localstatedir}/run/
@@ -611,7 +607,7 @@ fi
 %dir %attr(0700,apache,apache) %{_localstatedir}/run/ipa_memcached/
 %dir %attr(0700,root,root) %{_localstatedir}/run/ipa/
 # NOTE: systemd specific section
-%config(noreplace) %{_sysconfdir}/tmpfiles.d/ipa.conf
+%{_prefix}/lib/tmpfiles.d/%{name}.conf
 %attr(644,root,root) %{_unitdir}/ipa.service
 %attr(644,root,root) %{_unitdir}/ipa_memcached.service
 %attr(644,root,root) %{_unitdir}/ipa-otpd.socket
@@ -836,7 +832,13 @@ fi
 %endif # ONLY_CLIENT
 
 %changelog
-* Wed Aug 29 2013 Petr Viktorin <pviktori@redhat.com> - 3.3.0-2
+* Fri Oct 25 2013 Martin Kosek <mkosek@redhat.com> - 3.3.2-1
+- Remove mod_ssl conflict, it can now live with mod_nss installed
+
+* Wed Sep 4 2013 Ana Krivokapic <akrivoka@redhat.com> - 3.3.0-3
+- Conform to tmpfiles.d packaging guidelines
+
+* Wed Aug 28 2013 Petr Viktorin <pviktori@redhat.com> - 3.3.0-2
 - Add man pages to the tests subpackage
 
 * Mon Aug 12 2013 Petr Viktorin <pviktori@redhat.com> - 3.3.0-1

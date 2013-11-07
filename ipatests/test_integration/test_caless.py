@@ -100,10 +100,10 @@ class CALessBase(IntegrationTest):
 
             # Copy CRLs over
             base = os.path.join(cls.cert_dir, 'nssdb')
-            host.mkdir_recursive(cls.crl_path)
+            host.transport.mkdir_recursive(cls.crl_path)
             for source in glob.glob(os.path.join(base, '*.crl')):
                 dest = os.path.join(cls.crl_path, os.path.basename(source))
-                host.put_file(source, dest)
+                host.transport.put_file(source, dest)
 
     @classmethod
     def uninstall(cls):
@@ -163,9 +163,9 @@ class CALessBase(IntegrationTest):
             '--forwarder', host.config.dns_forwarder,
         ]
 
-        if http_pin:
+        if http_pin is not None:
             args.extend(['--http_pin', http_pin])
-        if dirsrv_pin:
+        if dirsrv_pin is not None:
             args.extend(['--dirsrv_pin', dirsrv_pin])
         if unattended:
             args.extend(['-U'])
@@ -174,8 +174,8 @@ class CALessBase(IntegrationTest):
 
     @classmethod
     def copy_cert(cls, host, filename):
-        host.put_file(os.path.join(cls.cert_dir, filename),
-                      os.path.join(host.config.test_dir, filename))
+        host.transport.put_file(os.path.join(cls.cert_dir, filename),
+                                os.path.join(host.config.test_dir, filename))
 
     @classmethod
     def uninstall_server(self, host=None):
@@ -211,8 +211,9 @@ class CALessBase(IntegrationTest):
         if dirsrv_pkcs12_exists:
             files_to_copy.append(dirsrv_pkcs12)
         for filename in set(files_to_copy):
-            master.put_file(os.path.join(self.cert_dir, filename),
-                            os.path.join(master.config.test_dir, filename))
+            master.transport.put_file(
+                os.path.join(self.cert_dir, filename),
+                os.path.join(master.config.test_dir, filename))
 
         self.collect_log(replica, '/var/log/ipareplica-install.log')
         self.collect_log(replica, '/var/log/ipaclient-install.log')
@@ -230,9 +231,9 @@ class CALessBase(IntegrationTest):
             args.extend(['--http_pkcs12', http_pkcs12])
         if dirsrv_pkcs12:
             args.extend(['--dirsrv_pkcs12', dirsrv_pkcs12])
-        if http_pin:
+        if http_pin is not None:
             args.extend(['--http_pin', http_pin])
-        if dirsrv_pin:
+        if dirsrv_pin is not None:
             args.extend(['--dirsrv_pin', dirsrv_pin])
 
         args.extend([replica.hostname])
@@ -276,14 +277,16 @@ class CALessBase(IntegrationTest):
         return replica.run_command(args)
 
     @classmethod
-    def export_pkcs12(cls, nickname, filename='server.p12'):
+    def export_pkcs12(cls, nickname, filename='server.p12', password=None):
         """Export a cert as PKCS#12 to the given file"""
+        if password is None:
+            password = cls.cert_password
         ipautil.run(['pk12util',
                      '-o', filename,
                      '-n', nickname,
                      '-d', 'nssdb',
                      '-K', cls.cert_password,
-                     '-W', cls.cert_password], cwd=cls.cert_dir)
+                     '-W', password], cwd=cls.cert_dir)
 
     @classmethod
     def get_pem(cls, nickname):
@@ -421,7 +424,7 @@ class TestServerInstall(CALessBase):
         with open(self.pem_filename, 'w') as f:
             f.write(self.get_pem('ca1'))
 
-        result = self.install_server(http_pin=False)
+        result = self.install_server(http_pin=None)
         assert_error(result,
                      'ipa-server-install: error: You must specify --http_pin '
                      'with --http_pkcs12')
@@ -433,7 +436,7 @@ class TestServerInstall(CALessBase):
         with open(self.pem_filename, 'w') as f:
             f.write(self.get_pem('ca1'))
 
-        result = self.install_server(dirsrv_pin=False)
+        result = self.install_server(dirsrv_pin=None)
         assert_error(result,
                      'ipa-server-install: error: You must specify '
                      '--dirsrv_pin with --dirsrv_pkcs12')
@@ -678,7 +681,7 @@ class TestServerInstall(CALessBase):
 
         stdin_text = get_install_stdin(cert_passwords=[self.cert_password])
 
-        result = self.install_server(http_pin=False, unattended=False,
+        result = self.install_server(http_pin=None, unattended=False,
                                      stdin_text=stdin_text)
         assert result.returncode == 0
         self.verify_installation()
@@ -694,12 +697,40 @@ class TestServerInstall(CALessBase):
 
         stdin_text = get_install_stdin(cert_passwords=[self.cert_password])
 
-        result = self.install_server(dirsrv_pin=False, unattended=False,
+        result = self.install_server(dirsrv_pin=None, unattended=False,
                                      stdin_text=stdin_text)
         assert result.returncode == 0
         self.verify_installation()
         assert ('Enter server.p12 unlock password:'
                 in result.stdout_text), result.stdout_text
+
+    def test_no_http_password(self):
+        "IPA server install with empty HTTP password"
+
+        self.export_pkcs12('ca1/server', filename='http.p12', password='')
+        self.export_pkcs12('ca1/server', filename='dirsrv.p12')
+        with open(self.pem_filename, 'w') as f:
+            f.write(self.get_pem('ca1'))
+
+        result = self.install_server(http_pkcs12='http.p12',
+                                     dirsrv_pkcs12='dirsrv.p12',
+                                     http_pin='')
+        assert result.returncode == 0
+        self.verify_installation()
+
+    def test_no_ds_password(self):
+        "IPA server install with empty DS password"
+
+        self.export_pkcs12('ca1/server', filename='http.p12')
+        self.export_pkcs12('ca1/server', filename='dirsrv.p12', password='')
+        with open(self.pem_filename, 'w') as f:
+            f.write(self.get_pem('ca1'))
+
+        result = self.install_server(http_pkcs12='http.p12',
+                                     dirsrv_pkcs12='dirsrv.p12',
+                                     dirsrv_pin='')
+        assert result.returncode == 0
+        self.verify_installation()
 
 
 class TestReplicaInstall(CALessBase):
@@ -1005,7 +1036,7 @@ class TestReplicaInstall(CALessBase):
         stdin_text = get_replica_prepare_stdin(
             cert_passwords=[self.cert_password])
 
-        result = self.prepare_replica(http_pin=False, unattended=False,
+        result = self.prepare_replica(http_pin=None, unattended=False,
                                       stdin_text=stdin_text)
         assert result.returncode == 0
 
@@ -1022,7 +1053,7 @@ class TestReplicaInstall(CALessBase):
         stdin_text = get_replica_prepare_stdin(
             cert_passwords=[self.cert_password])
 
-        result = self.prepare_replica(dirsrv_pin=False, unattended=False,
+        result = self.prepare_replica(dirsrv_pin=None, unattended=False,
                                       stdin_text=stdin_text)
         assert result.returncode == 0
 
@@ -1030,6 +1061,36 @@ class TestReplicaInstall(CALessBase):
         assert result.returncode == 0
 
         self.verify_installation()
+
+    def test_no_http_password(self):
+        "IPA replica install with empty HTTP password"
+
+        self.export_pkcs12('ca1/replica', filename='http.p12', password='')
+        self.export_pkcs12('ca1/replica', filename='dirsrv.p12')
+
+        result = self.prepare_replica(http_pkcs12='http.p12',
+                                      dirsrv_pkcs12='dirsrv.p12',
+                                      http_pin='')
+        assert result.returncode == 0
+
+        result = self.install_replica()
+        assert result.returncode == 0
+
+        self.verify_installation()
+
+    def test_no_ds_password(self):
+        "IPA replica install with empty DS password"
+
+        self.export_pkcs12('ca1/replica', filename='http.p12')
+        self.export_pkcs12('ca1/replica', filename='dirsrv.p12', password='')
+
+        result = self.prepare_replica(http_pkcs12='http.p12',
+                                      dirsrv_pkcs12='dirsrv.p12',
+                                      dirsrv_pin='')
+        assert result.returncode == 0
+
+        result = self.install_replica()
+        assert result.returncode == 0
 
 
 class TestClientInstall(CALessBase):
@@ -1091,6 +1152,7 @@ class TestIPACommands(CALessBase):
                 'cert-status'):
             func = lambda: self.check_ipa_command_not_available(cmd)
             func.description = 'Verify that %s command is not available' % cmd
+            func.test_argument = cmd
             yield (func, )
 
     def test_cert_help_unavailable(self):
@@ -1172,24 +1234,22 @@ class TestCertinstall(CALessBase):
         tasks.kinit_admin(cls.master)
 
     def certinstall(self, mode, cert_nick=None, cert_exists=True,
-                    filename='server.p12', pin=_DEFAULT, stdin_text=None):
+                    filename='server.p12', pin=_DEFAULT, stdin_text=None,
+                    p12_pin=None, args=None):
         if cert_nick:
-            self.export_pkcs12(cert_nick)
+            self.export_pkcs12(cert_nick, password=p12_pin)
         if pin is _DEFAULT:
             pin = self.cert_password
         if cert_exists:
             self.copy_cert(self.master, filename)
-        args = ['ipa-server-certinstall',
-                '-%s' % mode, filename]
-        if pin is not None:
-            option = {'w': '--http_pin', 'd': '--dirsrv_pin'}[mode]
-            args += [option, pin]
-        if mode == 'd':
-            if stdin_text:
-                stdin_text = '%s\n%s' % (self.master.config.dirman_password,
-                                         stdin_text)
-            else:
-                stdin_text = self.master.config.dirman_password + '\n'
+        if not args:
+            args = ['ipa-server-certinstall',
+                    '-%s' % mode, filename]
+            if pin is not None:
+                args += ['--pin', pin]
+            if mode == 'd':
+                args += ['--dirman-password',
+                         self.master.config.dirman_password]
         return self.master.run_command(args,
                                        raiseonerr=False,
                                        stdin_text=stdin_text)
@@ -1361,4 +1421,40 @@ class TestCertinstall(CALessBase):
         result = self.certinstall('d', 'ca1/server',
                                   pin=None,
                                   stdin_text=self.cert_password + '\n')
+        assert result.returncode == 0
+
+    def test_no_http_password(self):
+        "Install new HTTP certificate with no PKCS#12 password"
+
+        result = self.certinstall('w', 'ca1/server', pin='', p12_pin='')
+        assert result.returncode == 0
+
+    def test_no_ds_password(self):
+        "Install new DS certificate with no PKCS#12 password"
+
+        result = self.certinstall('d', 'ca1/server', pin='', p12_pin='')
+        assert result.returncode == 0
+
+    def test_http_old_options(self):
+        "Install new valid DS certificate using pre-v3.3 CLI options"
+        # http://www.freeipa.org/page/V3/ipa-server-certinstall_CLI_cleanup
+
+        args = ['ipa-server-certinstall',
+                '-w', 'server.p12',
+                '--http_pin', self.cert_password]
+
+        result = self.certinstall('w', 'ca1/server', args=args)
+        assert result.returncode == 0
+
+    def test_ds_old_options(self):
+        "Install new valid DS certificate using pre-v3.3 CLI options"
+        # http://www.freeipa.org/page/V3/ipa-server-certinstall_CLI_cleanup
+
+        args = ['ipa-server-certinstall',
+                '-d', 'server.p12',
+                '--dirsrv_pin', self.cert_password]
+        stdin_text = self.master.config.dirman_password + '\n'
+
+        result = self.certinstall('d', 'ca1/server',
+                                  args=args, stdin_text=stdin_text)
         assert result.returncode == 0

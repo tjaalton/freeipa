@@ -39,7 +39,7 @@ import uuid
 from samba import param
 from samba import credentials
 from samba.dcerpc import security, lsa, drsblobs, nbt, netlogon
-from samba.ndr import ndr_pack
+from samba.ndr import ndr_pack, ndr_print
 from samba import net
 import samba
 import random
@@ -165,8 +165,7 @@ class DomainValidator(object):
                 base_dn=cn_trust,
                 attrs_list=[self.ATTR_TRUSTED_SID,
                             self.ATTR_FLATNAME,
-                            self.ATTR_TRUST_PARTNER,
-                            self.ATTR_TRUST_AUTHOUT]
+                            self.ATTR_TRUST_PARTNER]
                 )
 
             # We need to use case-insensitive dictionary since we use
@@ -185,18 +184,8 @@ class DomainValidator(object):
                                  "attribute: %s", dn, e)
                     continue
 
-                trust_authout = entry.get(self.ATTR_TRUST_AUTHOUT, [None])[0]
-
-                # We were able to read all Trusted domain attributes but the
-                # secret User is not member of trust admins group
-                if trust_authout is None:
-                    raise errors.ACIError(
-                        info=_('communication with trusted domains is allowed '
-                               'for Trusts administrator group members only'))
-
                 result[trust_partner] = (flatname_normalized,
-                                         security.dom_sid(trusted_sid),
-                                         trust_authout)
+                                         security.dom_sid(trusted_sid))
             return result
         except errors.NotFound, e:
             return []
@@ -462,43 +451,6 @@ class DomainValidator(object):
         ]
         return u'S-%d-%d-%s' % ( sid_rev_num, ia, '-'.join([str(s) for s in subs]),)
 
-    def __extract_trusted_auth(self, info):
-        """
-        Returns in clear trusted domain account credentials
-        """
-        clear = None
-        auth = drsblobs.trustAuthInOutBlob()
-        auth.__ndr_unpack__(info['auth'])
-        auth_array = auth.current.array[0]
-        if auth_array.AuthType == lsa.TRUST_AUTH_TYPE_CLEAR:
-            clear = ''.join(map(chr, auth_array.AuthInfo.password)).decode('utf-16-le')
-        return clear
-
-    def __kinit_as_trusted_account(self, info, password):
-        """
-        Initializes ccache with trusted domain account credentials.
-
-        Applies session code defaults for ccache directory and naming prefix.
-        Session code uses krbccache_prefix+<pid>, we use
-        krbccache_prefix+<TD>+<domain netbios name> so there is no clash
-
-        Returns tuple (ccache name, principal) where (None, None) signifes an error
-        on ccache initialization
-        """
-        ccache_name = os.path.join(krbccache_dir, "%sTD%s" % (krbccache_prefix, info['name'][0]))
-        principal = '%s$@%s' % (self.flatname, info['dns_domain'].upper())
-        (stdout, stderr, returncode) = ipautil.run(['/usr/bin/kinit', principal],
-                                                   env={'KRB5CCNAME':ccache_name},
-                                                   stdin=password, raiseonerr=False)
-        if returncode == 0:
-            return (ccache_name, principal)
-        else:
-            if returncode == 1:
-                raise errors.ACIError(
-                   info=_("KDC for %(domain)s denied trust account for IPA domain with a message '%(message)s'") %
-                        dict(domain=info['dns_domain'],message=stderr.strip()))
-            return (None, None)
-
     def kinit_as_http(self, domain):
         """
         Initializes ccache with http service credentials.
@@ -544,13 +496,10 @@ class DomainValidator(object):
             return (None, None)
 
     def search_in_dc(self, domain, filter, attrs, scope, basedn=None,
-                     use_http=False, quiet=False):
+                     quiet=False):
         """
         Perform LDAP search in a trusted domain `domain' Domain Controller.
         Returns resulting entries or None.
-
-        If use_http is set to True, the search is conducted using
-        HTTP service credentials.
         """
 
         entries = None
@@ -565,7 +514,6 @@ class DomainValidator(object):
         for (host, port) in info['gc']:
             entries = self.__search_in_dc(info, host, port, filter, attrs,
                                           scope, basedn=basedn,
-                                          use_http=use_http,
                                           quiet=quiet)
             if entries:
                 break
@@ -573,22 +521,13 @@ class DomainValidator(object):
         return entries
 
     def __search_in_dc(self, info, host, port, filter, attrs, scope,
-                       basedn=None, use_http=False, quiet=False):
+                       basedn=None, quiet=False):
         """
         Actual search in AD LDAP server, using SASL GSSAPI authentication
         Returns LDAP result or None.
         """
 
-        if use_http:
-            (ccache_name, principal) = self.kinit_as_http(info['dns_domain'])
-        else:
-            auth = self.__extract_trusted_auth(info)
-
-            if not auth:
-                return None
-
-            (ccache_name, principal) = self.__kinit_as_trusted_account(info,
-                                                                       auth)
+        (ccache_name, principal) = self.kinit_as_http(info['dns_domain'])
 
         if ccache_name:
             with installutils.private_ccache(path=ccache_name):
@@ -626,7 +565,6 @@ class DomainValidator(object):
         Returns dictionary with following keys
              name       -- NetBIOS name of the trusted domain
              dns_domain -- DNS name of the trusted domain
-             auth       -- encrypted credentials for trusted domain account
              gc         -- array of tuples (server, port) for Global Catalog
         """
         if domain in self._info:
@@ -653,7 +591,6 @@ class DomainValidator(object):
             self._domains = self.get_trusted_domains()
 
         info = dict()
-        info['auth'] = self._domains[domain][2]
         servers = []
 
         if result:
@@ -684,6 +621,12 @@ class DomainValidator(object):
         self._info[domain] = info
         return info
 
+def string_to_array(what):
+    blob = [0] * len(what)
+
+    for i in range(len(what)):
+        blob[i] = ord(what[i])
+    return blob
 
 class TrustDomainInstance(object):
 
@@ -698,6 +641,7 @@ class TrustDomainInstance(object):
         self._pipe = None
         self._policy_handle = None
         self.read_only = False
+        self.ftinfo_records = None
 
     def __gen_lsa_connection(self, binding):
        if self.creds is None:
@@ -827,12 +771,6 @@ class TrustDomainInstance(object):
         def arcfour_encrypt(key, data):
             c = RC4.RC4(key)
             return c.update(data)
-        def string_to_array(what):
-            blob = [0] * len(what)
-
-            for i in range(len(what)):
-                blob[i] = ord(what[i])
-            return blob
 
         password_blob = string_to_array(trustdom_secret.encode('utf-16-le'))
 
@@ -876,6 +814,53 @@ class TrustDomainInstance(object):
         self.auth_info = auth_info
 
 
+    def generate_ftinfo(self, another_domain):
+        """
+        Generates TrustDomainInfoFullInfo2Internal structure
+        This structure allows to pass information about all domains associated
+        with the another domain's realm.
+
+        Only top level name and top level name exclusions are handled here.
+        """
+        if not another_domain.ftinfo_records:
+            return
+
+        ftinfo_records = []
+        info = lsa.ForestTrustInformation()
+
+        for rec in another_domain.ftinfo_records:
+            record = lsa.ForestTrustRecord()
+            record.flags = 0
+            record.time = rec['rec_time']
+            record.type = rec['rec_type']
+            record.forest_trust_data.string = rec['rec_name']
+            ftinfo_records.append(record)
+
+        info.count = len(ftinfo_records)
+        info.entries = ftinfo_records
+        return info
+
+    def update_ftinfo(self, another_domain):
+        """
+        Updates forest trust information in this forest corresponding
+        to the another domain's information.
+        """
+        try:
+            if another_domain.ftinfo_records:
+                ftinfo = self.generate_ftinfo(another_domain)
+                # Set forest trust information -- we do it only against AD DC as
+                # smbd already has the information about itself
+                ldname = lsa.StringLarge()
+                ldname.string = another_domain.info['dns_domain']
+                collision_info = self._pipe.lsaRSetForestTrustInformation(self._policy_handle,
+                                                                          ldname,
+                                                                          lsa.LSA_FOREST_TRUST_DOMAIN_INFO,
+                                                                          ftinfo, 0)
+                if collision_info:
+                    root_logger.error("When setting forest trust information, got collision info back:\n%s" % (ndr_print(collision_info)))
+        except RuntimeError, e:
+            # We can ignore the error here -- setting up name suffix routes may fail
+            pass
 
     def establish_trust(self, another_domain, trustdom_secret):
         """
@@ -883,6 +868,12 @@ class TrustDomainInstance(object):
         Input: another_domain -- instance of TrustDomainInstance, initialized with #retrieve call
                trustdom_secret -- shared secred used for the trust
         """
+        if self.info['name'] == another_domain.info['name']:
+            # Check that NetBIOS names do not clash
+            raise errors.ValidationError(name=u'AD Trust Setup',
+                    error=_('the IPA server and the remote domain cannot share the same '
+                            'NetBIOS name: %s') % self.info['name'])
+
         self.generate_auth(trustdom_secret)
 
         info = lsa.TrustDomainInfoInfoEx()
@@ -892,12 +883,6 @@ class TrustDomainInstance(object):
         info.trust_direction = lsa.LSA_TRUST_DIRECTION_INBOUND | lsa.LSA_TRUST_DIRECTION_OUTBOUND
         info.trust_type = lsa.LSA_TRUST_TYPE_UPLEVEL
         info.trust_attributes = lsa.LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE
-
-        if self.info['name'] == info.netbios_name.string:
-            # Check that NetBIOS names do not clash
-            raise errors.ValidationError(name=u'AD Trust Setup',
-                    error=_('the IPA server and the remote domain cannot share the same '
-                            'NetBIOS name: %s') % self.info['name'])
 
         try:
             dname = lsa.String()
@@ -911,6 +896,13 @@ class TrustDomainInstance(object):
         except RuntimeError, (num, message):
             raise assess_dcerpc_exception(num=num, message=message)
 
+        self.update_ftinfo(another_domain)
+
+        # We should use proper trustdom handle in order to modify the
+        # trust settings. Samba insists this has to be done with LSA
+        # OpenTrustedDomain* calls, it is not enough to have a handle
+        # returned by the CreateTrustedDomainEx2 call.
+        trustdom_handle = self._pipe.OpenTrustedDomainByName(self._policy_handle, dname, security.SEC_FLAG_MAXIMUM_ALLOWED)
         try:
             infoclass = lsa.TrustDomainInfoSupportedEncTypes()
             infoclass.enc_types = security.KERB_ENCTYPE_RC4_HMAC_MD5
@@ -918,6 +910,10 @@ class TrustDomainInstance(object):
             infoclass.enc_types |= security.KERB_ENCTYPE_AES256_CTS_HMAC_SHA1_96
             self._pipe.SetInformationTrustedDomain(trustdom_handle, lsa.LSA_TRUSTED_DOMAIN_SUPPORTED_ENCRYPTION_TYPES, infoclass)
         except RuntimeError, e:
+            # We can ignore the error here -- changing enctypes is for
+            # improved security but the trust will work with default values as
+            # well. In particular, the call may fail against Windows 2003
+            # server as that one doesn't support AES encryption types
             pass
 
     def verify_trust(self, another_domain):
@@ -942,6 +938,74 @@ class TrustDomainInstance(object):
             # We only check that it was indeed status for verification process
             return True
         return False
+
+
+def fetch_domains(api, mydomain, trustdomain, creds=None):
+    trust_flags = dict(
+                NETR_TRUST_FLAG_IN_FOREST = 0x00000001,
+                NETR_TRUST_FLAG_OUTBOUND  = 0x00000002,
+                NETR_TRUST_FLAG_TREEROOT  = 0x00000004,
+                NETR_TRUST_FLAG_PRIMARY   = 0x00000008,
+                NETR_TRUST_FLAG_NATIVE    = 0x00000010,
+                NETR_TRUST_FLAG_INBOUND   = 0x00000020,
+                NETR_TRUST_FLAG_MIT_KRB5  = 0x00000080,
+                NETR_TRUST_FLAG_AES       = 0x00000100)
+
+    trust_attributes = dict(
+                NETR_TRUST_ATTRIBUTE_NON_TRANSITIVE     = 0x00000001,
+                NETR_TRUST_ATTRIBUTE_UPLEVEL_ONLY       = 0x00000002,
+                NETR_TRUST_ATTRIBUTE_QUARANTINED_DOMAIN = 0x00000004,
+                NETR_TRUST_ATTRIBUTE_FOREST_TRANSITIVE  = 0x00000008,
+                NETR_TRUST_ATTRIBUTE_CROSS_ORGANIZATION = 0x00000010,
+                NETR_TRUST_ATTRIBUTE_WITHIN_FOREST      = 0x00000020,
+                NETR_TRUST_ATTRIBUTE_TREAT_AS_EXTERNAL  = 0x00000040)
+
+    def communicate(td):
+        td.creds.guess(td.parm)
+        netrc = net.Net(creds=td.creds, lp=td.parm)
+        try:
+            result = netrc.finddc(domain=trustdomain, flags=nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_DS)
+        except RuntimeError, e:
+            raise assess_dcerpc_exception(message=str(e))
+        if not result:
+            return None
+        td.retrieve(unicode(result.pdc_dns_name))
+
+        netr_pipe = netlogon.netlogon(td.binding, td.parm, td.creds)
+        domains = netr_pipe.netr_DsrEnumerateDomainTrusts(td.binding, 1)
+        return domains
+
+    domains = None
+    td = TrustDomainInstance('')
+    td.parm.set('workgroup', mydomain)
+    td.creds = credentials.Credentials()
+    if creds is None:
+        domval = DomainValidator(api)
+        (ccache_name, principal) = domval.kinit_as_http(trustdomain)
+        td.creds.set_kerberos_state(credentials.MUST_USE_KERBEROS)
+        if ccache_name:
+            with installutils.private_ccache(path=ccache_name):
+                domains = communicate(td)
+    else:
+        td.creds.set_kerberos_state(credentials.DONT_USE_KERBEROS)
+        td.creds.parse_string(creds)
+        domains = communicate(td)
+
+    if domains is None:
+        return None
+
+    result = []
+    for t in domains.array:
+        if ((t.trust_attributes & trust_attributes['NETR_TRUST_ATTRIBUTE_WITHIN_FOREST']) and
+            (t.trust_flags & trust_flags['NETR_TRUST_FLAG_IN_FOREST'])):
+            res = dict()
+            res['cn'] = unicode(t.dns_name)
+            res['ipantflatname'] = unicode(t.netbios_name)
+            res['ipanttrusteddomainsid'] = unicode(t.sid)
+            res['ipanttrustpartner'] = res['cn']
+            result.append(res)
+    return result
+
 
 class TrustDomainJoins(object):
     def __init__(self, api):
@@ -1007,6 +1071,31 @@ class TrustDomainJoins(object):
         # Otherwise, use anonymously obtained data
         self.remote_domain = rd
 
+    def get_realmdomains(self):
+        """
+        Generate list of records for forest trust information about
+        our realm domains. Note that the list generated currently
+        includes only top level domains, no exclusion domains, and no TDO objects
+        as we handle the latter in a separate way
+        """
+        if self.local_domain.read_only:
+            return
+
+	self.local_domain.ftinfo_records = []
+
+        realm_domains = self.api.Command.realmdomains_show()['result']
+        # Use realmdomains' modification timestamp to judge records last update time
+        (dn, entry_attrs) = self.api.Backend.ldap2.get_entry(realm_domains['dn'], ['modifyTimestamp'])
+        # Convert the timestamp to Windows 64-bit timestamp format
+        trust_timestamp = long(time.mktime(time.strptime(entry_attrs['modifytimestamp'][0][:14], "%Y%m%d%H%M%S"))*1e7+116444736000000000)
+
+        for dom in realm_domains['associateddomain']:
+            ftinfo = dict()
+            ftinfo['rec_name'] = dom
+            ftinfo['rec_time'] = trust_timestamp
+            ftinfo['rec_type'] = lsa.LSA_FOREST_TRUST_TOP_LEVEL_NAME
+            self.local_domain.ftinfo_records.append(ftinfo)
+
     def join_ad_full_credentials(self, realm, realm_server, realm_admin, realm_passwd):
         if not self.configured:
             return None
@@ -1021,6 +1110,7 @@ class TrustDomainJoins(object):
 
         if not self.remote_domain.read_only:
             trustdom_pass = samba.generate_random_password(128, 128)
+            self.get_realmdomains()
             self.remote_domain.establish_trust(self.local_domain, trustdom_pass)
             self.local_domain.establish_trust(self.remote_domain, trustdom_pass)
             result = self.remote_domain.verify_trust(self.local_domain)

@@ -21,121 +21,17 @@
 
 import os
 import socket
-import threading
-import subprocess
-from contextlib import contextmanager
-import errno
-
-import paramiko
 
 from ipapython.ipaldap import IPAdmin
 from ipapython import ipautil
 from ipapython.ipa_log_manager import log_mgr
+from ipatests.test_integration import transport
 
 
-class RemoteCommand(object):
-    """A Popen-style object representing a remote command
-
-    Unlike subprocess.Popen, this does not run the given command; instead
-    it only starts a shell. The command must be written to stdin manually.
-
-    The standard error and output are handled by this class. They're not
-    available for file-like reading. They are logged by default.
-    To make sure reading doesn't stall after one buffer fills up, they are read
-    in parallel using threads.
-
-    After calling wait(), stdout_text and stderr_text attributes will be
-    strings containing the output, and returncode will contain the
-    exit code.
-
-    :param host: The Host on which the command is run
-    :param argv: The command that will be run (for logging only)
-    :param index: An identification number added to the logs
-    :param log_stdout: If false, stdout will not be logged
-    """
-    def __init__(self, host, argv, index, log_stdout=True):
-        self.returncode = None
-        self.host = host
-        self.argv = argv
-        self._stdout_lines = []
-        self._stderr_lines = []
-        self.running_threads = set()
-
-        self.logger_name = '%s.cmd%s' % (self.host.logger_name, index)
-        self.log = log_mgr.get_logger(self.logger_name)
-
-        self.log.info('RUN %s', argv)
-
-        self._ssh = host.transport.open_channel('session')
-
-        self._ssh.invoke_shell()
-        stdin = self.stdin = self._ssh.makefile('wb')
-        stdout = self._ssh.makefile('rb')
-        stderr = self._ssh.makefile_stderr('rb')
-
-        self._start_pipe_thread(self._stdout_lines, stdout, 'out', log_stdout)
-        self._start_pipe_thread(self._stderr_lines, stderr, 'err', True)
-
-        self._done = False
-
-    def wait(self, raiseonerr=True):
-        """Wait for the remote process to exit
-
-        Raises an excption if the exit code is not 0.
-        """
-        if self._done:
-            return self.returncode
-
-        self._ssh.shutdown_write()
-        while self.running_threads:
-            self.running_threads.pop().join()
-
-        self.stdout_text = ''.join(self._stdout_lines)
-        self.stderr_text = ''.join(self._stderr_lines)
-        self.returncode = self._ssh.recv_exit_status()
-        self._ssh.close()
-
-        self._done = True
-
-        if raiseonerr and self.returncode:
-            self.log.error('Exit code: %s', self.returncode)
-            raise subprocess.CalledProcessError(self.returncode, self.argv)
-        else:
-            self.log.debug('Exit code: %s', self.returncode)
-        return self.returncode
-
-    def _start_pipe_thread(self, result_list, stream, name, do_log=True):
-        log = log_mgr.get_logger('%s.%s' % (self.logger_name, name))
-
-        def read_stream():
-            for line in stream:
-                if do_log:
-                    log.debug(line.rstrip('\n'))
-                result_list.append(line)
-
-        thread = threading.Thread(target=read_stream)
-        self.running_threads.add(thread)
-        thread.start()
-        return thread
-
-
-@contextmanager
-def sftp_open(sftp, filename, mode='r'):
-    """Context manager that provides a file-like object over a SFTP channel
-
-    This provides compatibility with older Paramiko versions.
-    (In Paramiko 1.10+, file objects from `sftp.open` are directly usable as
-    context managers).
-    """
-    file = sftp.open(filename, mode)
-    try:
-        yield file
-    finally:
-        file.close()
-
-
-class Host(object):
+class BaseHost(object):
     """Representation of a remote IPA host"""
+    transport_class = None
+
     def __init__(self, domain, hostname, role, index, ip=None):
         self.domain = domain
         self.role = role
@@ -145,6 +41,8 @@ class Host(object):
         self.shortname = shortname
         self.hostname = shortname + '.' + self.domain.name
         self.external_hostname = hostname
+
+        self.netbios = self.domain.name.split('.')[0].upper()
 
         self.logger_name = '%s.%s.%s' % (
             self.__module__, type(self).__name__, shortname)
@@ -175,8 +73,6 @@ class Host(object):
 
         self.env_sh_path = os.path.join(domain.config.test_dir, 'env.sh')
 
-        self._command_index = 0
-
         self.log_collectors = []
 
     def __str__(self):
@@ -200,6 +96,16 @@ class Host(object):
     def from_env(cls, env, domain, hostname, role, index):
         ip = env.get('BEAKER%s%s_IP_env%s' %
                         (role.upper(), index, domain.index), None)
+
+        # We need to determine the type of the host, this depends on the domain
+        # type, as we assume all Unix machines are in the Unix domain and
+        # all Windows machine in a AD domain
+
+        if domain.type == 'AD':
+            cls = WinHost
+        else:
+            cls = Host
+
         self = cls(domain, hostname, role, index, ip)
         return self
 
@@ -219,18 +125,56 @@ class Host(object):
         env['MYBEAKERHOSTNAME'] = self.external_hostname
         env['MYIP'] = self.ip
 
-        env['MYROLE'] = '%s%s' % (role, self.domain._env)
+        prefix = 'TESTHOST_' if self.role in self.domain.extra_roles else ''
+        env['MYROLE'] = '%s%s%s' % (prefix, role, self.domain._env)
         env['MYENV'] = str(self.domain.index)
 
         return env
+
+    @property
+    def transport(self):
+        try:
+            return self._transport
+        except AttributeError:
+            cls = self.transport_class
+            if cls:
+                # transport_class is None in the base class and must be
+                # set in subclasses.
+                # Pylint reports that calling None will fail
+                self._transport = cls(self)  # pylint: disable=E1102
+            else:
+                raise NotImplementedError('transport class not available')
+            return self._transport
+
+    def get_file_contents(self, filename):
+        """Shortcut for transport.get_file_contents"""
+        return self.transport.get_file_contents(filename)
+
+    def put_file_contents(self, filename, contents):
+        """Shortcut for transport.put_file_contents"""
+        self.transport.put_file_contents(filename, contents)
+
+    def ldap_connect(self):
+        """Return an LDAPClient authenticated to this host as directory manager
+        """
+        self.log.info('Connecting to LDAP')
+        ldap = IPAdmin(self.external_hostname)
+        binddn = self.config.dirman_dn
+        self.log.info('LDAP bind as %s' % binddn)
+        ldap.do_simple_bind(binddn, self.config.dirman_password)
+        return ldap
+
+    def collect_log(self, filename):
+        for collector in self.log_collectors:
+            collector(self, filename)
 
     def run_command(self, argv, set_env=True, stdin_text=None,
                     log_stdout=True, raiseonerr=True,
                     cwd=None):
         """Run the given command on this host
 
-        Returns a RemoteCommand instance. The command will have already run
-        when this method returns, so its stdout_text, stderr_text, and
+        Returns a Shell instance. The command will have already run in the
+        shell when this method returns, so its stdout_text, stderr_text, and
         returncode attributes will be available.
 
         :param argv: Command to run, as either a Popen-style list, or a string
@@ -242,30 +186,43 @@ class Host(object):
                            (but will still be available as cmd.stdout_text)
         :param raiseonerr: If true, an exception will be raised if the command
                            does not exit with return code 0
+        :param cwd: The working directory for the command
         """
-        assert self.transport
+        raise NotImplementedError()
 
-        self._command_index += 1
-        command = RemoteCommand(self, argv, index=self._command_index,
-                                log_stdout=log_stdout)
 
+class Host(BaseHost):
+    """A Unix host"""
+    transport_class = transport.SSHTransport
+
+    def run_command(self, argv, set_env=True, stdin_text=None,
+                    log_stdout=True, raiseonerr=True,
+                    cwd=None):
+        # This will give us a Bash shell
+        command = self.transport.start_shell(argv, log_stdout=log_stdout)
+
+        # Set working directory
         if cwd is None:
             cwd = self.config.test_dir
         command.stdin.write('cd %s\n' % ipautil.shell_quote(cwd))
 
+        # Set the environment
         if set_env:
             command.stdin.write('. %s\n' %
                                 ipautil.shell_quote(self.env_sh_path))
         command.stdin.write('set -e\n')
 
         if isinstance(argv, basestring):
+            # Run a shell command given as a string
             command.stdin.write('(')
             command.stdin.write(argv)
             command.stdin.write(')')
         else:
+            # Run a command given as a popen-style list (no shell expansion)
             for arg in argv:
                 command.stdin.write(ipautil.shell_quote(arg))
                 command.stdin.write(' ')
+
         command.stdin.write(';exit\n')
         if stdin_text:
             command.stdin.write(stdin_text)
@@ -274,91 +231,13 @@ class Host(object):
         command.wait(raiseonerr=raiseonerr)
         return command
 
-    @property
-    def transport(self):
-        """Paramiko Transport connected to this host"""
-        try:
-            return self._transport
-        except AttributeError:
-            sock = socket.create_connection((self.external_hostname,
-                                             self.ssh_port))
-            self._transport = transport = paramiko.Transport(sock)
-            transport.connect(hostkey=self.host_key)
-            if self.root_ssh_key_filename:
-                self.log.debug('Authenticating with private RSA key')
-                filename = os.path.expanduser(self.root_ssh_key_filename)
-                key = paramiko.RSAKey.from_private_key_file(filename)
-                transport.auth_publickey(username='root', key=key)
-            elif self.root_password:
-                self.log.debug('Authenticating with password')
-                transport.auth_password(username='root',
-                                        password=self.root_password)
-            else:
-                self.log.critical('No SSH credentials configured')
-                raise RuntimeError('No SSH credentials configured')
-            return transport
 
-    @property
-    def sftp(self):
-        """Paramiko SFTPClient connected to this host"""
-        try:
-            return self._sftp
-        except AttributeError:
-            transport = self.transport
-            self._sftp = paramiko.SFTPClient.from_transport(transport)
-            return self._sftp
+class WinHost(BaseHost):
+    """
+    Representation of a remote Windows host.
 
-    def ldap_connect(self):
-        """Return an LDAPClient authenticated to this host as directory manager
-        """
-        ldap = IPAdmin(self.external_hostname)
-        ldap.do_simple_bind(self.config.dirman_dn,
-                            self.config.dirman_password)
-        return ldap
+    This serves as a sketch class once we move from manual preparation of
+    Active Directory to the automated setup.
+    """
 
-    def mkdir_recursive(self, path):
-        """`mkdir -p` on the remote host"""
-        try:
-            self.sftp.chdir(path or '/')
-        except IOError as e:
-            if not path or path == '/':
-                raise
-            self.mkdir_recursive(os.path.dirname(path))
-            self.sftp.mkdir(path)
-            self.sftp.chdir(path)
-
-    def get_file_contents(self, filename):
-        """Read the named remote file and return the contents as a string"""
-        self.log.debug('READ %s', filename)
-        with sftp_open(self.sftp, filename) as f:
-            return f.read()
-
-    def put_file_contents(self, filename, contents):
-        """Write the given string to the named remote file"""
-        self.log.info('WRITE %s', filename)
-        with sftp_open(self.sftp, filename, 'w') as f:
-            f.write(contents)
-
-    def file_exists(self, filename):
-        """Return true if the named remote file exists"""
-        self.log.debug('STAT %s', filename)
-        try:
-            self.sftp.stat(filename)
-        except IOError, e:
-            if e.errno == errno.ENOENT:
-                return False
-            else:
-                raise
-        return True
-
-    def get_file(self, remotepath, localpath):
-        self.log.debug('GET %s', remotepath)
-        self.sftp.get(remotepath, localpath)
-
-    def put_file(self, localpath, remotepath):
-        self.log.info('PUT %s', remotepath)
-        self.sftp.put(localpath, remotepath)
-
-    def collect_log(self, filename):
-        for collector in self.log_collectors:
-            collector(self, filename)
+    pass

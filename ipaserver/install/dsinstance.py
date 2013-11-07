@@ -27,6 +27,7 @@ import time
 import tempfile
 import base64
 import stat
+import grp
 
 from ipapython.ipa_log_manager import *
 from ipapython import ipautil, sysrestore, ipaldap
@@ -130,6 +131,52 @@ def check_ports():
 def is_ds_running(server_id=''):
     return ipaservices.knownservices.dirsrv.is_running(instance_name=server_id)
 
+
+def create_ds_user():
+    """
+    Create DS user if it doesn't exist yet.
+    """
+    try:
+        pwd.getpwnam(DS_USER)
+        root_logger.debug('DS user %s exists', DS_USER)
+    except KeyError:
+        root_logger.debug('Adding DS user %s', DS_USER)
+        args = [
+            '/usr/sbin/useradd',
+            '-g', DS_GROUP,
+            '-c', 'DS System User',
+            '-d', '/var/lib/dirsrv',
+            '-s', '/sbin/nologin',
+            '-M', '-r', DS_USER
+        ]
+        try:
+            ipautil.run(args)
+            root_logger.debug('Done adding DS user')
+        except ipautil.CalledProcessError, e:
+            root_logger.critical('Failed to add DS user: %s', e)
+
+
+def create_ds_group():
+    """
+    Create DS group if it doesn't exist yet.
+    Returns True if the group already exists.
+    """
+    try:
+        grp.getgrnam(DS_GROUP)
+        root_logger.debug('DS group %s exists', DS_GROUP)
+        group_exists = True
+    except KeyError:
+        group_exists = False
+        root_logger.debug('Adding DS group %s', DS_GROUP)
+        args = ['/usr/sbin/groupadd', '-r', DS_GROUP]
+        try:
+            ipautil.run(args)
+            root_logger.debug('Done adding DS group')
+        except ipautil.CalledProcessError, e:
+            root_logger.critical('Failed to add DS group: %s', e)
+
+    return group_exists
+
 INF_TEMPLATE = """
 [General]
 FullMachineName=   $FQDN
@@ -166,12 +213,12 @@ class DsInstance(service.Service):
             )
         self.nickname = cert_nickname
         self.dm_password = dm_password
-        self.realm_name = realm_name
+        self.realm = realm_name
         self.sub_dict = None
         self.domain = domain_name
         self.serverid = None
-        self.fqdn = None
         self.pkcs12_info = None
+        self.ca_is_configured = True
         self.dercert = None
         self.idstart = None
         self.idmax = None
@@ -179,7 +226,7 @@ class DsInstance(service.Service):
         self.open_ports = []
         self.run_init_memberof = True
         if realm_name:
-            self.suffix = ipautil.realm_to_suffix(self.realm_name)
+            self.suffix = ipautil.realm_to_suffix(self.realm)
             self.__setup_sub_dict()
         else:
             self.suffix = DN()
@@ -194,7 +241,7 @@ class DsInstance(service.Service):
 
     def __common_setup(self, enable_ssl=False):
 
-        self.step("creating directory server user", self.__create_ds_user)
+        self.step("creating directory server user", create_ds_user)
         self.step("creating directory server instance", self.__create_instance)
         self.step("adding default schema", self.__add_default_schemas)
         self.step("enabling memberof plugin", self.__add_memberof_module)
@@ -233,17 +280,19 @@ class DsInstance(service.Service):
 
     def init_info(self, realm_name, fqdn, domain_name, dm_password,
                   subject_base, idstart, idmax, pkcs12_info, ca_file=None):
-        self.realm_name = realm_name.upper()
-        self.serverid = realm_to_serverid(self.realm_name)
-        self.suffix = ipautil.realm_to_suffix(self.realm_name)
+        self.realm = realm_name.upper()
+        self.serverid = realm_to_serverid(self.realm)
+        self.suffix = ipautil.realm_to_suffix(self.realm)
         self.fqdn = fqdn
         self.dm_password = dm_password
         self.domain = domain_name
-        self.principal = "ldap/%s@%s" % (self.fqdn, self.realm_name)
+        self.principal = "ldap/%s@%s" % (self.fqdn, self.realm)
         self.subject_base = subject_base
         self.idstart = idstart
         self.idmax = idmax
         self.pkcs12_info = pkcs12_info
+        if pkcs12_info:
+            self.ca_is_configured = False
         self.ca_file = ca_file
 
         self.__setup_sub_dict()
@@ -275,7 +324,7 @@ class DsInstance(service.Service):
 
     def create_replica(self, realm_name, master_fqdn, fqdn,
                        domain_name, dm_password, subject_base,
-                       pkcs12_info=None, ca_file=None):
+                       pkcs12_info=None, ca_file=None, ca_is_configured=None):
         # idstart and idmax are configured so that the range is seen as
         # depleted by the DNA plugin and the replica will go and get a
         # new range from the master.
@@ -295,10 +344,13 @@ class DsInstance(service.Service):
             ca_file=ca_file
         )
         self.master_fqdn = master_fqdn
+        if ca_is_configured is not None:
+            self.ca_is_configured = ca_is_configured
 
         self.__common_setup(True)
 
         self.step("setting up initial replication", self.__setup_replica)
+        self.step("updating schema", self.__update_schema)
         # See LDIFs for automember configuration during replica install
         self.step("setting Auto Member configuration", self.__add_replica_automember_config)
         self.step("enabling S4U2Proxy delegation", self.__setup_s4u2proxy)
@@ -310,16 +362,20 @@ class DsInstance(service.Service):
 
     def __setup_replica(self):
         replication.enable_replication_version_checking(self.fqdn,
-            self.realm_name,
+            self.realm,
             self.dm_password)
 
-        repl = replication.ReplicationManager(self.realm_name,
+        repl = replication.ReplicationManager(self.realm,
                                               self.fqdn,
                                               self.dm_password)
         repl.setup_replication(self.master_fqdn,
                                r_binddn=DN(('cn', 'Directory Manager')),
                                r_bindpw=self.dm_password)
         self.run_init_memberof = repl.needs_memberof_fixup()
+
+    def __update_schema(self):
+        # FIXME: https://fedorahosted.org/389/ticket/47490
+        self._ldap_mod("schema-update.ldif")
 
     def __enable(self):
         self.backup_state("enabled", self.is_enabled())
@@ -337,7 +393,7 @@ class DsInstance(service.Service):
                              PASSWORD=self.dm_password,
                              RANDOM_PASSWORD=self.generate_random(),
                              SUFFIX=self.suffix,
-                             REALM=self.realm_name, USER=DS_USER,
+                             REALM=self.realm, USER=DS_USER,
                              SERVER_ROOT=server_root, DOMAIN=self.domain,
                              TIME=int(time.time()), IDSTART=self.idstart,
                              IDMAX=self.idmax, HOST=self.fqdn,
@@ -346,30 +402,13 @@ class DsInstance(service.Service):
                              IDRANGE_SIZE=idrange_size
                          )
 
-    def __create_ds_user(self):
-        try:
-            pwd.getpwnam(DS_USER)
-            root_logger.debug("ds user %s exists" % DS_USER)
-        except KeyError:
-            root_logger.debug("adding ds user %s" % DS_USER)
-            args = ["/usr/sbin/useradd", "-g", DS_GROUP,
-                                         "-c", "DS System User",
-                                         "-d", "/var/lib/dirsrv",
-                                         "-s", "/sbin/nologin",
-                                         "-M", "-r", DS_USER]
-            try:
-                ipautil.run(args)
-                root_logger.debug("done adding user")
-            except ipautil.CalledProcessError, e:
-                root_logger.critical("failed to add user %s" % e)
-
     def __create_instance(self):
         pent = pwd.getpwnam(DS_USER)
 
         self.backup_state("serverid", self.serverid)
         self.fstore.backup_file("/etc/sysconfig/dirsrv")
 
-        self.sub_dict['BASEDC'] = self.realm_name.split('.')[0].lower()
+        self.sub_dict['BASEDC'] = self.realm.split('.')[0].lower()
         base_txt = ipautil.template_str(BASE_TEMPLATE, self.sub_dict)
         root_logger.debug(base_txt)
 
@@ -561,7 +600,7 @@ class DsInstance(service.Service):
 
     def enable_ssl(self):
         dirname = config_dirname(self.serverid)
-        dsdb = certs.CertDB(self.realm_name, nssdir=dirname, subject_base=self.subject_base)
+        dsdb = certs.CertDB(self.realm, nssdir=dirname, subject_base=self.subject_base)
         if self.pkcs12_info:
             dsdb.create_from_pkcs12(self.pkcs12_info[0], self.pkcs12_info[1],
                                     ca_file=self.ca_file)
@@ -574,17 +613,19 @@ class DsInstance(service.Service):
             self.dercert = dsdb.get_cert_from_db(nickname, pem=False)
         else:
             nickname = self.nickname
-            cadb = certs.CertDB(self.realm_name, host_name=self.fqdn, subject_base=self.subject_base)
+            cadb = certs.CertDB(self.realm, host_name=self.fqdn, subject_base=self.subject_base)
 
             # FIXME, need to set this nickname in the RA plugin
             cadb.export_ca_cert('ipaCert', False)
             dsdb.create_from_cacert(cadb.cacert_fname, passwd=None)
             self.dercert = dsdb.create_server_cert(
                 nickname, self.fqdn, cadb)
+            dsdb.create_pin_file()
+
+        if self.ca_is_configured:
             dsdb.track_server_cert(
                 nickname, self.principal, dsdb.passwd_fname,
                 'restart_dirsrv %s' % self.serverid)
-            dsdb.create_pin_file()
 
         conn = ipaldap.IPAdmin(self.fqdn)
         conn.do_simple_bind(DN(('cn', 'directory manager')), self.dm_password)
@@ -626,7 +667,7 @@ class DsInstance(service.Service):
         """
 
         dirname = config_dirname(self.serverid)
-        certdb = certs.CertDB(self.realm_name, nssdir=dirname, subject_base=self.subject_base)
+        certdb = certs.CertDB(self.realm, nssdir=dirname, subject_base=self.subject_base)
 
         if cacert_name is None:
             cacert_name = certdb.cacert_name
@@ -762,7 +803,7 @@ class DsInstance(service.Service):
             # drop the trailing / off the config_dirname so the directory
             # will match what is in certmonger
             dirname = config_dirname(serverid)[:-1]
-            dsdb = certs.CertDB(self.realm_name, nssdir=dirname)
+            dsdb = certs.CertDB(self.realm, nssdir=dirname)
             dsdb.untrack_server_cert(self.nickname)
 
     # we could probably move this function into the service.Service
@@ -790,8 +831,8 @@ class DsInstance(service.Service):
         # shutdown the server
         self.stop()
 
-        dirname = config_dirname(realm_to_serverid(self.realm_name))
-        certdb = certs.CertDB(self.realm_name, nssdir=dirname, subject_base=self.subject_base)
+        dirname = config_dirname(realm_to_serverid(self.realm))
+        certdb = certs.CertDB(self.realm, nssdir=dirname, subject_base=self.subject_base)
         if not cacert_name or len(cacert_name) == 0:
             cacert_name = "Imported CA"
         # we can't pass in the nickname, so we set the instance variable

@@ -32,16 +32,19 @@ from ldif import LDIFWriter
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipapython.ipa_log_manager import log_mgr
+from ipatests.test_integration import util
 from ipatests.test_integration.config import env_to_script
+from ipatests.test_integration.host import Host
 
 log = log_mgr.get_logger(__name__)
 
 
 def prepare_host(host):
-    env_filename = os.path.join(host.config.test_dir, 'env.sh')
-    host.collect_log(env_filename)
-    host.mkdir_recursive(host.config.test_dir)
-    host.put_file_contents(env_filename, env_to_script(host.to_env()))
+    if isinstance(host, Host):
+        env_filename = os.path.join(host.config.test_dir, 'env.sh')
+        host.collect_log(env_filename)
+        host.transport.mkdir_recursive(host.config.test_dir)
+        host.put_file_contents(env_filename, env_to_script(host.to_env()))
 
 
 def apply_common_fixes(host):
@@ -51,10 +54,10 @@ def apply_common_fixes(host):
 
 
 def backup_file(host, filename):
-    if host.file_exists(filename):
+    if host.transport.file_exists(filename):
         backupname = os.path.join(host.config.test_dir, 'file_backup',
                                   filename.lstrip('/'))
-        host.mkdir_recursive(os.path.dirname(backupname))
+        host.transport.mkdir_recursive(os.path.dirname(backupname))
         host.run_command(['cp', '-af', filename, backupname])
         return True
     else:
@@ -63,7 +66,7 @@ def backup_file(host, filename):
             ipautil.shell_quote(filename),
             ipautil.shell_quote(rmname)))
         contents = host.get_file_contents(rmname)
-        host.mkdir_recursive(os.path.dirname(rmname))
+        host.transport.mkdir_recursive(os.path.dirname(rmname))
         return False
 
 
@@ -115,8 +118,20 @@ def unapply_fixes(host):
 def restore_files(host):
     backupname = os.path.join(host.config.test_dir, 'file_backup')
     rmname = os.path.join(host.config.test_dir, 'file_remove')
+
+    # Restore the backed up files
     host.run_command('cp -arvf %s/* /' % ipautil.shell_quote(backupname),
                      raiseonerr=False)
+
+    # Restore context of the backed-up files
+    sed_remove_backupdir = 's/%s//g' % backupname.replace('/', '\/')
+    host.run_command("find %s | "
+                     "sed '%s' | "
+                     "sed '/^$/d' | "
+                     "xargs -d '\n' "
+                     "/sbin/restorecon -v" % (backupname, sed_remove_backupdir))
+
+    # Remove all the files that did not exist and were 'backed up'
     host.run_command(['xargs', '-d', r'\n', '-a', rmname, 'rm', '-vf'],
                      raiseonerr=False)
     host.run_command(['rm', '-rvf', backupname, rmname], raiseonerr=False)
@@ -197,6 +212,7 @@ def install_replica(master, replica, setup_ca=True):
 
     kinit_admin(replica)
 
+
 def install_client(master, client):
     client.collect_log('/var/log/ipaclient-install.log')
 
@@ -210,6 +226,194 @@ def install_client(master, client):
                         '--server', master.hostname])
 
     kinit_admin(client)
+
+
+def install_adtrust(host):
+    """
+    Runs ipa-adtrust-install on the client and generates SIDs for the entries.
+    Configures the compat tree for the legacy clients.
+    """
+
+    # ipa-adtrust-install appends to ipaserver-install.log
+    host.collect_log('/var/log/ipaserver-install.log')
+
+    inst = host.domain.realm.replace('.', '-')
+    host.collect_log('/var/log/dirsrv/slapd-%s/errors' % inst)
+    host.collect_log('/var/log/dirsrv/slapd-%s/access' % inst)
+
+    kinit_admin(host)
+    host.run_command(['ipa-adtrust-install', '-U',
+                      '--enable-compat',
+                      '--netbios-name', host.netbios,
+                      '-a', host.config.admin_password,
+                      '--add-sids'])
+
+    # Restart named because it lost connection to dirsrv
+    # (Directory server restarts during the ipa-adtrust-install)
+    host.run_command(['systemctl', 'restart', 'named'])
+
+    # Check that named is running and has loaded the information from LDAP
+    dig_command = ['dig', 'SRV', '+short', '@localhost',
+               '_ldap._tcp.%s' % host.domain.name]
+    dig_output = '0 100 389 %s.' % host.hostname
+    dig_test = lambda x: re.search(re.escape(dig_output), x)
+
+    util.run_repeatedly(host, dig_command, test=dig_test)
+
+
+def configure_dns_for_trust(master, ad):
+    """
+    This configures DNS on IPA master according to the relationship of the
+    IPA's and AD's domains.
+    """
+
+    def is_subdomain(subdomain, domain):
+        subdomain_unpacked = subdomain.split('.')
+        domain_unpacked = domain.split('.')
+
+        subdomain_unpacked.reverse()
+        domain_unpacked.reverse()
+
+        subdomain = False
+
+        if len(subdomain_unpacked) > len(domain_unpacked):
+            subdomain = True
+
+            for subdomain_segment, domain_segment in zip(subdomain_unpacked,
+                                                         domain_unpacked):
+                subdomain = subdomain and subdomain_segment == domain_segment
+
+        return subdomain
+
+    kinit_admin(master)
+
+    if is_subdomain(master.domain.name, ad.domain.name):
+        master.run_command(['ipa', 'dnszone-add', ad.domain.name,
+                            '--name-server', ad.hostname,
+                            '--admin-email', 'hostmaster@%s' % ad.domain.name,
+                            '--forwarder', ad.ip,
+                            '--forward-policy', 'only',
+                            '--ip-address', ad.ip,
+                            '--force'])
+    elif is_subdomain(ad.domain.name, master.domain.name):
+        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                            '%s.%s' % (ad.shortname, ad.netbios),
+                            '--a-ip-address', ad.ip])
+
+        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                            ad.netbios,
+                            '--ns-hostname',
+                            '%s.%s' % (ad.shortname, ad.netbios)])
+
+        master.run_command(['ipa', 'dnszone-mod', master.domain.name,
+                            '--allow-transfer', ad.ip])
+    else:
+        master.run_command(['ipa', 'dnszone-add', ad.domain.name,
+                            '--name-server', ad.hostname,
+                            '--admin-email', 'hostmaster@%s' % ad.domain.name,
+                            '--forwarder', ad.ip,
+                            '--forward-policy', 'only',
+                            '--ip-address', ad.ip,
+                            '--force'])
+
+
+def establish_trust_with_ad(master, ad, extra_args=()):
+    """
+    Establishes trust with Active Directory. Trust type is detected depending
+    on the presence of SfU (Services for Unix) support on the AD.
+
+    Use extra arguments to pass extra arguments to the trust-add command, such
+    as --range-type="ipa-ad-trust" to enfroce a particular range type.
+    """
+
+    # Force KDC to reload MS-PAC info by trying to get TGT for HTTP
+    master.run_command(['kinit', '-kt', '/etc/httpd/conf/ipa.keytab',
+                        'HTTP/%s' % master.hostname])
+    master.run_command(['systemctl', 'restart', 'krb5kdc.service'])
+    master.run_command(['kdestroy', '-A'])
+
+    kinit_admin(master)
+    master.run_command(['klist'])
+    master.run_command(['smbcontrol', 'all', 'debug', '100'])
+    util.run_repeatedly(master,
+                        ['ipa', 'trust-add',
+                        '--type', 'ad', ad.domain.name,
+                        '--admin', 'Administrator',
+                        '--password'] + list(extra_args),
+                        stdin_text=master.config.ad_admin_password)
+    master.run_command(['smbcontrol', 'all', 'debug', '1'])
+    clear_sssd_cache(master)
+
+
+def remove_trust_with_ad(master, ad):
+    """
+    Removes trust with Active Directory. Also removes the associated ID range.
+    """
+
+    kinit_admin(master)
+
+    # Remove the trust
+    master.run_command(['ipa', 'trust-del', ad.domain.name])
+
+    # Remove the range
+    range_name = ad.domain.name.upper() + '_id_range'
+    master.run_command(['ipa', 'idrange-del', range_name])
+
+
+def configure_auth_to_local_rule(master, ad):
+    """
+    Configures auth_to_local rule in /etc/krb5.conf
+    """
+
+    section_identifier = " %s = {" % master.domain.realm
+    line1 = ("  auth_to_local = RULE:[1:$1@$0](^.*@%s$)s/@%s/@%s/"
+             % (ad.domain.realm, ad.domain.realm, ad.domain.name))
+    line2 = "  auth_to_local = DEFAULT"
+
+    krb5_conf_content = master.get_file_contents('/etc/krb5.conf')
+    krb5_lines = [line.rstrip() for line in krb5_conf_content.split('\n')]
+    realm_section_index = krb5_lines.index(section_identifier)
+
+    krb5_lines.insert(realm_section_index + 1, line1)
+    krb5_lines.insert(realm_section_index + 2, line2)
+
+    krb5_conf_new_content = '\n'.join(krb5_lines)
+    master.put_file_contents('/etc/krb5.conf', krb5_conf_new_content)
+
+    master.run_command(['systemctl', 'restart', 'sssd'])
+
+
+def clear_sssd_cache(host):
+    """
+    Clears SSSD cache by removing the cache files. Restarts SSSD.
+    """
+
+    systemd_available = host.transport.file_exists('/bin/systemctl')
+
+    if systemd_available:
+        host.run_command(['systemctl', 'start', 'sssd'])
+    else:
+        host.run_command(['/sbin/service', 'sssd', 'start'])
+
+    host.run_command("find /var/lib/sss/db -name '*.ldb' | "
+                     "xargs rm -fv")
+    host.run_command(['rm', '-fv', '/var/lib/sss/mc/group'])
+    host.run_command(['rm', '-fv', '/var/lib/sss/mc/passwd'])
+
+    if systemd_available:
+        host.run_command(['systemctl', 'start', 'sssd'])
+    else:
+        host.run_command(['/sbin/service', 'sssd', 'start'])
+
+
+def sync_time(host, server):
+    """
+    Syncs the time with the remote server. Please note that this function
+    leaves ntpd stopped.
+    """
+
+    host.run_command(['sudo', 'systemctl', 'stop', 'ntpd'])
+    host.run_command(['sudo', 'ntpdate', server.hostname])
 
 
 def connect_replica(master, replica):
@@ -419,8 +623,7 @@ def wait_for_replication(ldap, timeout=30):
         if any(not e.single_value(status_attr).startswith('0 ')
                for e in entries):
             log.error('Replication error')
-            break
-        in_progress = []
+            continue
         if any(e.single_value(progress_attr) == 'TRUE' for e in entries):
             log.debug('Replication in progress (waited %s/%ss)',
                       i, timeout)

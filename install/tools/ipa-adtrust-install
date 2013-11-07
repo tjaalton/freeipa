@@ -248,13 +248,42 @@ def main():
     api.bootstrap(**cfg)
     api.finalize()
 
+    # If domain name and realm does not match, IPA server will not be able
+    # to estabilish trust with Active Directory. Print big fat warning.
+
+    realm_not_matching_domain = (api.env.domain.upper() != api.env.realm)
+
+    if realm_not_matching_domain:
+        print("WARNING: Realm name does not match the domain name.\n"
+              "You will not be able to estabilish trusts with Active "
+              "Directory unless\nthe realm name of the IPA server matches its "
+              "domain name.\n\n")
+        if not options.unattended:
+            if not ipautil.user_input("Do you wish to continue?",
+                                      default = False,
+                                      allow_empty = False):
+                sys.exit("Aborting installation.")
+
+    # Check if /etc/samba/smb.conf already exists. In case it was not generated
+    # by IPA, print a warning that we will break existing configuration.
+
     if adtrustinstance.ipa_smb_conf_exists():
         if not options.unattended:
-            while True:
                 print "IPA generated smb.conf detected."
-                if not ipautil.user_input("Overwrite smb.conf?", default = False, allow_empty = False):
+                if not ipautil.user_input("Overwrite smb.conf?",
+                                          default = False,
+                                          allow_empty = False):
                     sys.exit("Aborting installation.")
-                break
+
+    elif os.path.exists('/etc/samba/smb.conf'):
+        print("WARNING: The smb.conf already exists. Running "
+              "ipa-adtrust-install will break your existing samba "
+              "configuration.\n\n")
+        if not options.unattended:
+            if not ipautil.user_input("Do you wish to continue?",
+                                      default = False,
+                                      allow_empty = False):
+                sys.exit("Aborting installation.")
 
     if not options.unattended and not options.enable_compat:
         options.enable_compat = enable_compat_tree()

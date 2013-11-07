@@ -19,8 +19,6 @@
 
 """Base class for FreeIPA integration tests"""
 
-import os
-
 import nose
 
 from ipapython.ipa_log_manager import log_mgr
@@ -35,28 +33,49 @@ log = log_mgr.get_logger(__name__)
 class IntegrationTest(object):
     num_replicas = 0
     num_clients = 0
+    num_ad_domains = 0
+    required_extra_roles = []
     topology = None
 
     @classmethod
     def setup_class(cls):
+
+        def get_resources(resource_container, resource_str, num_needed):
+            if len(resource_container) < num_needed:
+                raise nose.SkipTest(
+                    'Not enough %s available (have %s, need %s)' %
+                    (resource_str, len(resource_container), num_needed))
+            return resource_container[:num_needed]
+
         config = get_global_config()
         if not config.domains:
             raise nose.SkipTest('Integration testing not configured')
 
         cls.logs_to_collect = {}
 
-        domain = config.domains[0]
-        cls.master = domain.master
-        if len(domain.replicas) < cls.num_replicas:
-            raise nose.SkipTest(
-                'Not enough replicas available (have %s, need %s)' %
-                (len(domain.replicas), cls.num_replicas))
-        if len(domain.clients) < cls.num_clients:
-            raise nose.SkipTest(
-                'Not enough clients available (have %s, need %s)' %
-                (len(domain.clients), cls.num_clients))
-        cls.replicas = domain.replicas[:cls.num_replicas]
-        cls.clients = domain.clients[:cls.num_clients]
+        cls.domain = config.domains[0]
+
+        # Check that we have enough resources available
+        cls.master = cls.domain.master
+        cls.replicas = get_resources(cls.domain.replicas, 'replicas',
+                                     cls.num_replicas)
+        cls.clients = get_resources(cls.domain.clients, 'clients',
+                                    cls.num_clients)
+        cls.ad_domains = get_resources(config.ad_domains, 'AD domains',
+                                       cls.num_ad_domains)
+
+        # Check that we have all required extra hosts at our disposal
+        available_extra_roles = [role for domain in cls.get_domains()
+                                        for role in domain.extra_roles]
+        missing_extra_roles = list(set(cls.required_extra_roles) -
+                                     set(available_extra_roles))
+
+        if missing_extra_roles:
+            raise nose.SkipTest("Not all required extra hosts available, "
+                                "missing: %s, available: %s"
+                                % (missing_extra_roles,
+                                   available_extra_roles))
+
         for host in cls.get_all_hosts():
             host.add_log_collector(cls.collect_log)
             cls.prepare_host(host)
@@ -68,8 +87,22 @@ class IntegrationTest(object):
             raise
 
     @classmethod
+    def host_by_role(cls, role):
+        for domain in cls.get_domains():
+            try:
+                return domain.host_by_role(role)
+            except LookupError:
+                pass
+        raise LookupError(role)
+
+    @classmethod
     def get_all_hosts(cls):
-        return [cls.master] + cls.replicas + cls.clients
+        return ([cls.master] + cls.replicas + cls.clients +
+                map(cls.host_by_role, cls.required_extra_roles))
+
+    @classmethod
+    def get_domains(cls):
+        return [cls.domain] + cls.ad_domains
 
     @classmethod
     def prepare_host(cls, host):
@@ -95,6 +128,8 @@ class IntegrationTest(object):
             del cls.master
             del cls.replicas
             del cls.clients
+            del cls.ad_domains
+            del cls.domain
 
     @classmethod
     def uninstall(cls):

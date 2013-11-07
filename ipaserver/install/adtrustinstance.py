@@ -27,10 +27,12 @@ import struct
 import re
 
 from ipaserver.install import service
+from ipaserver.install import installutils
 from ipaserver.install.dsinstance import realm_to_serverid
 from ipaserver.install.bindinstance import get_rr, add_rr, del_rr, \
                                            dns_zone_exists
 from ipalib import errors, api
+from ipalib.util import normalize_zone
 from ipapython.dn import DN
 from ipapython import sysrestore
 from ipapython import ipautil
@@ -108,35 +110,71 @@ class ADTRUSTInstance(service.Service):
     FALLBACK_GROUP_NAME = u'Default SMB Group'
 
     def __init__(self, fstore=None):
-        self.fqdn = None
         self.ip_address = None
-        self.realm = None
-        self.domain_name = None
         self.netbios_name = None
         self.reset_netbios_name = None
         self.no_msdcs = None
         self.add_sids = None
         self.smbd_user = None
-        self.suffix = DN()
-        self.ldapi_socket = None
-        self.smb_conf = None
-        self.smb_dn = None
         self.smb_dn_pwd = None
         self.trust_dn = None
         self.smb_dom_dn = None
         self.sub_dict = None
-        self.cifs_principal = None
-        self.cifs_agent = None
-        self.selinux_booleans = None
         self.rid_base = None
         self.secondary_rid_base = None
 
-        service.Service.__init__(self, "smb", service_desc="CIFS", dm_password=None, ldapi=True)
+        self.fqdn = None
+        self.realm = None
+        self.domain_name = None
+
+        service.Service.__init__(self, "smb", service_desc="CIFS",
+                                 dm_password=None, ldapi=True)
 
         if fstore:
             self.fstore = fstore
         else:
             self.fstore = sysrestore.FileStore('/var/lib/ipa/sysrestore')
+
+        self.__setup_default_attributes()
+
+    def __setup_default_attributes(self):
+        """
+        This method setups default attributes that are either constants, or
+        based on api.env attributes, such as realm, hostname or domain name.
+        """
+
+        # Constants
+        self.smb_conf = "/etc/samba/smb.conf"
+        self.samba_keytab = "/etc/samba/samba.keytab"
+        self.selinux_booleans = ["samba_portmapper"]
+        self.cifs_hosts = []
+
+        # Values obtained from API.env
+        self.fqdn = self.fqdn or api.env.host
+        self.realm = self.realm or api.env.realm
+        self.domain_name = self.domain_name or api.env.domain
+
+        self.cifs_principal = "cifs/" + self.fqdn + "@" + self.realm
+        self.suffix = ipautil.realm_to_suffix(self.realm)
+        self.ldapi_socket = "%%2fvar%%2frun%%2fslapd-%s.socket" % \
+                            realm_to_serverid(self.realm)
+
+        # DN definitions
+        self.trust_dn = DN(api.env.container_trusts, self.suffix)
+
+        self.smb_dn = DN(('cn', 'adtrust agents'),
+                         ('cn', 'sysaccounts'),
+                         ('cn', 'etc'),
+                         self.suffix)
+
+        self.smb_dom_dn = DN(('cn', self.domain_name),
+                             api.env.container_cifsdomains,
+                             self.suffix)
+
+        self.cifs_agent = DN(('krbprincipalname', self.cifs_principal.lower()),
+                             api.env.container_service,
+                             self.suffix)
+
 
     def __gen_sid_string(self):
         sub_ids = struct.unpack("<LLL", os.urandom(12))
@@ -364,8 +402,6 @@ class ADTRUSTInstance(service.Service):
         self.admin_conn.add_entry(entry)
 
     def __write_smb_conf(self):
-        self.fstore.backup_file(self.smb_conf)
-
         conf_fd = open(self.smb_conf, "w")
         conf_fd.write('### Added by IPA Installer ###\n')
         conf_fd.write('[global]\n')
@@ -474,26 +510,31 @@ class ADTRUSTInstance(service.Service):
                     member=[self.cifs_agent],
                 )
                 self.admin_conn.add_entry(entry)
-        except Exception, e:
-            # CIFS principal already exists, it is not the first time adtrustinstance is managed
+        except Exception:
+            # CIFS principal already exists, it is not the first time
+            # adtrustinstance is managed
             # That's fine, we we'll re-extract the key again.
             pass
 
-        samba_keytab = "/etc/samba/samba.keytab"
-        if os.path.exists(samba_keytab):
-            try:
-                ipautil.run(["ipa-rmkeytab", "--principal", self.cifs_principal,
-                                         "-k", samba_keytab])
-            except ipautil.CalledProcessError, e:
-                if e.returncode != 5:
-                    root_logger.critical("Failed to remove old key for %s" % self.cifs_principal)
+        self.clean_samba_keytab()
 
         try:
             ipautil.run(["ipa-getkeytab", "--server", self.fqdn,
                                           "--principal", self.cifs_principal,
-                                          "-k", samba_keytab])
-        except ipautil.CalledProcessError, e:
-            root_logger.critical("Failed to add key for %s" % self.cifs_principal)
+                                          "-k", self.samba_keytab])
+        except ipautil.CalledProcessError:
+            root_logger.critical("Failed to add key for %s"
+                                 % self.cifs_principal)
+
+    def clean_samba_keytab(self):
+        if os.path.exists(self.samba_keytab):
+            try:
+                ipautil.run(["ipa-rmkeytab", "--principal", self.cifs_principal,
+                                         "-k", self.samba_keytab])
+            except ipautil.CalledProcessError, e:
+                if e.returncode != 5:
+                    root_logger.critical("Failed to remove old key for %s"
+                                         % self.cifs_principal)
 
     def srv_rec(self, host, port, prio):
         return "%(prio)d 100 %(port)d %(host)s" % dict(host=host,prio=prio,port=port)
@@ -506,13 +547,19 @@ class ADTRUSTInstance(service.Service):
         """
 
         zone = self.domain_name
-        host = self.fqdn.split(".")[0]
+        host, host_domain = self.fqdn.split(".", 1)
+
+        if normalize_zone(zone) == normalize_zone(host_domain):
+            host_in_rr = host
+        else:
+            host_in_rr = normalize_zone(self.fqdn)
+
         priority = 0
 
         ipa_srv_rec = (
-            ("_ldap._tcp", [self.srv_rec(host, 389, priority)], 389),
-            ("_kerberos._tcp", [self.srv_rec(host, 88, priority)], 88),
-            ("_kerberos._udp", [self.srv_rec(host, 88, priority)], 88),
+            ("_ldap._tcp", [self.srv_rec(host_in_rr, 389, priority)], 389),
+            ("_kerberos._tcp", [self.srv_rec(host_in_rr, 88, priority)], 88),
+            ("_kerberos._udp", [self.srv_rec(host_in_rr, 88, priority)], 88),
         )
         win_srv_suffix = (".Default-First-Site-Name._sites.dc._msdcs",
                           ".dc._msdcs")
@@ -688,6 +735,7 @@ class ADTRUSTInstance(service.Service):
     def __stop(self):
         self.backup_state("running", self.is_running())
         try:
+            ipaservices.service('winbind').stop()
             self.stop()
         except:
             pass
@@ -740,24 +788,9 @@ class ADTRUSTInstance(service.Service):
         self.add_sids = add_sids
         self.enable_compat = enable_compat
         self.smbd_user = smbd_user
-        self.suffix = ipautil.realm_to_suffix(self.realm)
-        self.ldapi_socket = "%%2fvar%%2frun%%2fslapd-%s.socket" % \
-                            realm_to_serverid(self.realm)
 
-        self.smb_conf = "/etc/samba/smb.conf"
-
-        self.smb_dn = DN(('cn', 'adtrust agents'), ('cn', 'sysaccounts'),
-                         ('cn', 'etc'), self.suffix)
-
-        self.trust_dn = DN(api.env.container_trusts, self.suffix)
-        self.smb_dom_dn = DN(('cn', self.domain_name),
-                             api.env.container_cifsdomains, self.suffix)
-        self.cifs_principal = "cifs/" + self.fqdn + "@" + self.realm
-        self.cifs_agent = DN(('krbprincipalname', self.cifs_principal.lower()),
-                             api.env.container_service,
-                             self.suffix)
-        self.selinux_booleans = ["samba_portmapper"]
-        self.cifs_hosts = list()
+        # Setup constants and attributes derived from the values above
+        self.__setup_default_attributes()
 
         self.__setup_sub_dict()
 
@@ -856,20 +889,34 @@ class ADTRUSTInstance(service.Service):
         except:
             pass
 
-        for r_file in [self.smb_conf]:
-            try:
-                self.fstore.restore_file(r_file)
-            except ValueError, error:
-                root_logger.debug(error)
-                pass
+        # Since we do not guarantee restoring back to working samba state,
+        # we should not restore smb.conf
 
+        # Restore the state of affected selinux booleans
         for var in self.selinux_booleans:
             sebool_state = self.restore_state(var)
             if not sebool_state is None:
                 try:
-                    ipautil.run(["/usr/sbin/setsebool", "-P", var, sebool_state])
+                    ipautil.run(["/usr/sbin/setsebool",
+                                 "-P", var, sebool_state])
                 except:
                     self.print_msg(SELINUX_WARNING % dict(var=var))
+
+        # Remove samba's credentials cache
+        krb5cc_samba = '/var/run/samba/krb5cc_samba'
+        installutils.remove_file(krb5cc_samba)
+
+        # Remove samba's configuration file
+        installutils.remove_file(self.smb_conf)
+
+        # Remove samba's persistent and temporary tdb files
+        tdb_files = [tdb_file for tdb_file in os.listdir("/var/lib/samba/")
+                                           if tdb_file.endswith(".tdb")]
+        for tdb_file in tdb_files:
+            installutils.remove_file(tdb_file)
+
+        # Remove our keys from samba's keytab
+        self.clean_samba_keytab()
 
         if not enabled is None and not enabled:
             self.disable()

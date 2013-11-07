@@ -28,19 +28,19 @@
 
 import sys
 import os
-import errno
 import grp
-import subprocess
 import signal
 import shutil
-import glob
 import pickle
 import random
 import tempfile
 import nss.error
 import base64
-from optparse import OptionGroup, OptionValueError, SUPPRESS_HELP
+import pwd
+import textwrap
+from optparse import OptionGroup, OptionValueError
 
+from ipaserver.install import adtrustinstance
 from ipaserver.install import dsinstance
 from ipaserver.install import krbinstance
 from ipaserver.install import bindinstance
@@ -51,10 +51,11 @@ from ipaserver.install import cainstance
 from ipaserver.install import memcacheinstance
 from ipaserver.install import otpdinstance
 from ipaserver.install import sysupgrade
-
+from ipaserver.install import replication
 from ipaserver.install import service, installutils
 from ipapython import version
 from ipapython import certmonger
+from ipapython import ipaldap
 from ipaserver.install.installutils import *
 from ipaserver.plugins.ldap2 import ldap2
 
@@ -110,7 +111,7 @@ def validate_dm_password(password):
         raise ValueError("Password must only contain ASCII characters")
 
     # Disallow characters that pkisilent doesn't process properly:
-    bad_characters = ' &\\<'
+    bad_characters = ' &\\<%'
     if any(c in bad_characters for c in password):
         raise ValueError('Password must not contain these characters: %s' %
             ', '.join('"%s"' % c for c in bad_characters))
@@ -212,9 +213,6 @@ def parse_options():
                       help="Do not use DNS for hostname lookup during installation")
     dns_group.add_option("--no-dns-sshfp", dest="create_sshfp", default=True, action="store_false",
                       help="Do not automatically create DNS SSHFP records")
-    dns_group.add_option("--no-serial-autoincrement", dest="serial_autoincrement",
-                      default=True, action="store_false",
-                      help="Do not enable SOA serial autoincrement")
     parser.add_option_group(dns_group)
 
     uninstall_group = OptionGroup(parser, "uninstall options")
@@ -274,11 +272,11 @@ def parse_options():
                      "PKCS#12 options are used.")
 
     if options.unattended:
-        if options.dirsrv_pkcs12 and not options.dirsrv_pin:
+        if options.dirsrv_pkcs12 and options.dirsrv_pin is None:
             parser.error("You must specify --dirsrv_pin with --dirsrv_pkcs12")
-        if options.http_pkcs12 and not options.http_pin:
+        if options.http_pkcs12 and options.http_pin is None:
             parser.error("You must specify --http_pin with --http_pkcs12")
-        if options.pkinit_pkcs12 and not options.pkinit_pin:
+        if options.pkinit_pkcs12 and options.pkinit_pin is None:
             parser.error("You must specify --pkinit_pin with --pkinit_pkcs12")
 
     if options.dirsrv_pkcs12 and not options.root_ca_file:
@@ -495,6 +493,7 @@ def uninstall():
     httpinstance.HTTPInstance(fstore).uninstall()
     krbinstance.KrbInstance(fstore).uninstall()
     dsinstance.DsInstance(fstore=fstore).uninstall()
+    adtrustinstance.ADTRUSTInstance(fstore).uninstall()
     memcacheinstance.MemcacheInstance().uninstall()
     otpdinstance.OtpdInstance().uninstall()
     ipaservices.restore_network_configuration(fstore, sstore)
@@ -624,6 +623,50 @@ def main():
                 print "Aborting uninstall operation."
                 sys.exit(1)
 
+        try:
+            conn = ipaldap.IPAdmin(
+                api.env.host,
+                ldapi=True,
+                realm=api.env.realm
+            )
+            conn.do_external_bind(pwd.getpwuid(os.geteuid()).pw_name)
+        except Exception:
+            msg = ("\nWARNING: Failed to connect to Directory Server to find "
+                   "information about replication agreements. Uninstallation "
+                   "will continue despite the possible existing replication "
+                   "agreements.\n\n")
+            print textwrap.fill(msg, width=80, replace_whitespace=False)
+        else:
+            rm = replication.ReplicationManager(
+                realm=api.env.realm,
+                hostname=api.env.host,
+                dirman_passwd=None,
+                conn=conn
+            )
+            agreements = rm.find_ipa_replication_agreements()
+
+            if agreements:
+                other_masters = [a.get('cn')[0][4:] for a in agreements]
+                msg = (
+                    "\nReplication agreements with the following IPA masters "
+                    "found: %s. Removing any replication agreements before "
+                    "uninstalling the server is strongly recommended. You can "
+                    "remove replication agreements by running the following "
+                    "command on any other IPA master:\n" % ", ".join(
+                        other_masters)
+                )
+                cmd = "$ ipa-replica-manage del %s\n" % api.env.host
+                print textwrap.fill(msg, width=80, replace_whitespace=False)
+                print cmd
+                if not (options.unattended or user_input("Are you sure you "
+                                                         "want to continue "
+                                                         "with the uninstall "
+                                                         "procedure?",
+                                                         False)):
+                    print ""
+                    print "Aborting uninstall operation."
+                    sys.exit(1)
+
         return uninstall()
 
     if options.external_ca:
@@ -748,6 +791,10 @@ def main():
         except ipaclient.ntpconf.NTPConfigurationError:
             pass
 
+    # Check to see if httpd is already configured to listen on 443
+    if httpinstance.httpd_443_configured():
+        sys.exit("Aborting installation")
+
     realm_name = ""
     host_name = ""
     domain_name = ""
@@ -832,38 +879,35 @@ def main():
     ca_file = options.root_ca_file
 
     if options.http_pkcs12:
-        if not options.http_pin:
+        if options.http_pin is None:
             options.http_pin = installutils.read_password(
                 "Enter %s unlock" % options.http_pkcs12,
                 confirm=False, validate=False)
             if options.http_pin is None:
                 sys.exit("%s unlock password required" % options.http_pkcs12)
-        http_pin_file = ipautil.write_tmp_file(options.http_pin)
-        http_pkcs12_info = (options.http_pkcs12, http_pin_file.name)
+        http_pkcs12_info = (options.http_pkcs12, options.http_pin)
         http_cert_name = installutils.check_pkcs12(
             http_pkcs12_info, ca_file, host_name)
 
     if options.dirsrv_pkcs12:
-        if not options.dirsrv_pin:
+        if options.dirsrv_pin is None:
             options.dirsrv_pin = installutils.read_password(
                 "Enter %s unlock" % options.dirsrv_pkcs12,
                 confirm=False, validate=False)
             if options.dirsrv_pin is None:
                 sys.exit("%s unlock password required" % options.dirsrv_pkcs12)
-        dirsrv_pin_file = ipautil.write_tmp_file(options.dirsrv_pin)
-        dirsrv_pkcs12_info = (options.dirsrv_pkcs12, dirsrv_pin_file.name)
+        dirsrv_pkcs12_info = (options.dirsrv_pkcs12, options.dirsrv_pin)
         dirsrv_cert_name = installutils.check_pkcs12(
             dirsrv_pkcs12_info, ca_file, host_name)
 
     if options.pkinit_pkcs12:
-        if not options.pkinit_pin:
+        if options.pkinit_pin is None:
             options.pkinit_pin = installutils.read_password(
                 "Enter %s unlock" % options.pkinit_pkcs12,
                 confirm=False, validate=False)
             if options.pkinit_pin is None:
                 sys.exit("%s unlock password required" % options.pkinit_pkcs12)
-        pkinit_pin_file = ipautil.write_tmp_file(options.pkinit_pin)
-        pkinit_pkcs12_info = (options.pkinit_pkcs12, pkinit_pin_file.name)
+        pkinit_pkcs12_info = (options.pkinit_pkcs12, options.pkinit_pin)
 
     if not options.dm_password:
         dm_password = read_dm_password()
@@ -924,6 +968,17 @@ def main():
                 or reverse_zone is None else reverse_zone)
         print
 
+    # If domain name and realm does not match, IPA server will not be able
+    # to estabilish trust with Active Directory. Print big fat warning.
+
+    realm_not_matching_domain = (domain_name.upper() != realm_name)
+
+    if realm_not_matching_domain:
+        print("WARNING: Realm name does not match the domain name.\n"
+              "You will not be able to estabilish trusts with Active "
+              "Directory unless\nythe realm name of the IPA server matches "
+              "its domain name.\n\n")
+
     if not options.unattended and not user_input("Continue to configure the system with these values?", False):
         sys.exit("Installation aborted")
 
@@ -971,16 +1026,7 @@ def main():
         ipaservices.backup_and_replace_hostname(fstore, sstore, host_name)
 
     # Create DS group if it doesn't exist yet
-    try:
-        grp.getgrnam(dsinstance.DS_GROUP)
-        root_logger.debug("ds group %s exists" % dsinstance.DS_GROUP)
-    except KeyError:
-        args = ["/usr/sbin/groupadd", "-r", dsinstance.DS_GROUP]
-        try:
-            ipautil.run(args)
-            root_logger.debug("done adding DS group")
-        except ipautil.CalledProcessError, e:
-            root_logger.critical("failed to add DS group: %s" % e)
+    dsinstance.create_ds_group()
 
     # Create a directory server instance
     if external != 2:
@@ -1138,7 +1184,6 @@ def main():
     bind = bindinstance.BindInstance(fstore, dm_password)
     bind.setup(host_name, ip_address, realm_name, domain_name, dns_forwarders,
                options.conf_ntp, reverse_zone, zonemgr=options.zonemgr,
-               serial_autoincrement=options.serial_autoincrement,
                ca_configured=setup_ca)
     if options.setup_dns:
         api.Backend.ldap2.connect(bind_dn=DN(('cn', 'Directory Manager')), bind_pw=dm_password)
