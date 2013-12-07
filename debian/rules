@@ -40,9 +40,8 @@ else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client
 endif
 
-ifeq ($(ONLY_CLIENT), 1)
+# tests would just fail, they need a proper environment with 389 running et al
 override_dh_auto_test:
-endif
 
 override_dh_auto_install:
 ifneq ($(ONLY_CLIENT), 1)

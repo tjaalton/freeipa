@@ -38,6 +38,8 @@ freeipa (3.3.3-1) UNRELEASED; urgency=low
     that.
   * Add support for Debian platform.
   * port-ipa-client-automount.diff: Patch i-c-a so it works on Debian.
+  * rules: Don't run tests on server either, would never work during package
+    build.
 
   [ Nick Hatch ]
   * Added three patches
