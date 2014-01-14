@@ -1,13 +1,13 @@
 # not upstreamable
 no-testcert.patch
 prefix.patch
-fix-nss-include.diff
 no-test-lang.diff
 fix-install-layout.diff
 fix-ntpdate-opts.diff
 fix-ldap-conf-path.diff
 port-ipa-client-automount.diff
 dont-check-for-systemd-pc.diff
+fix-portability-of-nss.diff
 
 # send upstream
 fix-string-format.diff
