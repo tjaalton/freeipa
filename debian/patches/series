@@ -7,6 +7,7 @@ fix-install-layout.diff
 fix-ntpdate-opts.diff
 fix-ldap-conf-path.diff
 port-ipa-client-automount.diff
+dont-check-for-systemd-pc.diff
 
 # send upstream
 fix-string-format.diff

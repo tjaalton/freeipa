@@ -1,0 +1,15 @@
+avoid build-dependency on systemd, which doesn't exist on ubuntu
+
+diff --git a/daemons/configure.ac b/daemons/configure.ac
+index e57dad2..9ca5198 100644
+--- a/daemons/configure.ac
++++ b/daemons/configure.ac
+@@ -232,7 +232,7 @@ PKG_CHECK_MODULES([SSSNSSIDMAP], [sss_nss_idmap])
+ dnl ---------------------------------------------------------------------------
+ dnl - Check for systemd unit directory
+ dnl ---------------------------------------------------------------------------
+-PKG_CHECK_EXISTS([systemd], [], [AC_MSG_ERROR([systemd not found])])
++dnl PKG_CHECK_EXISTS([systemd], [], [AC_MSG_ERROR([systemd not found])])
+ AC_ARG_WITH([systemdsystemunitdir],
+             AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
+             [], [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])

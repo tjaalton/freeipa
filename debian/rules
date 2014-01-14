@@ -28,7 +28,10 @@ override_dh_autoreconf:
 override_dh_auto_configure:
 	dh_auto_configure -Dipa-client
 ifneq ($(ONLY_CLIENT), 1)
-	dh_auto_configure -Ddaemons -- --with-openldap
+	dh_auto_configure -Ddaemons -- \
+		--with-openldap \
+		--with-systemdsystemunitdir=/lib/systemd/system
+
 	dh_auto_configure -Dinstall
 endif
 
