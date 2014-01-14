@@ -1,7 +1,7 @@
 freeipa (3.3.3-1) UNRELEASED; urgency=low
 
   [ Michele Baldessari ]
-  * Initial release (Closes: #12345)
+  * Initial release (Closes: #734703)
   * New upstream
   * Dropped 10_ipa_kpasswd patch, applied upstream
 
