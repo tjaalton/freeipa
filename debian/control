@@ -80,7 +80,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-ldap,
  python-krbv,
  python-pyasn1,
- tomcat6,
 Description: FreeIPA centralized identity framework -- server
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
@@ -88,6 +87,25 @@ Description: FreeIPA centralized identity framework -- server
  logs, analysis thereof).
  .
  This is the server package.
+
+Package: freeipa-server-trust-ad
+Architecture: any
+Depends: ${misc:Depends}, ${python:Depends},
+ freeipa-server (= ${binary:Version}),
+ python-libsss-nss-idmap,
+ python-m2crypto,
+ python-samba,
+ samba,
+ winbind,
+Description: FreeIPA centralized identity framework -- AD trust installer
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ Cross-realm trusts with Active Directory in IPA require working Samba 4
+ installation. This package is provided for convenience to install all required
+ dependencies at once.
 
 Package: freeipa-client
 Architecture: any
@@ -131,6 +149,19 @@ Description: FreeIPA centralized identity framework -- admintools
  logs, analysis thereof).
  .
  This package contains some tools for administrators.
+
+Package: freeipa-tests
+Architecture: any
+Depends: ${misc:Depends}, ${python:Depends},
+ tar,
+ xz,
+Description: FreeIPA centralized identity framework -- tests
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package contains tests that verify IPA functionality.
 
 Package: python-freeipa
 Architecture: any
