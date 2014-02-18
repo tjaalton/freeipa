@@ -10,7 +10,6 @@ dont-check-for-systemd-pc.diff
 fix-portability-of-nss.diff
 
 # send upstream
-fix-string-format.diff
 correct-python-path.diff
 dont-search-platform-path.diff
 fix-symlink-exclusion.diff

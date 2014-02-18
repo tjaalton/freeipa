@@ -7,5 +7,5 @@
 -PYTHON ?= $(shell rpm -E %__python)
 +PYTHON ?= $(shell rpm -E %__python || echo /usr/bin/python)
  
- all: bootstrap-autogen server tests
- 	@for subdir in $(SUBDIRS); do \
+ # Uncomment to increase Java stack size for Web UI build in case it fails
+ # because of stack overflow exception. Default should be OK for most platforms.
