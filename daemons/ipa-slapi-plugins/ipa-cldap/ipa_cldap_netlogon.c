@@ -121,6 +121,38 @@ done:
     return ret;
 }
 
+char *make_netbios_name(TALLOC_CTX *mem_ctx, const char *s)
+{
+    char *nb_name;
+    const char *p;
+    size_t c = 0;
+
+    if (s == NULL) {
+        return NULL;
+    }
+
+    nb_name = talloc_zero_size(mem_ctx, NETBIOS_NAME_MAX + 1);
+    if (nb_name == NULL) {
+        return NULL;
+    }
+
+    for (p = s; *p && c < NETBIOS_NAME_MAX; p++) {
+        /* Create the NetBIOS name from the first segment of the hostname */
+        if (*p == '.') {
+            break;
+        } else if (isalnum(*p)) {
+            nb_name[c++] = toupper(*p);
+        }
+    }
+
+    if (*nb_name == '\0') {
+        talloc_free(nb_name);
+        return NULL;
+    }
+
+    return nb_name;
+}
+
 #define NETLOGON_SAM_LOGON_RESPONSE_EX_pusher \
             (ndr_push_flags_fn_t)ndr_push_NETLOGON_SAM_LOGON_RESPONSE_EX
 
@@ -131,8 +163,6 @@ static int ipa_cldap_encode_netlogon(char *fq_hostname, char *domain,
     struct NETLOGON_SAM_LOGON_RESPONSE_EX *nlr;
     enum ndr_err_code ndr_err;
     DATA_BLOB blob;
-    char *pdc_name;
-    char *p;
     int ret;
 
     nlr = talloc_zero(NULL, struct NETLOGON_SAM_LOGON_RESPONSE_EX);
@@ -161,15 +191,8 @@ static int ipa_cldap_encode_netlogon(char *fq_hostname, char *domain,
     nlr->dns_domain = domain;
     nlr->pdc_dns_name = fq_hostname;
     nlr->domain_name = name;
-    pdc_name = talloc_asprintf(nlr, "\\\\%s", fq_hostname);
-    for (p = pdc_name; *p; p++) {
-        if (*p == '.') {
-            *p = '\0';
-            break;
-        }
-        *p = toupper(*p);
-    }
-    nlr->pdc_name = pdc_name;
+
+    nlr->pdc_name = make_netbios_name(nlr, fq_hostname);
     nlr->user_name = "";
     nlr->server_site = "Default-First-Site-Name";
     nlr->client_site = "Default-First-Site-Name";

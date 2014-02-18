@@ -124,6 +124,7 @@ class ADTRUSTInstance(service.Service):
         self.secondary_rid_base = None
 
         self.fqdn = None
+        self.host_netbios_name = None
         self.realm = None
         self.domain_name = None
 
@@ -151,6 +152,7 @@ class ADTRUSTInstance(service.Service):
 
         # Values obtained from API.env
         self.fqdn = self.fqdn or api.env.host
+        self.host_netbios_name = make_netbios_name(self.fqdn)
         self.realm = self.realm or api.env.realm
         self.domain_name = self.domain_name or api.env.domain
 
@@ -769,6 +771,7 @@ class ADTRUSTInstance(service.Service):
         self.sub_dict = dict(REALM = self.realm,
                              SUFFIX = self.suffix,
                              NETBIOS_NAME = self.netbios_name,
+                             HOST_NETBIOS_NAME = self.host_netbios_name,
                              SMB_DN = self.smb_dn,
                              LDAPI_SOCKET = self.ldapi_socket,
                              FQDN = self.fqdn)
@@ -881,11 +884,16 @@ class ADTRUSTInstance(service.Service):
         if self.is_configured():
             self.print_msg("Unconfiguring %s" % self.service_name)
 
-        running = self.restore_state("running")
-        enabled = self.restore_state("enabled")
+        # Call restore_state so that we do not leave mess in the statestore
+        # Otherwise this does nothing
+        self.restore_state("running")
+        self.restore_state("enabled")
 
+        # Always try to stop and disable smb service, since we do not leave
+        # working configuration after uninstall
         try:
             self.stop()
+            self.disable()
         except:
             pass
 
@@ -917,9 +925,3 @@ class ADTRUSTInstance(service.Service):
 
         # Remove our keys from samba's keytab
         self.clean_samba_keytab()
-
-        if not enabled is None and not enabled:
-            self.disable()
-
-        if not running is None and running:
-            self.start()

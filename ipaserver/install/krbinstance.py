@@ -24,12 +24,14 @@ import sys
 import os
 import pwd
 import socket
+import dns.name
 
 import service
 import installutils
 from ipapython import sysrestore
 from ipapython import ipautil
 from ipapython import services as ipaservices
+from ipapython import kernel_keyring
 from ipalib import errors
 from ipapython.ipa_log_manager import *
 from ipapython.dn import DN
@@ -237,16 +239,28 @@ class KrbInstance(service.Service):
 
         # IPA server/KDC is not a subdomain of default domain
         # Proper domain-realm mapping needs to be specified
-        dr_map = ''
-        if not self.fqdn.endswith(self.domain):
-            root_logger.debug("IPA FQDN '%s' is not located in default domain '%s'" \
-                    % (self.fqdn, self.domain))
-            server_host, dot, server_domain = self.fqdn.partition('.')
-            root_logger.debug("Domain '%s' needs additional mapping in krb5.conf" \
-                    % server_domain)
+        domain = dns.name.from_text(self.domain)
+        fqdn = dns.name.from_text(self.fqdn)
+        if not fqdn.is_subdomain(domain):
+            root_logger.debug("IPA FQDN '%s' is not located in default domain '%s'",
+                    fqdn, domain)
+            server_domain = fqdn.parent().to_unicode(omit_final_dot=True)
+            root_logger.debug("Domain '%s' needs additional mapping in krb5.conf",
+                server_domain)
             dr_map = " .%(domain)s = %(realm)s\n %(domain)s = %(realm)s\n" \
                         % dict(domain=server_domain, realm=self.realm)
+        else:
+            dr_map = ""
         self.sub_dict['OTHER_DOMAIN_REALM_MAPS'] = dr_map
+
+        # Configure KEYRING CCACHE if supported
+        if kernel_keyring.is_persistent_keyring_supported():
+            root_logger.debug("Enabling persistent keyring CCACHE")
+            self.sub_dict['OTHER_LIBDEFAULTS'] = \
+                " default_ccache_name = KEYRING:persistent:%{uid}\n"
+        else:
+            root_logger.debug("Persistent keyring CCACHE is not enabled")
+            self.sub_dict['OTHER_LIBDEFAULTS'] = ''
 
     def __configure_sasl_mappings(self):
         # we need to remove any existing SASL mappings in the directory as otherwise they

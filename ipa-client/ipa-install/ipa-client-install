@@ -43,6 +43,7 @@ try:
         run, user_input, CalledProcessError, file_exists, realm_to_suffix)
     import ipapython.services as ipaservices
     from ipapython import ipautil, sysrestore, version, certmonger, ipaldap
+    from ipapython import kernel_keyring
     from ipapython.config import IPAOptionParser
     from ipalib import api, errors
     from ipalib import x509
@@ -925,6 +926,12 @@ def configure_krb5_conf(cli_realm, cli_domain, cli_server, cli_kdc, dnsok,
     libopts.append({'name':'rdns', 'type':'option', 'value':'false'})
     libopts.append({'name':'ticket_lifetime', 'type':'option', 'value':'24h'})
     libopts.append({'name':'forwardable', 'type':'option', 'value':'yes'})
+
+    # Configure KEYRING CCACHE if supported
+    if kernel_keyring.is_persistent_keyring_supported():
+        root_logger.debug("Enabling persistent keyring CCACHE")
+        libopts.append({'name':'default_ccache_name', 'type':'option',
+            'value':'KEYRING:persistent:%{uid}'})
 
     opts.append({'name':'libdefaults', 'type':'section', 'value':libopts})
     opts.append({'name':'empty', 'type':'empty'})
@@ -1863,6 +1870,10 @@ def install(options, env, fstore, statestore):
         root_logger.warning("Option 'force-join' has no additional effect "
                             "when used with together with option 'keytab'.")
 
+    # Check if old certificate exist and show warning
+    if not options.ca_cert_file and get_cert_path(options.ca_cert_file) == CACERT:
+        root_logger.warning("Using existing certificate '%s'.", CACERT)
+
     # Create the discovery instance
     ds = ipadiscovery.IPADiscovery()
 
@@ -2112,13 +2123,13 @@ def install(options, env, fstore, statestore):
             (ccache_fd, ccache_name) = tempfile.mkstemp()
             os.close(ccache_fd)
             env['KRB5CCNAME'] = os.environ['KRB5CCNAME'] = ccache_name
-            join_args = ["/usr/sbin/ipa-join", "-s", cli_server[0], "-b", str(realm_to_suffix(cli_realm))]
+            join_args = ["/usr/sbin/ipa-join",
+                         "-s", cli_server[0],
+                         "-b", str(realm_to_suffix(cli_realm)),
+                         "-h", hostname]
             if options.debug:
                 join_args.append("-d")
                 env['XMLRPC_TRACE_CURL'] = 'yes'
-            if options.hostname:
-                join_args.append("-h")
-                join_args.append(options.hostname)
             if options.force_join:
                 join_args.append("-f")
             if options.principal is not None:

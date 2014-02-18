@@ -5,6 +5,10 @@
 %global POLICYCOREUTILSVER 2.1.12-5
 %global gettext_domain ipa
 
+%if (0%{?fedora} > 15 || 0%{?rhel} >= 7)
+%define _hardened_build 1
+%endif
+
 Name:           freeipa
 Version:        __VERSION__
 Release:        __RELEASE__%{?dist}
@@ -316,6 +320,10 @@ This package contains tests that verify IPA functionality.
 %setup -n freeipa-%{version} -q
 
 %build
+%ifarch ppc %{power64} s390 s390x
+# UI compilation segfaulted on some arches when the stack was lower (#1040576)
+export JAVA_STACK_SIZE="8m"
+%endif
 export CFLAGS="$CFLAGS %{optflags}"
 export CPPFLAGS="$CPPFLAGS %{optflags}"
 %if 0%{?fedora} >= 18
@@ -541,6 +549,16 @@ if [ $1 -gt 1 ] ; then
             /sbin/restorecon /etc/krb5.conf
         fi
     fi
+
+    if [ -f '/etc/sysconfig/ntpd' -a $restore -ge 2 ]; then
+        if grep -E -q 'OPTIONS=.*-u ntp:ntp' /etc/sysconfig/ntpd 2>/dev/null; then
+            sed -r '/OPTIONS=/ { s/\s+-u ntp:ntp\s+/ /; s/\s*-u ntp:ntp\s*// }' /etc/sysconfig/ntpd >/etc/sysconfig/ntpd.ipanew
+            mv /etc/sysconfig/ntpd.ipanew /etc/sysconfig/ntpd
+            /sbin/restorecon /etc/sysconfig/ntpd
+
+            /bin/systemctl condrestart ntpd.service 2>&1 || :
+        fi
+    fi
 fi
 
 %triggerin -n freeipa-client -- openssh-server
@@ -665,6 +683,7 @@ fi
 %{_usr}/share/ipa/ui/*.svg
 %{_usr}/share/ipa/ui/*.ttf
 %{_usr}/share/ipa/ui/*.woff
+%dir %{_usr}/share/ipa/ui/js
 %dir %{_usr}/share/ipa/ui/js/dojo
 %{_usr}/share/ipa/ui/js/dojo/dojo.js
 %dir %{_usr}/share/ipa/ui/js/libs
