@@ -52,7 +52,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +check_selinux_status = redhat.check_selinux_status
 --- /dev/null
 +++ b/ipapython/platform/debian/auth.py
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,43 @@
++from ipapython import ipautil
 +from ipapython.platform import base
 +
 +class DebianAuthConfig(base.AuthConfig):
