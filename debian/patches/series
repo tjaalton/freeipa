@@ -15,3 +15,4 @@ dont-search-platform-path.diff
 fix-symlink-exclusion.diff
 check-dbus-before-starting.diff
 add-debian-platform.diff
+use-new-nssdb.diff

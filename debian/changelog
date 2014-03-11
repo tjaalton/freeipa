@@ -48,4 +48,7 @@ freeipa (3.3.4-1) UNRELEASED; urgency=low
     - check-dbus-before-starting.diff: Check to see if dbus is running
       before attempting to start it
 
+  [ Timo Aaltonen ]
+  * use-new-nssdb.diff: Use sqlite-based nssdb's instead of old.
+
  -- Timo Aaltonen <tjaalton@ubuntu.com>  Tue, 01 Nov 2011 10:52:25 -0400
