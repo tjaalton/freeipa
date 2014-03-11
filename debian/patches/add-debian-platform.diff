@@ -94,7 +94,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    def execute(self):
 +        env = "DEBCONF_FRONTEND=noninteractive"
 +        args = self.__build_args()
-+        ipautil.run(["/usr/sbin/pam-auth-update"]+args,env)
++#        ipautil.run(["/usr/sbin/pam-auth-update"]+args,env)
 +
 --- /dev/null
 +++ b/ipapython/platform/debian/service.py
