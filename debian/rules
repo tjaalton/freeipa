@@ -60,8 +60,6 @@ else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
 endif
 
-	touch $(DESTDIR)/etc/ipa/default.conf
-
 	# purge .la files
 	find $(CURDIR)/debian/tmp -name "*.la" -type f -exec rm -f "{}" \;
 	# purge precompiled .pyc/.pyo files
