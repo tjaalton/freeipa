@@ -33,6 +33,7 @@ Build-Depends: quilt, debhelper (>= 9), dh-autoreconf,
  python-support,
 # server
  389-ds-base-dev (>= 1.1.3),
+ libkrad-dev,
  libsss-idmap-dev,
  libsss-nss-idmap-dev,
  libsvrcore-dev,
