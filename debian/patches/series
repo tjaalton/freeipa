@@ -18,3 +18,4 @@ add-debian-platform.diff
 use-new-nssdb.diff
 
 include-ldflags-otpd.diff
+fix-pykerberos-api.diff
