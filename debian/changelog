@@ -50,5 +50,7 @@ freeipa (3.3.4-1) UNRELEASED; urgency=low
 
   [ Timo Aaltonen ]
   * use-new-nssdb.diff: Use sqlite-based nssdb's instead of old.
+  * control: Add python-dnspython and python-ldap to python-freeipa
+    Depends.
 
  -- Timo Aaltonen <tjaalton@ubuntu.com>  Tue, 01 Nov 2011 10:52:25 -0400
