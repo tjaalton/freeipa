@@ -12,3 +12,4 @@ fix-hyphen-used-as-minus-sign.patch
 fix-manpage-has-errors-from-man.patch
 fix-typo.patch
 fix-ipa-conf.diff
+fix-pykerberos-api.diff
