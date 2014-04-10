@@ -71,7 +71,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    """
 +
 +    def __build_args(self):
-+        args = ['--force --package']
++        args = ['--force',  '--package']
 +        for (option, value) in self.parameters.items():
 +            if option == "sssdauth":
 +                option = "sss"
