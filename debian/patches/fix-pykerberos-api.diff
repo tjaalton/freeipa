@@ -1,5 +1,3 @@
-diff --git a/ipalib/rpc.py b/ipalib/rpc.py
-index 81e7aa3..ce5f2a0 100644
 --- a/ipalib/rpc.py
 +++ b/ipalib/rpc.py
 @@ -380,7 +380,7 @@ class KerbTransport(SSLTransport):
@@ -10,3 +8,4 @@ index 81e7aa3..ce5f2a0 100644
 +            (rc, vc) = kerberos.authGSSClientInit(service, gssflags=self.flags)
          except kerberos.GSSError, e:
              self._handle_exception(e)
+ 

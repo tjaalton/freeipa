@@ -52,7 +52,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +check_selinux_status = redhat.check_selinux_status
 --- /dev/null
 +++ b/ipapython/platform/debian/auth.py
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,33 @@
 +from ipapython import ipautil
 +from ipapython.platform import base
 +
@@ -71,26 +71,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    """
 +
 +    def __build_args(self):
-+        args = ['--force']
++        args = ['--force --package']
 +        for (option, value) in self.parameters.items():
 +            if option == "sssdauth":
 +                option = "sss"
-+            # only sssd supported, filter the dupe
-+            elif option in ["sssd", "krb5", "ldap", "update"]:
-+                 continue
-+            if type(value) is bool:
-+                if value:
-+                    if not "package" in args:
-+                        args.append("--package %s" % (option))
-+                    else:
-+                        args.append("%s" % (option))
-+                else:
-+                    if not any("remove" in s for s in args):
-+                        args.append("--remove %s" % (option))
-+                    else:
-+                        args.append("%s" % (option))
++            if type(value) is bool and not value:
++               if not any("remove" in s for s in args):
++                    args.append("--remove")
++               args.append("%s" % (option))
 +        return args
-+
 +
 +    def execute(self):
 +        env = {"DEBCONF_FRONTEND" : "noninteractive"}
