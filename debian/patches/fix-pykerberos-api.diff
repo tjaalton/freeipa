@@ -1,6 +1,6 @@
 --- a/ipalib/rpc.py
 +++ b/ipalib/rpc.py
-@@ -380,7 +380,7 @@ class KerbTransport(SSLTransport):
+@@ -541,7 +541,7 @@ class KerbTransport(SSLTransport):
          service = "HTTP@" + host.split(':')[0]
  
          try:

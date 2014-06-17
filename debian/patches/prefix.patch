@@ -5,7 +5,19 @@ use the debian layout when installing python modules
 
 --- a/Makefile
 +++ b/Makefile
-@@ -153,7 +153,7 @@ server-install: server
+@@ -96,9 +96,9 @@ client-install: client client-dirs
+ 	done
+ 	cd install/po && $(MAKE) install || exit 1;
+ 	if [ "$(DESTDIR)" = "" ]; then \
+-		$(PYTHON) setup-client.py install; \
++		$(PYTHON) setup-client.py install --install-layout=deb; \
+ 	else \
+-		$(PYTHON) setup-client.py install --root $(DESTDIR); \
++		$(PYTHON) setup-client.py install --root $(DESTDIR) --install-layout=deb; \
+ 	fi
+ 
+ client-dirs:
+@@ -169,7 +169,7 @@ server-install: server
  	if [ "$(DESTDIR)" = "" ]; then \
  		$(PYTHON) setup.py install; \
  	else \
@@ -18,10 +30,10 @@ use the debian layout when installing python modules
 +++ b/ipapython/Makefile
 @@ -14,7 +14,7 @@ install:
  	if [ "$(DESTDIR)" = "" ]; then \
- 		python setup.py install; \
+ 		python2 setup.py install; \
  	else \
--		python setup.py install --root $(DESTDIR); \
-+		python setup.py install --root $(DESTDIR) --install-layout=deb; \
+-		python2 setup.py install --root $(DESTDIR); \
++		python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
  	fi
  	@for subdir in $(SUBDIRS); do \
  		(cd $$subdir && $(MAKE) $@) || exit 1; \
@@ -29,10 +41,10 @@ use the debian layout when installing python modules
 +++ b/ipapython/py_default_encoding/Makefile
 @@ -9,7 +9,7 @@ install:
  	if [ "$(DESTDIR)" = "" ]; then \
- 		python setup.py install; \
+ 		python2 setup.py install; \
  	else \
--		python setup.py install --root $(DESTDIR); \
-+		python setup.py install --root $(DESTDIR) --install-layout=deb; \
+-		python2 setup.py install --root $(DESTDIR); \
++		python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
  	fi
  
  clean:

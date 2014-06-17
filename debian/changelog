@@ -1,3 +1,10 @@
+freeipa (3.4~git20140617-1) UNRELEASED; urgency=medium
+
+  * git snapshot.
+    - drop a bunch of patches, update others.
+
+ -- Timo Aaltonen <tjaalton@ubuntu.com>  Tue, 17 Jun 2014 16:09:16 +0300
+
 freeipa (3.3.4-1) UNRELEASED; urgency=low
 
   [ Michele Baldessari ]

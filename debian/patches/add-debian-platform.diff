@@ -196,13 +196,331 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +                services[s] = debian_service(s)
 +        # Call base class constructor. This will lock services to read-only
 +        super(DebianServices, self).__init__(services)
---- a/ipapython/setup.py.in
-+++ b/ipapython/setup.py.in
-@@ -68,6 +68,7 @@ def setup_package():
-             packages = [ "ipapython",
-                          "ipapython.platform",
-                          "ipapython.platform.base",
-+                         "ipapython.platform.debian",
-                          "ipapython.platform.fedora16",
-                          "ipapython.platform.fedora18",
-                          "ipapython.platform.redhat" ],
+--- /dev/null
++++ b/ipaplatform/debian/__init__.py
+@@ -0,0 +1,22 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++This module contains Debian specific platform files.
++"""
+--- /dev/null
++++ b/ipaplatform/debian/authconfig.py
+@@ -0,0 +1,51 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++from ipapython import ipautil
++from ipaplatform.base.authconfig import AuthConfig
++
++class DebianAuthConfig(base.AuthConfig):
++    """
++    Debian implementation of the AuthConfig class.
++
++    Debian doesn't provide a single application for changing both
++    nss and pam configuration. PAM can be configured using debconf but
++    there is currently no such solution for updating NSS database and
++    every package does it by itself.
++
++    We'll have to play a catch-up game with the rest of the FreeIPA
++    project filtering out .enable() and .disable() calls that are
++    useless for us, and making the best out of the rest of them.
++    """
++
++    def __build_args(self):
++        args = ['--force',  '--package']
++        for (option, value) in self.parameters.items():
++            if option == "sssdauth":
++                option = "sss"
++            if type(value) is bool and not value:
++               if not any("remove" in s for s in args):
++                    args.append("--remove")
++               args.append("%s" % (option))
++        return args
++
++    def execute(self):
++        env = {"DEBCONF_FRONTEND" : "noninteractive"}
++        args = self.__build_args()
++        ipautil.run(["/usr/sbin/pam-auth-update"] + args, env = env)
+--- /dev/null
++++ b/ipaplatform/debian/paths.py
+@@ -0,0 +1,33 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++This Debian base platform module exports default filesystem paths as common
++in Debian-based systems.
++"""
++
++# Fallback to default path definitions
++from ipaplatform.base.paths import BasePathNamespace
++
++
++class DebianPathNamespace(BasePathNamespace):
++    ETC_DEBIAN_VERSION = "/etc/debian_version"
++    SBIN_SERVICE = "/usr/sbin/service"
++
++paths = DebianPathNamespace()
+--- /dev/null
++++ b/ipaplatform/debian/services.py
+@@ -0,0 +1,149 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++Contains Debian-specific service class implementations.
++"""
++
++import time
++
++from ipaplatform.tasks import tasks
++from ipaplatform.base import services as base_services
++
++from ipapython import ipautil
++from ipapython.ipa_log_manager import root_logger
++from ipalib import api
++from ipaplatform.paths import paths
++
++# Service classes that implement Debian-specific behaviour
++
++class DebianService(base_services.PlatformService):
++    def __wait_for_open_ports(self, instance_name=""):
++        """
++        If this is a service we need to wait for do so.
++        """
++        ports = None
++        if instance_name in base.wellknownports:
++            ports = base.wellknownports[instance_name]
++        else:
++            if self.service_name in base.wellknownports:
++                ports = base.wellknownports[self.service_name]
++        if ports:
++            ipautil.wait_for_open_ports('localhost', ports, api.env.startup_timeout)
++    def stop(self, instance_name='', capture_output=True):
++        ipautil.run([paths.SBIN_SERVICE, self.service_name, "stop",
++                     instance_name], capture_output=capture_output)
++        if 'context' in api.env and api.env.context in ['ipactl', 'installer']:
++            update_service_list = True
++        else:
++            update_service_list = False
++        super(DebianService, self).stop(instance_name)
++
++    def start(self, instance_name='', capture_output=True, wait=True):
++        ipautil.run([paths.SBIN_SERVICE, self.service_name, "start",
++                     instance_name], capture_output=capture_output)
++        if 'context' in api.env and api.env.context in ['ipactl', 'installer']:
++            update_service_list = True
++        else:
++            update_service_list = False
++        if wait and self.is_running(instance_name):
++            self.__wait_for_open_ports(instance_name)
++        super(DebianService, self).start(instance_name)
++
++    def restart(self, instance_name='', capture_output=True, wait=True):
++        ipautil.run([paths.SBIN_SERVICE, self.service_name, "restart",
++                     instance_name], capture_output=capture_output)
++        if wait and self.is_running(instance_name):
++            self.__wait_for_open_ports(instance_name)
++
++    def is_running(self, instance_name=""):
++        ret = True
++        try:
++            (sout, serr, rcode) = ipautil.run([paths.SBIN_SERVICE,
++                                              self.service_name, "status",
++                                              instance_name])
++            if sout.find("NOT running") >= 0:
++                ret = False
++            if sout.find("stop") >= 0:
++                ret = False
++        except ipautil.CalledProcessError:
++                ret = False
++        return ret
++
++    def is_installed(self):
++        installed = True
++        try:
++            ipautil.run([paths.SBIN_SERVICE, self.service_name, "status"])
++        except ipautil.CalledProcessError, e:
++            if e.returncode == 1:
++                # service is not installed or there is other serious issue
++                installed = False
++        return installed
++
++    def is_enabled(self, instance_name=""):
++        # Services are always assumed to be enabled when installed
++        return True
++
++    def enable(self):
++        return True
++
++    def disable(self):
++        return True
++
++    def install(self):
++        return True
++
++    def remove(self):
++        return True
++
++
++class DebianSSHService(DebianService):
++    def get_config_dir(self, instance_name=""):
++        return '/etc/ssh'
++
++# Function that constructs proper Debian-specific server classes for services
++# of specified name
++
++def debian_service_class_factory(name):
++    if name == 'sshd':
++        return DebianSSHService(name)
++    return DebianService(name)
++
++
++# Magicdict containing DebianService instances.
++
++class DebianServices(base_services.KnownServices):
++    def __init__(self):
++        services = dict()
++        for s in base_services.wellknownservices:
++            if s == "messagebus":
++                services[s] = debian_service_class_factory("dbus")
++            elif s == "ntpd":
++                services[s] = debian_service("ntp")
++            else:
++                services[s] = debian_service_class_factory(s)
++        # Call base class constructor. This will lock services to read-only
++        super(DebianServices, self).__init__(services)
++
++
++# Objects below are expected to be exported by platform module
++
++from ipaplatform.base.services import timedate_services
++service = debian_service_class_factory
++knownservices = DebianServices()
+--- /dev/null
++++ b/ipaplatform/debian/tasks.py
+@@ -0,0 +1,36 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++This module contains default Debian-specific implementations of system tasks.
++"""
++
++from ipaplatform.paths import paths
++from ipaplatform.base.tasks import *
++
++class DebianTaskNamespace(BaseTaskNamespace):
++
++    def restore_network_configuration(self, fstore, statestore):
++        filepath = paths.ETC_HOSTNAME
++        if fstore.has_file(filepath):
++            fstore.restore_file(filepath)
++            hostname_was_configured = True
++
++
++tasks = DebianTaskNamespace()
+\ No newline at end of file
+--- a/ipaplatform/setup.py.in
++++ b/ipaplatform/setup.py.in
+@@ -67,6 +67,7 @@ def setup_package():
+             package_dir = {'ipaplatform': ''},
+             packages = ["ipaplatform",
+                         "ipaplatform.base",
++                        "ipaplatform.debian",
+                         "ipaplatform.fedora"],
+         )
+     finally:
+--- a/ipaserver/install/ntpinstance.py
++++ b/ipaserver/install/ntpinstance.py
+@@ -46,6 +46,8 @@ class NTPInstance(service.Service):
+             os = "fedora"
+         elif ipautil.file_exists(paths.ETC_REDHAT_RELEASE):
+             os = "rhel"
++        elif ipautil.file_exists(paths.ETC_DEBIAN_VERSION):
++            os = "debian"
+ 
+         srv_vals = []
+         srv_vals.append("0.%s.pool.ntp.org" % os)

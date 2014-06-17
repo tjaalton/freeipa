@@ -1,6 +1,6 @@
 --- a/ipa-client/ipa-install/ipa-client-install
 +++ b/ipa-client/ipa-install/ipa-client-install
-@@ -201,7 +201,7 @@ def log_service_error(name, action, erro
+@@ -228,7 +228,7 @@ def log_service_error(name, action, erro
      root_logger.error("%s failed to %s: %s", name, action, str(error))
  
  def nickname_exists(nickname):
@@ -9,7 +9,7 @@
  
          if returncode == 0:
              return True
-@@ -365,7 +365,7 @@ def uninstall(options, env):
+@@ -487,7 +487,7 @@ def uninstall(options, env):
      # Remove our host cert and CA cert
      if nickname_exists("IPA CA"):
          try:
@@ -18,7 +18,7 @@
          except Exception, e:
              root_logger.error(
                  "Failed to remove IPA CA from /etc/pki/nssdb: %s", str(e))
-@@ -393,7 +393,7 @@ def uninstall(options, env):
+@@ -515,7 +515,7 @@ def uninstall(options, env):
  
      if nickname_exists(client_nss_nickname):
          try:
@@ -27,23 +27,3 @@
          except Exception, e:
              root_logger.error("Failed to remove %s from /etc/pki/nssdb: %s",
                  client_nss_nickname, str(e))
-@@ -2297,7 +2297,7 @@ def install(options, env, fstore, states
- 
-     # Add the CA to the default NSS database and trust it
-     try:
--        run(["/usr/bin/certutil", "-A", "-d", "/etc/pki/nssdb", "-n", "IPA CA", "-t", "CT,C,C", "-a", "-i", CACERT])
-+        run(["/usr/bin/certutil", "-A", "-d", "sql:/etc/pki/nssdb", "-n", "IPA CA", "-t", "CT,C,C", "-a", "-i", CACERT])
-     except CalledProcessError, e:
-         root_logger.info("Failed to add CA to the default NSS database.")
-         return CLIENT_INSTALL_ERROR
---- a/ipalib/rpc.py
-+++ b/ipalib/rpc.py
-@@ -322,7 +322,7 @@ class SSLTransport(LanguageAwareTranspor
-             if self._connection and host == self._connection[0]:
-                 return self._connection[1]
- 
--        dbdir = '/etc/pki/nssdb'
-+        dbdir = 'sql:/etc/pki/nssdb'
-         no_init = self.__nss_initialized(dbdir)
-         if sys.version_info < (2, 7):
-             conn = NSSHTTPS(host, 443, dbdir=dbdir, no_init=no_init)

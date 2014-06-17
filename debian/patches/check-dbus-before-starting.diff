@@ -1,9 +1,9 @@
 --- a/ipa-client/ipa-install/ipa-client-install
 +++ b/ipa-client/ipa-install/ipa-client-install
-@@ -372,10 +372,11 @@ def uninstall(options, env):
+@@ -495,10 +495,11 @@ def uninstall(options, env):
      # Always start certmonger. We can't untrack something if it isn't
      # running
-     messagebus = ipaservices.knownservices.messagebus
+     messagebus = services.knownservices.messagebus
 -    try:
 -        messagebus.start()
 -    except Exception, e:
@@ -14,12 +14,12 @@
 +        except Exception, e:
 +            log_service_error(messagebus.service_name, 'start', e)
  
-     cmonger = ipaservices.knownservices.certmonger
+     cmonger = services.knownservices.certmonger
      try:
-@@ -970,10 +971,11 @@ def configure_certmonger(fstore, subject
+@@ -1070,10 +1071,11 @@ def configure_certmonger(fstore, subject
      principal = 'host/%s@%s' % (hostname, cli_realm)
  
-     messagebus = ipaservices.knownservices.messagebus
+     messagebus = services.knownservices.messagebus
 -    try:
 -        messagebus.start()
 -    except Exception, e:
