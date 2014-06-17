@@ -1,0 +1,74 @@
+From 2d9e290970e71d373b91cd0cd1db52b991636889 Mon Sep 17 00:00:00 2001
+From: Lukas Slebodnik <lslebodn@redhat.com>
+Date: Thu, 28 Nov 2013 15:32:07 +0100
+Subject: [PATCH] BUILD: Fix portability of NSS in file ipa_pwd.c
+
+---
+ daemons/ipa-kdb/Makefile.am                         | 4 +++-
+ daemons/ipa-slapi-plugins/ipa-pwd-extop/Makefile.am | 1 +
+ util/ipa_pwd.c                                      | 8 ++++----
+ 3 files changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/daemons/ipa-kdb/Makefile.am b/daemons/ipa-kdb/Makefile.am
+index dc543dd..b3d6a1b 100644
+--- a/daemons/ipa-kdb/Makefile.am
++++ b/daemons/ipa-kdb/Makefile.am
+@@ -21,6 +21,7 @@ AM_CPPFLAGS =						\
+ 	$(KRB5_CFLAGS)					\
+ 	$(WARN_CFLAGS)					\
+ 	$(NDRPAC_CFLAGS)				\
++	$(NSS_CFLAGS)					\
+ 	$(NULL)
+ 
+ plugindir = $(libdir)/krb5/plugins/kdb
+@@ -51,6 +52,7 @@ ipadb_la_LIBADD = 		\
+ 	$(LDAP_LIBS)		\
+ 	$(NDRPAC_LIBS)		\
+ 	$(UNISTRING_LIBS)	\
++	$(NSS_LIBS)             \
+ 	$(NULL)
+ 
+ if HAVE_CHECK
+@@ -77,7 +79,7 @@ ipa_kdb_tests_LDADD =          \
+        $(KRB5_LIBS)            \
+        $(LDAP_LIBS)            \
+        $(NDRPAC_LIBS)          \
+-       -lnss3                  \
++       $(NSS_LIBS)             \
+        -lkdb5                  \
+        -lsss_idmap             \
+        $(NULL)
+diff --git a/daemons/ipa-slapi-plugins/ipa-pwd-extop/Makefile.am b/daemons/ipa-slapi-plugins/ipa-pwd-extop/Makefile.am
+index b53b2e1..3323d72 100644
+--- a/daemons/ipa-slapi-plugins/ipa-pwd-extop/Makefile.am
++++ b/daemons/ipa-slapi-plugins/ipa-pwd-extop/Makefile.am
+@@ -22,6 +22,7 @@ AM_CPPFLAGS =							\
+ 	$(LDAP_CFLAGS)					\
+ 	$(KRB5_CFLAGS)						\
+ 	$(SSL_CFLAGS)						\
++	$(NSS_CFLAGS)						\
+ 	$(WARN_CFLAGS)						\
+ 	$(NULL)
+ 	
+diff --git a/util/ipa_pwd.c b/util/ipa_pwd.c
+index 761d1ef..f6564c8 100644
+--- a/util/ipa_pwd.c
++++ b/util/ipa_pwd.c
+@@ -27,10 +27,10 @@
+ #include <stdio.h>
+ #include <time.h>
+ #include <ctype.h>
+-#include <nss3/nss.h>
+-#include <nss3/nssb64.h>
+-#include <nss3/hasht.h>
+-#include <nss3/pk11pub.h>
++#include <nss.h>
++#include <nssb64.h>
++#include <hasht.h>
++#include <pk11pub.h>
+ #include <errno.h>
+ #include "ipa_pwd.h"
+ 
+-- 
+1.8.4.2
+

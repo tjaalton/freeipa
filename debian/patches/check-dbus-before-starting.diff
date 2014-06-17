@@ -1,0 +1,34 @@
+--- a/ipa-client/ipa-install/ipa-client-install
++++ b/ipa-client/ipa-install/ipa-client-install
+@@ -372,10 +372,11 @@ def uninstall(options, env):
+     # Always start certmonger. We can't untrack something if it isn't
+     # running
+     messagebus = ipaservices.knownservices.messagebus
+-    try:
+-        messagebus.start()
+-    except Exception, e:
+-        log_service_error(messagebus.service_name, 'start', e)
++    if not messagebus.is_running():
++        try:
++            messagebus.start()
++        except Exception, e:
++            log_service_error(messagebus.service_name, 'start', e)
+ 
+     cmonger = ipaservices.knownservices.certmonger
+     try:
+@@ -970,10 +971,11 @@ def configure_certmonger(fstore, subject
+     principal = 'host/%s@%s' % (hostname, cli_realm)
+ 
+     messagebus = ipaservices.knownservices.messagebus
+-    try:
+-        messagebus.start()
+-    except Exception, e:
+-        log_service_error(messagebus.service_name, 'start', e)
++    if not messagebus.is_running():
++        try:
++            messagebus.start()
++        except Exception, e:
++            log_service_error(messagebus.service_name, 'start', e)
+ 
+     # Ensure that certmonger has been started at least once to generate the
+     # cas files in /var/lib/certmonger/cas.

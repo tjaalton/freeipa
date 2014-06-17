@@ -1,0 +1,21 @@
+commit 75dadc1d8ffc3ac84c4b1988c266ef60de1a6cfe
+Author: Jan Cholasta <jcholast@redhat.com>
+Date:   Wed Dec 4 18:39:44 2013 +0100
+
+    Include LDFLAGS provided by rpmbuild in global LDFLAGS in the spec file.
+    
+    Remove explicitly specified hardening flags from LDFLAGS in ipa-otpd.
+    
+    https://fedorahosted.org/freeipa/ticket/3896
+
+diff --git a/daemons/ipa-otpd/Makefile.am b/daemons/ipa-otpd/Makefile.am
+index f0b7528..ed99c3e 100644
+--- a/daemons/ipa-otpd/Makefile.am
++++ b/daemons/ipa-otpd/Makefile.am
+@@ -1,5 +1,5 @@
+ AM_CFLAGS := $(CFLAGS) @LDAP_CFLAGS@ @LIBVERTO_CFLAGS@
+-AM_LDFLAGS := $(LDFLAGS) @LDAP_LIBS@ @LIBVERTO_LIBS@ @KRAD_LIBS@ -pie -Wl,-z,relro -Wl,-z,now
++AM_LDFLAGS := $(LDFLAGS) @LDAP_LIBS@ @LIBVERTO_LIBS@ @KRAD_LIBS@
+ 
+ noinst_HEADERS = internal.h
+ libexec_PROGRAMS = ipa-otpd

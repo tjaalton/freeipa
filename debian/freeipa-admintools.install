@@ -1,0 +1,3 @@
+etc/bash_completion.d/ipa
+usr/bin/ipa
+usr/share/man/man1/ipa.1

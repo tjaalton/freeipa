@@ -1,0 +1,21 @@
+# not upstreamable
+no-testcert.patch
+prefix.patch
+no-test-lang.diff
+fix-install-layout.diff
+fix-ntpdate-opts.diff
+fix-ldap-conf-path.diff
+port-ipa-client-automount.diff
+dont-check-for-systemd-pc.diff
+fix-portability-of-nss.diff
+
+# send upstream
+correct-python-path.diff
+dont-search-platform-path.diff
+fix-symlink-exclusion.diff
+check-dbus-before-starting.diff
+add-debian-platform.diff
+use-new-nssdb.diff
+
+include-ldflags-otpd.diff
+fix-pykerberos-api.diff
