@@ -1,13 +1,11 @@
 # not upstreamable
 prefix.patch
 no-test-lang.diff
-fix-ldap-conf-path.diff
 port-ipa-client-automount.diff
 dont-check-for-systemd-pc.diff
 
 # send upstream
 check-dbus-before-starting.diff
 add-debian-platform.diff
-use-new-nssdb.diff
 
 fix-pykerberos-api.diff

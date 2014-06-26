@@ -1,18 +1,5 @@
 --- a/ipa-client/ipa-install/ipa-client-automount
 +++ b/ipa-client/ipa-install/ipa-client-automount
-@@ -40,10 +40,10 @@ from ipapython.dn import DN
- from ipaplatform.tasks import tasks
- from ipaplatform import services
- 
--AUTOFS_CONF = '/etc/sysconfig/autofs'
-+AUTOFS_CONF = '/etc/default/autofs'
- NSSWITCH_CONF = '/etc/nsswitch.conf'
- AUTOFS_LDAP_AUTH = '/etc/autofs_ldap_auth.conf'
--NFS_CONF = '/etc/sysconfig/nfs'
-+NFS_CONF = '/etc/default/nfs-common'
- IDMAPD_CONF = '/etc/idmapd.conf'
- 
- def parse_options():
 @@ -310,7 +310,7 @@ def configure_nfs(fstore, statestore):
      Configure secure NFS
      """

@@ -222,62 +222,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +This module contains Debian specific platform files.
 +"""
 --- /dev/null
-+++ b/ipaplatform/debian/authconfig.py
-@@ -0,0 +1,51 @@
-+# Authors:
-+#   Timo Aaltonen <tjaalton@ubuntu.com>
-+#
-+# Copyright (C) 2014 Timo Aaltonen
-+# see file 'COPYING' for use and warranty information
-+#
-+# This program is free software; you can redistribute it and/or modify
-+# it under the terms of the GNU General Public License as published by
-+# the Free Software Foundation, either version 3 of the License, or
-+# (at your option) any later version.
-+#
-+# This program is distributed in the hope that it will be useful,
-+# but WITHOUT ANY WARRANTY; without even the implied warranty of
-+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+# GNU General Public License for more details.
-+#
-+# You should have received a copy of the GNU General Public License
-+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-+
-+from ipapython import ipautil
-+from ipaplatform.base.authconfig import AuthConfig
-+
-+class DebianAuthConfig(base.AuthConfig):
-+    """
-+    Debian implementation of the AuthConfig class.
-+
-+    Debian doesn't provide a single application for changing both
-+    nss and pam configuration. PAM can be configured using debconf but
-+    there is currently no such solution for updating NSS database and
-+    every package does it by itself.
-+
-+    We'll have to play a catch-up game with the rest of the FreeIPA
-+    project filtering out .enable() and .disable() calls that are
-+    useless for us, and making the best out of the rest of them.
-+    """
-+
-+    def __build_args(self):
-+        args = ['--force',  '--package']
-+        for (option, value) in self.parameters.items():
-+            if option == "sssdauth":
-+                option = "sss"
-+            if type(value) is bool and not value:
-+               if not any("remove" in s for s in args):
-+                    args.append("--remove")
-+               args.append("%s" % (option))
-+        return args
-+
-+    def execute(self):
-+        env = {"DEBCONF_FRONTEND" : "noninteractive"}
-+        args = self.__build_args()
-+        ipautil.run(["/usr/sbin/pam-auth-update"] + args, env = env)
---- /dev/null
 +++ b/ipaplatform/debian/paths.py
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,34 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -307,7 +253,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +
 +class DebianPathNamespace(BasePathNamespace):
-+    ETC_DEBIAN_VERSION = "/etc/debian_version"
++    OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
++    NSS_DB_DIR = "sql:/etc/pki/nssdb"
 +    SBIN_SERVICE = "/usr/sbin/service"
 +
 +paths = DebianPathNamespace()
@@ -465,7 +412,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +knownservices = DebianServices()
 --- /dev/null
 +++ b/ipaplatform/debian/tasks.py
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,37 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -491,8 +438,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +from ipaplatform.paths import paths
 +from ipaplatform.base.tasks import *
++from ipaplatform.fedora.tasks import FedoraTaskNamespace
 +
-+class DebianTaskNamespace(BaseTaskNamespace):
++class DebianTaskNamespace(FedoraTaskNamespace):
 +
 +    def restore_network_configuration(self, fstore, statestore):
 +        filepath = paths.ETC_HOSTNAME
@@ -502,7 +450,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +
 +tasks = DebianTaskNamespace()
-\ No newline at end of file
 --- a/ipaplatform/setup.py.in
 +++ b/ipaplatform/setup.py.in
 @@ -67,6 +67,7 @@ def setup_package():
