@@ -2,6 +2,8 @@ freeipa (3.4~git20140617-1) UNRELEASED; urgency=medium
 
   * git snapshot.
     - drop a bunch of patches, update others.
+    - add new build-deps
+    - add gentarball target
 
  -- Timo Aaltonen <tjaalton@ubuntu.com>  Tue, 17 Jun 2014 16:09:16 +0300
 

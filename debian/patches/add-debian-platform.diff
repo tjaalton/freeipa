@@ -451,7 +451,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +            if s == "messagebus":
 +                services[s] = debian_service_class_factory("dbus")
 +            elif s == "ntpd":
-+                services[s] = debian_service("ntp")
++                services[s] = debian_service_class_factory("ntp")
 +            else:
 +                services[s] = debian_service_class_factory(s)
 +        # Call base class constructor. This will lock services to read-only
