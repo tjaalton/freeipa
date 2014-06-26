@@ -269,6 +269,12 @@ IPA.input_widget = function(spec) {
     var that = IPA.widget(spec);
 
     /**
+     * Placeholder
+     * @property {string}
+     */
+    that.placeholder = text.get(spec.placeholder);
+
+    /**
      * Widget's width.
      * @deprecated
      * @property {number}
@@ -709,6 +715,7 @@ IPA.text_widget = function(spec) {
             'class': 'form-control',
             size: that.size,
             title: that.tooltip,
+            placeholder: that.placeholder,
             keyup: function() {
                 that.on_value_changed();
             }
@@ -1975,6 +1982,7 @@ IPA.textarea_widget = function (spec) {
             'class': 'form-control',
             readOnly: !!that.read_only,
             title: that.tooltip,
+            placeholder: that.placeholder,
             keyup: function() {
                 that.on_value_changed();
             }
@@ -5747,6 +5755,7 @@ exp.activity_widget = IPA.activity_widget = function(spec) {
 exp.pre_op = function(spec, context) {
 
     if (context.facet) spec.facet = context.facet;
+    if (context.parent) spec.parent = context.parent;
     if (context.entity) spec.entity = context.entity;
     return spec;
 };

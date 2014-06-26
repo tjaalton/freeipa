@@ -27,6 +27,7 @@ struct keys_container {
 
 #define KEYTAB_SET_OID "2.16.840.1.113730.3.8.10.1"
 #define KEYTAB_RET_OID "2.16.840.1.113730.3.8.10.2"
+#define KEYTAB_GET_OID "2.16.840.1.113730.3.8.10.5"
 
 void
 ipa_krb5_free_ktypes(krb5_context context, krb5_enctype *val);
@@ -67,6 +68,9 @@ void free_keys_contents(krb5_context krbctx, struct keys_container *keys);
 
 struct berval *create_key_control(struct keys_container *keys,
                                   const char *principalName);
+
+int ipa_string_to_enctypes(const char *str, struct krb_key_salt **encsalts,
+                           int *num_encsalts, char **err_msg);
 
 int create_keys(krb5_context krbctx,
                 krb5_principal princ,

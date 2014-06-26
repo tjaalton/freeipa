@@ -96,6 +96,28 @@ class cosentry(LDAPObject):
                 'Password Policy Administrator',
             },
         },
+        'System: Add Group Password Policy costemplate': {
+            'ipapermright': {'add'},
+            'replaces': [
+                '(target = "ldap:///cn=*,cn=costemplates,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Add Group Password Policy costemplate";allow (add) groupdn = "ldap:///cn=Add Group Password Policy costemplate,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Password Policy Administrator'},
+        },
+        'System: Delete Group Password Policy costemplate': {
+            'ipapermright': {'delete'},
+            'replaces': [
+                '(target = "ldap:///cn=*,cn=costemplates,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Delete Group Password Policy costemplate";allow (delete) groupdn = "ldap:///cn=Delete Group Password Policy costemplate,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Password Policy Administrator'},
+        },
+        'System: Modify Group Password Policy costemplate': {
+            'ipapermright': {'write'},
+            'ipapermdefaultattr': {'cospriority'},
+            'replaces': [
+                '(targetattr = "cospriority")(target = "ldap:///cn=*,cn=costemplates,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Modify Group Password Policy costemplate";allow (write) groupdn = "ldap:///cn=Modify Group Password Policy costemplate,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Password Policy Administrator'},
+        },
     }
 
     takes_params = (
@@ -214,6 +236,32 @@ class pwpolicy(LDAPObject):
                 'Password Policy Readers',
                 'Password Policy Administrator',
             },
+        },
+        'System: Add Group Password Policy': {
+            'ipapermright': {'add'},
+            'replaces': [
+                '(target = "ldap:///cn=*,cn=$REALM,cn=kerberos,$SUFFIX")(version 3.0;acl "permission:Add Group Password Policy";allow (add) groupdn = "ldap:///cn=Add Group Password Policy,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Password Policy Administrator'},
+        },
+        'System: Delete Group Password Policy': {
+            'ipapermright': {'delete'},
+            'replaces': [
+                '(target = "ldap:///cn=*,cn=$REALM,cn=kerberos,$SUFFIX")(version 3.0;acl "permission:Delete Group Password Policy";allow (delete) groupdn = "ldap:///cn=Delete Group Password Policy,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Password Policy Administrator'},
+        },
+        'System: Modify Group Password Policy': {
+            'ipapermright': {'write'},
+            'ipapermdefaultattr': {
+                'krbmaxpwdlife', 'krbminpwdlife', 'krbpwdfailurecountinterval',
+                'krbpwdhistorylength', 'krbpwdlockoutduration',
+                'krbpwdmaxfailure', 'krbpwdmindiffchars', 'krbpwdminlength'
+            },
+            'replaces': [
+                '(targetattr = "krbmaxpwdlife || krbminpwdlife || krbpwdhistorylength || krbpwdmindiffchars || krbpwdminlength || krbpwdmaxfailure || krbpwdfailurecountinterval || krbpwdlockoutduration")(target = "ldap:///cn=*,cn=$REALM,cn=kerberos,$SUFFIX")(version 3.0;acl "permission:Modify Group Password Policy";allow (write) groupdn = "ldap:///cn=Modify Group Password Policy,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Password Policy Administrator'},
         },
     }
 

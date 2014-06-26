@@ -115,6 +115,7 @@ register = Registry()
 
 PROTECTED_GROUPS = (u'admins', u'trust admins', u'default smb group')
 
+
 @register()
 class group(LDAPObject):
     """
@@ -126,7 +127,7 @@ class group(LDAPObject):
     object_class = ['ipausergroup']
     object_class_config = 'ipagroupobjectclasses'
     possible_objectclasses = ['posixGroup', 'mepManagedEntry', 'ipaExternalGroup']
-    permission_filter_objectclasses = ['ipausergroup']
+    permission_filter_objectclasses = ['posixgroup', 'ipausergroup']
     search_attributes_config = 'ipagroupsearchfields'
     default_attributes = [
         'cn', 'description', 'gidnumber', 'member', 'memberof',
@@ -150,6 +151,7 @@ class group(LDAPObject):
                 'businesscategory', 'cn', 'description', 'gidnumber',
                 'ipaexternalmember', 'ipauniqueid', 'mepmanagedby', 'o',
                 'objectclass', 'ou', 'owner', 'seealso',
+                'ipantsecurityidentifier'
             },
         },
         'System: Read Group Membership': {
@@ -159,6 +161,46 @@ class group(LDAPObject):
             'ipapermdefaultattr': {
                 'member', 'memberof', 'memberuid', 'memberuser', 'memberhost',
             },
+        },
+        'System: Add Groups': {
+            'ipapermright': {'add'},
+            'replaces': [
+                '(target = "ldap:///cn=*,cn=groups,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Add Groups";allow (add) groupdn = "ldap:///cn=Add Groups,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Group Administrators'},
+        },
+        'System: Modify Group Membership': {
+            'ipapermright': {'write'},
+            'ipapermtargetfilter': [
+                '(objectclass=ipausergroup)',
+                '(!(cn=admins))',
+            ],
+            'ipapermdefaultattr': {'member'},
+            'replaces': [
+                '(targetattr = "member")(target = "ldap:///cn=*,cn=groups,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Modify Group membership";allow (write) groupdn = "ldap:///cn=Modify Group membership,cn=permissions,cn=pbac,$SUFFIX";)',
+                '(targetfilter = "(!(cn=admins))")(targetattr = "member")(target = "ldap:///cn=*,cn=groups,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Modify Group membership";allow (write) groupdn = "ldap:///cn=Modify Group membership,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {
+                'Group Administrators', 'Modify Group membership'
+            },
+        },
+        'System: Modify Groups': {
+            'ipapermright': {'write'},
+            'ipapermdefaultattr': {
+                'cn', 'description', 'gidnumber', 'ipauniqueid',
+                'mepmanagedby', 'objectclass'
+            },
+            'replaces': [
+                '(targetattr = "cn || description || gidnumber || objectclass || mepmanagedby || ipauniqueid")(target = "ldap:///cn=*,cn=groups,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Modify Groups";allow (write) groupdn = "ldap:///cn=Modify Groups,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Group Administrators'},
+        },
+        'System: Remove Groups': {
+            'ipapermright': {'delete'},
+            'replaces': [
+                '(target = "ldap:///cn=*,cn=groups,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Remove Groups";allow (delete) groupdn = "ldap:///cn=Remove Groups,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'Group Administrators'},
         },
     }
 
@@ -197,6 +239,7 @@ ipaexternalmember_param = Str('ipaexternalmember*',
             flags=['no_create', 'no_update', 'no_search'],
         )
 
+
 @register()
 class group_add(LDAPCreate):
     __doc__ = _('Create a new group.')
@@ -232,8 +275,6 @@ class group_add(LDAPCreate):
         return dn
 
 
-
-
 @register()
 class group_del(LDAPDelete):
     __doc__ = _('Delete group.')
@@ -265,7 +306,6 @@ class group_del(LDAPDelete):
             pass
 
         return True
-
 
 
 @register()
@@ -339,7 +379,6 @@ class group_mod(LDAPUpdate):
         raise exc
 
 
-
 @register()
 class group_find(LDAPSearch):
     __doc__ = _('Search for groups.')
@@ -409,7 +448,6 @@ class group_find(LDAPSearch):
         return (filter, base_dn, scope)
 
 
-
 @register()
 class group_show(LDAPRetrieve):
     __doc__ = _('Display information about a named group.')
@@ -464,13 +502,16 @@ class group_add_member(LDAPAddMember):
             restore = []
             if 'member' in failed and 'group' in failed['member']:
                 restore = failed['member']['group']
-            failed['member']['group'] = list((id,id) for id in sids)
-            result = add_external_post_callback('member', 'group', 'ipaexternalmember',
-                                                ldap, completed, failed, dn, entry_attrs,
-                                                keys, options, external_callback_normalize=False)
+            failed['member']['group'] = list((id, id) for id in sids)
+            result = add_external_post_callback(ldap, dn, entry_attrs,
+                                                failed=failed,
+                                                completed=completed,
+                                                memberattr='member',
+                                                membertype='group',
+                                                externalattr='ipaexternalmember',
+                                                normalize=False)
             failed['member']['group'] += restore + failed_sids
         return result
-
 
 
 @register()
@@ -518,13 +559,16 @@ class group_remove_member(LDAPRemoveMember):
             restore = []
             if 'member' in failed and 'group' in failed['member']:
                 restore = failed['member']['group']
-            failed['member']['group'] = list((id,id) for id in sids)
-            result = remove_external_post_callback('member', 'group', 'ipaexternalmember',
-                                                ldap, completed, failed, dn, entry_attrs,
-                                                keys, options)
+            failed['member']['group'] = list((id, id) for id in sids)
+            result = remove_external_post_callback(ldap, dn, entry_attrs,
+                                                failed=failed,
+                                                completed=completed,
+                                                memberattr='member',
+                                                membertype='group',
+                                                externalattr='ipaexternalmember',
+                                                )
             failed['member']['group'] += restore + failed_sids
         return result
-
 
 
 @register()

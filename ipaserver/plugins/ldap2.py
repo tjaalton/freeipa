@@ -333,9 +333,11 @@ class ldap2(LDAPClient, CrudBackend):
             "krbPrincipalAux", base_dn=api.env.basedn)
         sctrl = [GetEffectiveRightsControl(True, "dn: " + str(entry.dn))]
         self.conn.set_option(_ldap.OPT_SERVER_CONTROLS, sctrl)
-        entry = self.get_entry(dn, attrs_list)
-        # remove the control so subsequent operations don't include GER
-        self.conn.set_option(_ldap.OPT_SERVER_CONTROLS, [])
+        try:
+            entry = self.get_entry(dn, attrs_list)
+        finally:
+            # remove the control so subsequent operations don't include GER
+            self.conn.set_option(_ldap.OPT_SERVER_CONTROLS, [])
         return entry
 
     def can_write(self, dn, attr):
@@ -406,18 +408,21 @@ class ldap2(LDAPClient, CrudBackend):
 
         return False
 
-    def modify_password(self, dn, new_pass, old_pass=''):
+    def modify_password(self, dn, new_pass, old_pass='', otp='', skip_bind=False):
         """Set user password."""
 
         assert isinstance(dn, DN)
 
         # The python-ldap passwd command doesn't verify the old password
         # so we'll do a simple bind to validate it.
-        if old_pass != '':
+        if not skip_bind and old_pass != '':
+            pw = old_pass
+            if (otp):
+                pw = old_pass+otp
             with self.error_handler():
                 conn = IPASimpleLDAPObject(
                     self.ldap_uri, force_schema_updates=False)
-                conn.simple_bind_s(dn, old_pass)
+                conn.simple_bind_s(dn, pw)
                 conn.unbind_s()
 
         with self.error_handler():

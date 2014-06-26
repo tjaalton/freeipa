@@ -549,6 +549,31 @@ def _dns_name_to_string(value, raw=False):
     else:
         return unicode(value)
 
+
+def _check_entry_objectclass(entry, objectclasses):
+    """
+    Check if entry contains all objectclasses
+    """
+    if not isinstance(objectclasses, (list, tuple)):
+        objectclasses = [objectclasses, ]
+    if not entry.get('objectclass'):
+        return False
+    entry_objectclasses = [o.lower() for o in entry['objectclass']]
+    for o in objectclasses:
+        if o not in entry_objectclasses:
+            return False
+    return True
+
+
+def _check_DN_objectclass(ldap, dn, objectclasses):
+    try:
+        entry = ldap.get_entry(dn, [u'objectclass', ])
+    except Exception:
+        return False
+    else:
+        return _check_entry_objectclass(entry, objectclasses)
+
+
 class DNSRecord(Str):
     # a list of parts that create the actual raw DNS record
     parts = None
@@ -958,11 +983,6 @@ class DHCIDRecord(DNSRecord):
     rfc = 4701
     supported = False
 
-class DLVRecord(DNSRecord):
-    rrtype = 'DLV'
-    rfc = 4431
-    supported = False
-
 class DNAMERecord(DNSRecord):
     rrtype = 'DNAME'
     rfc = 2672
@@ -998,8 +1018,17 @@ class DSRecord(DNSRecord):
         ),
         Str('digest',
             label=_('Digest'),
+            pattern=r'^[0-9a-fA-F]+$',
+            pattern_errmsg=u'only hexadecimal digits are allowed'
         ),
     )
+
+
+class DLVRecord(DSRecord):
+    # must use same attributes as DSRecord
+    rrtype = 'DLV'
+    rfc = 4431
+
 
 class HIPRecord(DNSRecord):
     rrtype = 'HIP'
@@ -1009,26 +1038,7 @@ class HIPRecord(DNSRecord):
 class KEYRecord(DNSRecord):
     rrtype = 'KEY'
     rfc = 2535
-    parts = (
-        Int('flags',
-            label=_('Flags'),
-            minvalue=0,
-            maxvalue=65535,
-        ),
-        Int('protocol',
-            label=_('Protocol'),
-            minvalue=0,
-            maxvalue=255,
-        ),
-        Int('algorithm',
-            label=_('Algorithm'),
-            minvalue=0,
-            maxvalue=255,
-        ),
-        Str('public_key',
-            label=_('Public Key'),
-        ),
-    )
+    supported = False  # managed by BIND itself
 
 class IPSECKEYRecord(DNSRecord):
     rrtype = 'IPSECKEY'
@@ -1209,42 +1219,7 @@ class NSRecord(DNSRecord):
 class NSECRecord(DNSRecord):
     rrtype = 'NSEC'
     rfc = 4034
-    format_error_msg = _('format must be specified as "NEXT TYPE1 '\
-                         '[TYPE2 [TYPE3 [...]]]" (see RFC 4034 for details)')
-    _allowed_types = (u'SOA',) + _record_types
-
-    parts = (
-        DNSNameParam('next',
-            label=_('Next Domain Name'),
-        ),
-        StrEnum('types+',
-            label=_('Type Map'),
-            values=_allowed_types,
-            csv=True,
-        ),
-    )
-
-    def _get_part_values(self, value):
-        values = value.split()
-
-        if len(values) < 2:
-            return None
-
-        return (values[0], tuple(values[1:]))
-
-    def _part_values_to_string(self, values, index, idna=True):
-        self._validate_parts(values)
-        if idna:
-            val = values[0].ToASCII()
-        else:
-            val = unicode(values[0])
-        values_flat = [val, ]  # add "next" part
-        types = values[1]
-        if not isinstance(types, (list, tuple)):
-            types = [types,]
-        values_flat.extend(types)
-        return u" ".join(Str._convert_scalar(self, v, index) \
-                             for v in values_flat if v is not None)
+    supported = False  # managed by BIND itself
 
 class NSEC3Record(DNSRecord):
     rrtype = 'NSEC3'
@@ -1254,7 +1229,34 @@ class NSEC3Record(DNSRecord):
 class NSEC3PARAMRecord(DNSRecord):
     rrtype = 'NSEC3PARAM'
     rfc = 5155
-    supported = False
+    parts = (
+        Int('algorithm',
+            label=_('Algorithm'),
+            minvalue=0,
+            maxvalue=255,
+            ),
+        Int('flags',
+            label=_('Flags'),
+            minvalue=0,
+            maxvalue=255,
+            default=0,
+            ),
+        Int('iterations',
+            label=_('Iterations'),
+            minvalue=0,
+            maxvalue=65535,
+            ),
+        Str('salt',
+            label=_('Salt'),
+            doc=_('A hexadecimal salt value. Requires hexadecimal digits '
+                  'or hyphen ("-") if no salt is required'),
+            minlength=1,
+            default=u'-',  # no salt
+            pattern=r'^([0-9a-fA-F]+|-)$',
+            pattern_errmsg=u'only hexadecimal digits or single hyphen ("-") '
+                           u'are allowed'
+            ),
+    )
 
 def _validate_naptr_flags(ugettext, flags):
     allowed_flags = u'SAUP'
@@ -1347,47 +1349,7 @@ def _sig_time_validator(ugettext, value):
 class SIGRecord(DNSRecord):
     rrtype = 'SIG'
     rfc = 2535
-    _allowed_types = tuple([u'SOA'] + [x for x in _record_types if x != u'SIG'])
-
-    parts = (
-        StrEnum('type_covered',
-            label=_('Type Covered'),
-            values=_allowed_types,
-        ),
-        Int('algorithm',
-            label=_('Algorithm'),
-            minvalue=0,
-            maxvalue=255,
-        ),
-        Int('labels',
-            label=_('Labels'),
-            minvalue=0,
-            maxvalue=255,
-        ),
-        Int('original_ttl',
-            label=_('Original TTL'),
-            minvalue=0,
-        ),
-        Str('signature_expiration',
-            _sig_time_validator,
-            label=_('Signature Expiration'),
-        ),
-        Str('signature_inception',
-            _sig_time_validator,
-            label=_('Signature Inception'),
-        ),
-        Int('key_tag',
-            label=_('Key Tag'),
-            minvalue=0,
-            maxvalue=65535,
-        ),
-        Str('signers_name',
-            label=_('Signer\'s Name'),
-        ),
-        Str('signature',
-            label=_('Signature'),
-        ),
-    )
+    supported = False  # managed by BIND itself
 
 class SPFRecord(DNSRecord):
     rrtype = 'SPF'
@@ -1397,6 +1359,7 @@ class SPFRecord(DNSRecord):
 class RRSIGRecord(SIGRecord):
     rrtype = 'RRSIG'
     rfc = 4034
+    supported = False  # managed by BIND itself
 
 class SSHFPRecord(DNSRecord):
     rrtype = 'SSHFP'
@@ -1669,24 +1632,16 @@ def _records_idn_postprocess(record, **options):
         record[attr] = rrs
 
 
-@register()
-class dnszone(LDAPObject):
+class DNSZoneBase(LDAPObject):
     """
-    DNS Zone, container for resource records.
+    Base class for DNS Zone
     """
     container_dn = api.env.container_dns
-    object_name = _('DNS zone')
-    object_name_plural = _('DNS zones')
-    object_class = ['top', 'idnsrecord', 'idnszone']
+    object_class = ['top']
     possible_objectclasses = ['ipadnszone']
     default_attributes = [
-        'idnsname', 'idnszoneactive', 'idnssoamname', 'idnssoarname',
-        'idnssoaserial', 'idnssoarefresh', 'idnssoaretry', 'idnssoaexpire',
-        'idnssoaminimum', 'idnsallowquery', 'idnsallowtransfer',
-        'idnsforwarders', 'idnsforwardpolicy', 'idnssecinlinesigning',
-    ] + _record_attributes
-    label = _('DNS Zones')
-    label_singular = _('DNS Zone')
+        'idnsname', 'idnszoneactive', 'idnsforwarders', 'idnsforwardpolicy'
+    ]
 
     takes_params = (
         DNSNameParam('idnsname',
@@ -1702,6 +1657,325 @@ class dnszone(LDAPObject):
             doc=_('IP network to create reverse zone name from'),
             flags=('virtual_attribute',),
         ),
+        Bool('idnszoneactive?',
+            cli_name='zone_active',
+            label=_('Active zone'),
+            doc=_('Is zone active?'),
+            flags=['no_create', 'no_update'],
+            attribute=True,
+        ),
+        Str('idnsforwarders*',
+            _validate_bind_forwarder,
+            cli_name='forwarder',
+            label=_('Zone forwarders'),
+            doc=_('Per-zone forwarders. A custom port can be specified '
+                  'for each forwarder using a standard format "IP_ADDRESS port PORT"'),
+            csv=True,
+        ),
+        StrEnum('idnsforwardpolicy?',
+            cli_name='forward_policy',
+            label=_('Forward policy'),
+            doc=_('Per-zone conditional forwarding policy. Set to "none" to '
+                  'disable forwarding to global forwarder for this zone. In '
+                  'that case, conditional zone forwarders are disregarded.'),
+            values=(u'only', u'first', u'none'),
+        ),
+
+    )
+
+    def get_dn(self, *keys, **options):
+        zone = keys[-1]
+        assert isinstance(zone, DNSName)
+        assert zone.is_absolute()
+        zone = zone.ToASCII()
+
+        # try first relative name, a new zone has to be added as absolute
+        # otherwise ObjectViolation is raised
+        zone = zone[:-1]
+        dn = super(DNSZoneBase, self).get_dn(zone, **options)
+        try:
+            self.backend.get_entry(dn, [''])
+        except errors.NotFound:
+            zone = u"%s." % zone
+            dn = super(DNSZoneBase, self).get_dn(zone, **options)
+
+        return dn
+
+    def permission_name(self, zone):
+        assert isinstance(zone, DNSName)
+        return u"Manage DNS zone %s" % zone.ToASCII()
+
+    def get_name_in_zone(self, zone, hostname):
+        """
+        Get name of a record that is to be added to a new zone. I.e. when
+        we want to add record "ipa.lab.example.com" in a zone "example.com",
+        this function should return "ipa.lab". Returns None when record cannot
+        be added to a zone. Returns '@' when the hostname is the zone record.
+        """
+        assert isinstance(zone, DNSName)
+        assert zone.is_absolute()
+        assert isinstance(hostname, DNSName)
+
+        if not hostname.is_absolute():
+            return hostname
+
+        if hostname.is_subdomain(zone):
+            return hostname.relativize(zone)
+
+        return None
+
+
+class DNSZoneBase_add(LDAPCreate):
+
+    has_output_params = LDAPCreate.has_output_params + dnszone_output_params
+
+    def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
+        assert isinstance(dn, DN)
+        if not dns_container_exists(self.api.Backend.ldap2):
+            raise errors.NotFound(reason=_('DNS is not configured'))
+
+        try:
+            entry = ldap.get_entry(dn)
+        except errors.NotFound:
+            pass
+        else:
+            if _check_entry_objectclass(entry, self.obj.object_class):
+                self.obj.handle_duplicate_entry(*keys)
+            else:
+                raise errors.DuplicateEntry(
+                    message=_(u'Only one zone type is allowed per zone name')
+                )
+
+        entry_attrs['idnszoneactive'] = 'TRUE'
+
+        return dn
+
+
+class DNSZoneBase_del(LDAPDelete):
+
+    def pre_callback(self, ldap, dn, *nkeys, **options):
+        assert isinstance(dn, DN)
+        if not _check_DN_objectclass(ldap, dn, self.obj.object_class):
+            self.obj.handle_not_found(*nkeys)
+        return dn
+
+    def post_callback(self, ldap, dn, *keys, **options):
+        try:
+            api.Command['permission_del'](self.obj.permission_name(keys[-1]),
+                    force=True)
+        except errors.NotFound:
+            pass
+
+        return True
+
+
+class DNSZoneBase_mod(LDAPUpdate):
+    has_output_params = LDAPUpdate.has_output_params + dnszone_output_params
+
+
+class DNSZoneBase_find(LDAPSearch):
+    __doc__ = _('Search for DNS zones (SOA records).')
+
+    has_output_params = LDAPSearch.has_output_params + dnszone_output_params
+
+    def args_options_2_params(self, *args, **options):
+        # FIXME: Check that name_from_ip is valid. This is necessary because
+        #        custom validation rules, including _validate_ipnet, are not
+        #        used when doing a search. Once we have a parameter type for
+        #        IP network objects, this will no longer be necessary, as the
+        #        parameter type will handle the validation itself (see
+        #        <https://fedorahosted.org/freeipa/ticket/2266>).
+        if 'name_from_ip' in options:
+            self.obj.params['name_from_ip'](unicode(options['name_from_ip']))
+        return super(DNSZoneBase_find, self).args_options_2_params(*args, **options)
+
+    def args_options_2_entry(self, *args, **options):
+        if 'name_from_ip' in options:
+            if 'idnsname' not in options:
+                options['idnsname'] = self.obj.params['idnsname'].get_default(**options)
+            del options['name_from_ip']
+        search_kw = super(DNSZoneBase_find, self).args_options_2_entry(*args,
+                                                                   **options)
+        name = search_kw.get('idnsname')
+        if name:
+            search_kw['idnsname'] = [name, name.relativize(DNSName.root)]
+        return search_kw
+
+    def pre_callback(self, ldap, filter, attrs_list, base_dn, scope, *args, **options):
+        assert isinstance(base_dn, DN)
+        filter = _create_idn_filter(self, ldap, *args, **options)
+        return (filter, base_dn, scope)
+
+
+class DNSZoneBase_show(LDAPRetrieve):
+    has_output_params = LDAPRetrieve.has_output_params + dnszone_output_params
+
+    def pre_callback(self, ldap, dn, attrs_list, *keys, **options):
+        assert isinstance(dn, DN)
+        if not _check_DN_objectclass(ldap, dn, self.obj.object_class):
+            self.obj.handle_not_found(*keys)
+        return dn
+
+
+class DNSZoneBase_disable(LDAPQuery):
+    has_output = output.standard_value
+
+    def execute(self, *keys, **options):
+        ldap = self.obj.backend
+
+        dn = self.obj.get_dn(*keys, **options)
+        entry = ldap.get_entry(dn, ['idnszoneactive', 'objectclass'])
+        if not _check_entry_objectclass(entry, self.obj.object_class):
+            self.obj.handle_not_found(*keys)
+
+        entry['idnszoneactive'] = ['FALSE']
+
+        try:
+            ldap.update_entry(entry)
+        except errors.EmptyModlist:
+            pass
+
+        return dict(result=True, value=pkey_to_value(keys[-1], options))
+
+
+class DNSZoneBase_enable(LDAPQuery):
+    has_output = output.standard_value
+
+    def execute(self, *keys, **options):
+        ldap = self.obj.backend
+
+        dn = self.obj.get_dn(*keys, **options)
+        entry = ldap.get_entry(dn, ['idnszoneactive', 'objectclass'])
+        if not _check_entry_objectclass(entry, self.obj.object_class):
+            self.obj.handle_not_found(*keys)
+
+        entry['idnszoneactive'] = ['TRUE']
+
+        try:
+            ldap.update_entry(entry)
+        except errors.EmptyModlist:
+            pass
+
+        return dict(result=True, value=pkey_to_value(keys[-1], options))
+
+
+class DNSZoneBase_add_permission(LDAPQuery):
+    has_output = _output_permissions
+    msg_summary = _('Added system permission "%(value)s"')
+
+    def execute(self, *keys, **options):
+        ldap = self.obj.backend
+        dn = self.obj.get_dn(*keys, **options)
+
+        try:
+            entry_attrs = ldap.get_entry(dn, ['objectclass'])
+        except errors.NotFound:
+            self.obj.handle_not_found(*keys)
+        else:
+            if not _check_entry_objectclass(entry_attrs, self.obj.object_class):
+                self.obj.handle_not_found(*keys)
+
+        permission_name = self.obj.permission_name(keys[-1])
+
+        # compatibility with older IPA versions which allows relative zonenames
+        permission_name_rel = self.obj.permission_name(
+            keys[-1].relativize(DNSName.root)
+        )
+        try:
+            api.Object['permission'].get_dn_if_exists(permission_name_rel)
+        except errors.NotFound:
+            pass
+        else:
+            # permission exists without absolute domain name
+            raise errors.DuplicateEntry(
+                message=_('permission "%(value)s" already exists') % {
+                        'value': permission_name
+                }
+            )
+
+        permission = api.Command['permission_add_noaci'](permission_name,
+                         ipapermissiontype=u'SYSTEM'
+                     )['result']
+
+        dnszone_ocs = entry_attrs.get('objectclass')
+        if dnszone_ocs:
+            for oc in dnszone_ocs:
+                if oc.lower() == 'ipadnszone':
+                    break
+            else:
+                dnszone_ocs.append('ipadnszone')
+
+        entry_attrs['managedby'] = [permission['dn']]
+        ldap.update_entry(entry_attrs)
+
+        return dict(
+            result=True,
+            value=pkey_to_value(permission_name, options),
+        )
+
+
+class DNSZoneBase_remove_permission(LDAPQuery):
+    has_output = _output_permissions
+    msg_summary = _('Removed system permission "%(value)s"')
+
+    def execute(self, *keys, **options):
+        ldap = self.obj.backend
+        dn = self.obj.get_dn(*keys, **options)
+        try:
+            entry = ldap.get_entry(dn, ['managedby', 'objectclass'])
+        except errors.NotFound:
+            self.obj.handle_not_found(*keys)
+        else:
+            if not _check_entry_objectclass(entry, self.obj.object_class):
+                self.obj.handle_not_found(*keys)
+
+        entry['managedby'] = None
+
+        try:
+            ldap.update_entry(entry)
+        except errors.EmptyModlist:
+            # managedBy attribute is clean, lets make sure there is also no
+            # dangling DNS zone permission
+            pass
+
+        permission_name = self.obj.permission_name(keys[-1])
+        try:
+            api.Command['permission_del'](permission_name, force=True)
+        except errors.NotFound, e:
+            # compatibility, older IPA versions which allows to create zone
+            # without absolute zone name
+            permission_name_rel = self.obj.permission_name(
+                keys[-1].relativize(DNSName.root)
+            )
+            try:
+                api.Command['permission_del'](permission_name_rel, force=True)
+            except errors.NotFound:
+                raise e  # re-raise original exception
+
+
+        return dict(
+            result=True,
+            value=pkey_to_value(permission_name, options),
+        )
+
+
+@register()
+class dnszone(DNSZoneBase):
+    """
+    DNS Zone, container for resource records.
+    """
+    object_name = _('DNS zone')
+    object_name_plural = _('DNS zones')
+    object_class = DNSZoneBase.object_class + ['idnsrecord', 'idnszone']
+    default_attributes = DNSZoneBase.default_attributes + [
+        'idnssoamname', 'idnssoarname', 'idnssoaserial', 'idnssoarefresh',
+        'idnssoaretry', 'idnssoaexpire', 'idnssoaminimum', 'idnsallowquery',
+        'idnsallowtransfer', 'idnssecinlinesigning',
+    ] + _record_attributes
+    label = _('DNS Zones')
+    label_singular = _('DNS Zone')
+
+    takes_params = DNSZoneBase.takes_params + (
         DNSNameParam('idnssoamname',
             cli_name='name_server',
             label=_('Authoritative nameserver'),
@@ -1782,13 +2056,6 @@ class dnszone(LDAPObject):
             default_from=lambda idnsname: default_zone_update_policy(idnsname),
             autofill=True
         ),
-        Bool('idnszoneactive?',
-            cli_name='zone_active',
-            label=_('Active zone'),
-            doc=_('Is zone active?'),
-            flags=['no_create', 'no_update'],
-            attribute=True,
-        ),
         Bool('idnsallowdynupdate?',
             cli_name='dynamic_update',
             label=_('Dynamic update'),
@@ -1815,22 +2082,6 @@ class dnszone(LDAPObject):
             default=u'none;',  # no one can issue queries by default
             autofill=True,
         ),
-        Str('idnsforwarders*',
-            _validate_bind_forwarder,
-            cli_name='forwarder',
-            label=_('Zone forwarders'),
-            doc=_('Per-zone forwarders. A custom port can be specified '
-                  'for each forwarder using a standard format "IP_ADDRESS port PORT"'),
-            csv=True,
-        ),
-        StrEnum('idnsforwardpolicy?',
-            cli_name='forward_policy',
-            label=_('Forward policy'),
-            doc=_('Per-zone conditional forwarding policy. Set to "none" to '
-                  'disable forwarding to global forwarder for this zone. In '
-                  'that case, conditional zone forwarders are disregarded.'),
-            values=(u'only', u'first', u'none'),
-        ),
         Bool('idnsallowsyncptr?',
             cli_name='allow_sync_ptr',
             label=_('Allow PTR sync'),
@@ -1843,47 +2094,80 @@ class dnszone(LDAPObject):
             doc=_('Allow inline DNSSEC signing of records in the zone'),
         ),
     )
-
-    def get_dn(self, *keys, **options):
-        zone = keys[-1]
-        assert isinstance(zone, DNSName)
-        assert zone.is_absolute()
-        zone = zone.ToASCII()
-
-        #try first relative name, a new zone has to be added as absolute
-        #otherwise ObjectViolation is raised
-        zone = zone[:-1]
-        dn = super(dnszone, self).get_dn(zone, **options)
-        try:
-            self.backend.get_entry(dn, [''])
-        except errors.NotFound:
-            zone = u"%s." % zone
-            dn = super(dnszone, self).get_dn(zone, **options)
-
-        return dn
-
-    def permission_name(self, zone):
-        assert isinstance(zone, DNSName)
-        return u"Manage DNS zone %s" % zone.ToASCII()
-
-    def get_name_in_zone(self, zone, hostname):
-        """
-        Get name of a record that is to be added to a new zone. I.e. when
-        we want to add record "ipa.lab.example.com" in a zone "example.com",
-        this function should return "ipa.lab". Returns None when record cannot
-        be added to a zone. Returns '@' when the hostname is the zone record.
-        """
-        assert isinstance(zone, DNSName)
-        assert zone.is_absolute()
-        assert isinstance(hostname, DNSName)
-
-        if not hostname.is_absolute():
-            return hostname
-
-        if hostname.is_subdomain(zone):
-            return hostname.relativize(zone)
-
-        return None
+    # Permissions will be apllied for forwardzones too
+    managed_permissions = {
+        'System: Add DNS Entries': {
+            'non_object': True,
+            'ipapermright': {'add'},
+            'ipapermlocation': api.env.basedn,
+            'ipapermtarget': DN('idnsname=*', 'cn=dns', api.env.basedn),
+            'replaces': [
+                '(target = "ldap:///idnsname=*,cn=dns,$SUFFIX")(version 3.0;acl "permission:add dns entries";allow (add) groupdn = "ldap:///cn=add dns entries,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'DNS Administrators', 'DNS Servers'},
+        },
+        'System: Read DNS Entries': {
+            'non_object': True,
+            'ipapermright': {'read', 'search', 'compare'},
+            'ipapermlocation': api.env.basedn,
+            'ipapermtarget': DN('idnsname=*', 'cn=dns', api.env.basedn),
+            'ipapermdefaultattr': {
+                'objectclass',
+                'a6record', 'aaaarecord', 'afsdbrecord', 'arecord',
+                'certrecord', 'cn', 'cnamerecord', 'dlvrecord', 'dnamerecord',
+                'dnsclass', 'dnsttl', 'dsrecord', 'hinforecord',
+                'idnsallowdynupdate', 'idnsallowquery', 'idnsallowsyncptr',
+                'idnsallowtransfer', 'idnsforwarders', 'idnsforwardpolicy',
+                'idnsname', 'idnssoaexpire', 'idnssoaminimum', 'idnssoamname',
+                'idnssoarefresh', 'idnssoaretry', 'idnssoarname',
+                'idnssoaserial', 'idnsupdatepolicy', 'idnszoneactive',
+                'keyrecord', 'kxrecord', 'locrecord', 'managedby', 'mdrecord',
+                'minforecord', 'mxrecord', 'naptrrecord', 'nsecrecord',
+                'nsec3paramrecord', 'nsrecord', 'nxtrecord', 'ptrrecord',
+                'rrsigrecord', 'sigrecord', 'srvrecord', 'sshfprecord',
+                'txtrecord',
+            },
+            'replaces_system': ['Read DNS Entries'],
+            'default_privileges': {'DNS Administrators', 'DNS Servers'},
+        },
+        'System: Remove DNS Entries': {
+            'non_object': True,
+            'ipapermright': {'delete'},
+            'ipapermlocation': api.env.basedn,
+            'ipapermtarget': DN('idnsname=*', 'cn=dns', api.env.basedn),
+            'replaces': [
+                '(target = "ldap:///idnsname=*,cn=dns,$SUFFIX")(version 3.0;acl "permission:remove dns entries";allow (delete) groupdn = "ldap:///cn=remove dns entries,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'DNS Administrators', 'DNS Servers'},
+        },
+        'System: Update DNS Entries': {
+            'non_object': True,
+            'ipapermright': {'write'},
+            'ipapermlocation': api.env.basedn,
+            'ipapermtarget': DN('idnsname=*', 'cn=dns', api.env.basedn),
+            'ipapermdefaultattr': {
+                'a6record', 'aaaarecord', 'afsdbrecord', 'arecord',
+                'certrecord', 'cn', 'cnamerecord', 'dlvrecord', 'dnamerecord',
+                'dnsclass', 'dnsttl', 'dsrecord', 'hinforecord',
+                'idnsallowdynupdate', 'idnsallowquery', 'idnsallowsyncptr',
+                'idnsallowtransfer', 'idnsforwarders', 'idnsforwardpolicy',
+                'idnsname', 'idnssoaexpire', 'idnssoaminimum', 'idnssoamname',
+                'idnssoarefresh', 'idnssoaretry', 'idnssoarname',
+                'idnssoaserial', 'idnsupdatepolicy', 'idnszoneactive',
+                'keyrecord', 'kxrecord', 'locrecord', 'managedby', 'mdrecord',
+                'minforecord', 'mxrecord', 'naptrrecord', 'nsecrecord',
+                'nsec3paramrecord', 'nsrecord', 'nxtrecord', 'ptrrecord',
+                'rrsigrecord', 'sigrecord', 'srvrecord', 'sshfprecord',
+                'txtrecord',
+            },
+            'replaces': [
+                '(targetattr = "idnsname || cn || idnsallowdynupdate || dnsttl || dnsclass || arecord || aaaarecord || a6record || nsrecord || cnamerecord || ptrrecord || srvrecord || txtrecord || mxrecord || mdrecord || hinforecord || minforecord || afsdbrecord || sigrecord || keyrecord || locrecord || nxtrecord || naptrrecord || kxrecord || certrecord || dnamerecord || dsrecord || sshfprecord || rrsigrecord || nsecrecord || idnsname || idnszoneactive || idnssoamname || idnssoarname || idnssoaserial || idnssoarefresh || idnssoaretry || idnssoaexpire || idnssoaminimum || idnsupdatepolicy")(target = "ldap:///idnsname=*,cn=dns,$SUFFIX")(version 3.0;acl "permission:update dns entries";allow (write) groupdn = "ldap:///cn=update dns entries,cn=permissions,cn=pbac,$SUFFIX";)',
+                '(targetattr = "idnsname || cn || idnsallowdynupdate || dnsttl || dnsclass || arecord || aaaarecord || a6record || nsrecord || cnamerecord || ptrrecord || srvrecord || txtrecord || mxrecord || mdrecord || hinforecord || minforecord || afsdbrecord || sigrecord || keyrecord || locrecord || nxtrecord || naptrrecord || kxrecord || certrecord || dnamerecord || dsrecord || sshfprecord || rrsigrecord || nsecrecord || idnsname || idnszoneactive || idnssoamname || idnssoarname || idnssoaserial || idnssoarefresh || idnssoaretry || idnssoaexpire || idnssoaminimum || idnsupdatepolicy || idnsallowquery || idnsallowtransfer || idnsallowsyncptr || idnsforwardpolicy || idnsforwarders")(target = "ldap:///idnsname=*,cn=dns,$SUFFIX")(version 3.0;acl "permission:update dns entries";allow (write) groupdn = "ldap:///cn=update dns entries,cn=permissions,cn=pbac,$SUFFIX";)',
+                '(targetattr = "idnsname || cn || idnsallowdynupdate || dnsttl || dnsclass || arecord || aaaarecord || a6record || nsrecord || cnamerecord || ptrrecord || srvrecord || txtrecord || mxrecord || mdrecord || hinforecord || minforecord || afsdbrecord || sigrecord || keyrecord || locrecord || nxtrecord || naptrrecord || kxrecord || certrecord || dnamerecord || dsrecord || sshfprecord || rrsigrecord || nsecrecord || idnsname || idnszoneactive || idnssoamname || idnssoarname || idnssoaserial || idnssoarefresh || idnssoaretry || idnssoaexpire || idnssoaminimum || idnsupdatepolicy || idnsallowquery || idnsallowtransfer || idnsallowsyncptr || idnsforwardpolicy || idnsforwarders || managedby")(target = "ldap:///idnsname=*,cn=dns,$SUFFIX")(version 3.0;acl "permission:update dns entries";allow (write) groupdn = "ldap:///cn=update dns entries,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'DNS Administrators', 'DNS Servers'},
+        },
+    }
 
     def _rr_zone_postprocess(self, record, **options):
         #Decode IDN ACE form to Unicode, raw records are passed directly from LDAP
@@ -1894,11 +2178,10 @@ class dnszone(LDAPObject):
 
 
 @register()
-class dnszone_add(LDAPCreate):
+class dnszone_add(DNSZoneBase_add):
     __doc__ = _('Create new DNS zone (SOA record).')
 
-    has_output_params = LDAPCreate.has_output_params + dnszone_output_params
-    takes_options = LDAPCreate.takes_options + (
+    takes_options = DNSZoneBase_add.takes_options + (
         Flag('force',
              label=_('Force'),
              doc=_('Force DNS zone creation even if nameserver is not resolvable.'),
@@ -1939,10 +2222,9 @@ class dnszone_add(LDAPCreate):
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
         assert isinstance(dn, DN)
-        if not dns_container_exists(self.api.Backend.ldap2):
-            raise errors.NotFound(reason=_('DNS is not configured'))
 
-        entry_attrs['idnszoneactive'] = 'TRUE'
+        dn = super(dnszone_add, self).pre_callback(ldap, dn, entry_attrs,
+            attrs_list, *keys, **options)
 
         # Check nameserver has a forward record
         nameserver = entry_attrs['idnssoamname']
@@ -2013,24 +2295,21 @@ class dnszone_add(LDAPCreate):
 
 
 @register()
-class dnszone_del(LDAPDelete):
+class dnszone_del(DNSZoneBase_del):
     __doc__ = _('Delete DNS zone (SOA record).')
 
     msg_summary = _('Deleted DNS zone "%(value)s"')
 
     def post_callback(self, ldap, dn, *keys, **options):
-        try:
-            api.Command['permission_del'](self.obj.permission_name(keys[-1]),
-                    force=True)
-        except errors.NotFound:
-            pass
+        super(dnszone_del, self).post_callback(ldap, dn, *keys, **options)
 
         # Delete entry from realmdomains
         # except for our own domain
         zone = keys[0].make_absolute()
 
         if (zone != DNSName(api.env.domain).make_absolute() and
-            not zone.is_reverse()):
+                not zone.is_reverse()
+        ):
             try:
                 api.Command['realmdomains_mod'](del_domain=unicode(zone),
                                                 force=True)
@@ -2042,19 +2321,19 @@ class dnszone_del(LDAPDelete):
 
 
 @register()
-class dnszone_mod(LDAPUpdate):
+class dnszone_mod(DNSZoneBase_mod):
     __doc__ = _('Modify DNS zone (SOA record).')
 
-    takes_options = LDAPUpdate.takes_options + (
+    takes_options = DNSZoneBase_mod.takes_options + (
         Flag('force',
              label=_('Force'),
              doc=_('Force nameserver change even if nameserver not in DNS'),
         ),
     )
 
-    has_output_params = LDAPUpdate.has_output_params + dnszone_output_params
-
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list,  *keys, **options):
+        if not _check_DN_objectclass(ldap, dn, self.obj.object_class):
+            self.obj.handle_not_found(*keys)
         nameserver = entry_attrs.get('idnssoamname')
         if nameserver and not nameserver.is_empty() and not options['force']:
             check_ns_rec_resolvable(keys[0], nameserver)
@@ -2067,37 +2346,11 @@ class dnszone_mod(LDAPUpdate):
         return dn
 
 
-
 @register()
-class dnszone_find(LDAPSearch):
+class dnszone_find(DNSZoneBase_find):
     __doc__ = _('Search for DNS zones (SOA records).')
 
-    has_output_params = LDAPSearch.has_output_params + dnszone_output_params
-
-    def args_options_2_params(self, *args, **options):
-        # FIXME: Check that name_from_ip is valid. This is necessary because
-        #        custom validation rules, including _validate_ipnet, are not
-        #        used when doing a search. Once we have a parameter type for
-        #        IP network objects, this will no longer be necessary, as the
-        #        parameter type will handle the validation itself (see
-        #        <https://fedorahosted.org/freeipa/ticket/2266>).
-        if 'name_from_ip' in options:
-            self.obj.params['name_from_ip'](unicode(options['name_from_ip']))
-        return super(dnszone_find, self).args_options_2_params(*args, **options)
-
-    def args_options_2_entry(self, *args, **options):
-        if 'name_from_ip' in options:
-            if 'idnsname' not in options:
-                options['idnsname'] = self.obj.params['idnsname'].get_default(**options)
-            del options['name_from_ip']
-        search_kw = super(dnszone_find, self).args_options_2_entry(*args,
-                                                                   **options)
-        name = search_kw.get('idnsname')
-        if name:
-            search_kw['idnsname'] = [name, name.relativize(DNSName.root)]
-        return search_kw
-
-    takes_options = LDAPSearch.takes_options + (
+    takes_options = DNSZoneBase_find.takes_options + (
         Flag('forward_only',
             label=_('Forward zones only'),
             cli_name='forward_only',
@@ -2108,7 +2361,8 @@ class dnszone_find(LDAPSearch):
     def pre_callback(self, ldap, filter, attrs_list, base_dn, scope, *args, **options):
         assert isinstance(base_dn, DN)
 
-        filter = _create_idn_filter(self, ldap, *args, **options)
+        filter, base, dn = super(dnszone_find, self).pre_callback(ldap, filter,
+            attrs_list, base_dn, scope, *args, **options)
 
         if options.get('forward_only', False):
             search_kw = {}
@@ -2131,10 +2385,8 @@ class dnszone_find(LDAPSearch):
 
 
 @register()
-class dnszone_show(LDAPRetrieve):
+class dnszone_show(DNSZoneBase_show):
     __doc__ = _('Display information about a DNS zone (SOA record).')
-
-    has_output_params = LDAPRetrieve.has_output_params + dnszone_output_params
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
@@ -2144,121 +2396,25 @@ class dnszone_show(LDAPRetrieve):
 
 
 @register()
-class dnszone_disable(LDAPQuery):
+class dnszone_disable(DNSZoneBase_disable):
     __doc__ = _('Disable DNS Zone.')
-
-    has_output = output.standard_value
     msg_summary = _('Disabled DNS zone "%(value)s"')
 
-    def execute(self, *keys, **options):
-        ldap = self.obj.backend
-
-        dn = self.obj.get_dn(*keys, **options)
-        entry = ldap.get_entry(dn, ['idnszoneactive'])
-
-        entry['idnszoneactive'] = ['FALSE']
-
-        try:
-            ldap.update_entry(entry)
-        except errors.EmptyModlist:
-            pass
-
-        return dict(result=True, value=pkey_to_value(keys[-1], options))
-
-
 
 @register()
-class dnszone_enable(LDAPQuery):
+class dnszone_enable(DNSZoneBase_enable):
     __doc__ = _('Enable DNS Zone.')
-
-    has_output = output.standard_value
     msg_summary = _('Enabled DNS zone "%(value)s"')
 
-    def execute(self, *keys, **options):
-        ldap = self.obj.backend
-
-        dn = self.obj.get_dn(*keys, **options)
-        entry = ldap.get_entry(dn, ['idnszoneactive'])
-
-        entry['idnszoneactive'] = ['TRUE']
-
-        try:
-            ldap.update_entry(entry)
-        except errors.EmptyModlist:
-            pass
-
-        return dict(result=True, value=pkey_to_value(keys[-1], options))
-
 
 @register()
-class dnszone_add_permission(LDAPQuery):
+class dnszone_add_permission(DNSZoneBase_add_permission):
     __doc__ = _('Add a permission for per-zone access delegation.')
 
-    has_output = _output_permissions
-    msg_summary = _('Added system permission "%(value)s"')
-
-    def execute(self, *keys, **options):
-        ldap = self.obj.backend
-        dn = self.obj.get_dn(*keys, **options)
-
-        try:
-            entry_attrs = ldap.get_entry(dn, ['objectclass'])
-        except errors.NotFound:
-            self.obj.handle_not_found(*keys)
-
-        permission_name = self.obj.permission_name(keys[-1])
-        permission = api.Command['permission_add_noaci'](permission_name,
-                         ipapermissiontype=u'SYSTEM'
-                     )['result']
-
-        dnszone_ocs = entry_attrs.get('objectclass')
-        if dnszone_ocs:
-            for oc in dnszone_ocs:
-                if oc.lower() == 'ipadnszone':
-                    break
-            else:
-                dnszone_ocs.append('ipadnszone')
-
-        entry_attrs['managedby'] = [permission['dn']]
-        ldap.update_entry(entry_attrs)
-
-        return dict(
-            result=True,
-            value=pkey_to_value(permission_name, options),
-        )
-
 
 @register()
-class dnszone_remove_permission(LDAPQuery):
+class dnszone_remove_permission(DNSZoneBase_remove_permission):
     __doc__ = _('Remove a permission for per-zone access delegation.')
-
-    has_output = _output_permissions
-    msg_summary = _('Removed system permission "%(value)s"')
-
-    def execute(self, *keys, **options):
-        ldap = self.obj.backend
-        dn = self.obj.get_dn(*keys, **options)
-        try:
-            entry = ldap.get_entry(dn, ['managedby'])
-        except errors.NotFound:
-            self.obj.handle_not_found(*keys)
-
-        entry['managedby'] = None
-
-        try:
-            ldap.update_entry(entry)
-        except errors.EmptyModlist:
-            # managedBy attribute is clean, lets make sure there is also no
-            # dangling DNS zone permission
-            pass
-
-        permission_name = self.obj.permission_name(keys[-1])
-        api.Command['permission_del'](permission_name, force=True)
-
-        return dict(
-            result=True,
-            value=pkey_to_value(permission_name, options),
-        )
 
 
 @register()
@@ -2311,6 +2467,13 @@ class dnsrecord(LDAPObject):
         for nsrecord in nsrecords:
             check_ns_rec_resolvable(keys[0], DNSName(nsrecord))
 
+    def _nsec3paramrecord_pre_callback(self, ldap, dn, entry_attrs, *keys, **options):
+        assert isinstance(dn, DN)
+        nsec3paramrecord = entry_attrs.get('nsec3paramrecord')
+        if nsec3paramrecord and not self.is_pkey_zone_record(*keys):
+            raise errors.ValidationError(name='nsec3paramrecord',
+                        error=unicode(_('must be in zone record')))
+
     def _idnsname_pre_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
         if keys[-1].is_absolute():
@@ -2349,8 +2512,8 @@ class dnsrecord(LDAPObject):
 
         addr_len = len(addr.labels)
 
-        #Classless zones (0/25.0.0.10.in-addr.arpa.) -> skip check
-        #zone has to be checked without reverse domain suffix (in-addr.arpa.)
+        # Classless zones (0/25.0.0.10.in-addr.arpa.) -> skip check
+        # zone has to be checked without reverse domain suffix (in-addr.arpa.)
         for sign in ('/', '-'):
             for name in (zone, addr):
                 for label in name.labels:
@@ -2385,17 +2548,33 @@ class dnsrecord(LDAPObject):
             return True
         return False
 
+    def check_zone(self, zone, **options):
+        """
+        Check if zone exists and if is master zone
+        """
+        parent_object = self.api.Object[self.parent_object]
+        dn = parent_object.get_dn(zone, **options)
+        ldap = self.api.Backend.ldap2
+        try:
+            entry = ldap.get_entry(dn, ['objectclass'])
+        except errors.NotFound:
+            parent_object.handle_not_found(zone)
+        else:
+            # only master zones can contain records
+            if 'idnszone' not in [x.lower() for x in entry.get('objectclass', [])]:
+                raise errors.ValidationError(
+                    name='dnszoneidnsname',
+                    error=_(u'only master zones can contain records')
+                )
+        return dn
+
+
     def get_dn(self, *keys, **options):
+        dn = self.check_zone(keys[-2], **options)
+
         if self.is_pkey_zone_record(*keys):
-            parent_object = self.api.Object[self.parent_object]
-            dn = parent_object.get_dn(*keys[:-1], **options)
-            # zone must exist
-            ldap = self.api.Backend.ldap2
-            try:
-                ldap.get_entry(dn, [])
-            except errors.NotFound:
-                parent_object.handle_not_found(*keys[:-1])
             return dn
+
         #Make RR name relative if possible
         relative_name = keys[-1].relativize(keys[-2]).ToASCII()
         keys = keys[:-1] + (relative_name,)
@@ -2580,6 +2759,14 @@ class dnsrecord(LDAPObject):
                           error=_('DNAME record is not allowed to coexist with an '
                                   'NS record except when located in a zone root '
                                   'record (RFC 6672, section 2.3)'))
+
+        # NSEC3PARAM record validation
+        nsec3params = rrattrs.get('nsec3paramrecord')
+        if nsec3params is not None:
+            if len(nsec3params) > 1:
+                raise errors.ValidationError(name='nsec3paramrecord',
+                    error=_('Only one NSEC3PARAM record is '
+                            'allowed per zone'))
 
     def _entry2rrsets(self, entry_attrs, dns_name, dns_domain):
         '''Convert entry_attrs to a dictionary {rdtype: rrset}.
@@ -3300,7 +3487,7 @@ class dnsrecord_del(LDAPUpdate):
             deleted_values = []
             for rec_value in dns_record[param.name]:
                 user_del_value = self.Backend.textui.prompt_yesno(
-                        _("Delete %(name)s '%(value)s'?") \
+                        _("Delete %(name)s '%(value)s'?")
                             % dict(name=param.label, value=rec_value), default=False)
                 if user_del_value is True:
                      deleted_values.append(rec_value)
@@ -3346,6 +3533,9 @@ class dnsrecord_find(LDAPSearch):
 
     def pre_callback(self, ldap, filter, attrs_list, base_dn, scope, *args, **options):
         assert isinstance(base_dn, DN)
+
+        # validate if zone is master zone
+        self.obj.check_zone(args[-2], **options)
 
         filter = _create_idn_filter(self, ldap, *args, **options)
         return (filter, base_dn, ldap.SCOPE_SUBTREE)
@@ -3455,6 +3645,36 @@ class dnsconfig(LDAPObject):
             label=_('Zone refresh interval'),
         ),
     )
+    managed_permissions = {
+        'System: Write DNS Configuration': {
+            'non_object': True,
+            'ipapermright': {'write'},
+            'ipapermlocation': api.env.basedn,
+            'ipapermtarget': DN('cn=dns', api.env.basedn),
+            'ipapermtargetfilter': ['(objectclass=idnsConfigObject)'],
+            'ipapermdefaultattr': {
+                'idnsallowsyncptr', 'idnsforwarders', 'idnsforwardpolicy',
+                'idnspersistentsearch', 'idnszonerefresh'
+            },
+            'replaces': [
+                '(targetattr = "idnsforwardpolicy || idnsforwarders || idnsallowsyncptr || idnszonerefresh || idnspersistentsearch")(target = "ldap:///cn=dns,$SUFFIX")(version 3.0;acl "permission:Write DNS Configuration";allow (write) groupdn = "ldap:///cn=Write DNS Configuration,cn=permissions,cn=pbac,$SUFFIX";)',
+            ],
+            'default_privileges': {'DNS Administrators', 'DNS Servers'},
+        },
+        'System: Read DNS Configuration': {
+            'non_object': True,
+            'ipapermright': {'read'},
+            'ipapermlocation': api.env.basedn,
+            'ipapermtarget': DN('cn=dns', api.env.basedn),
+            'ipapermtargetfilter': ['(objectclass=idnsConfigObject)'],
+            'ipapermdefaultattr': {
+                'objectclass',
+                'idnsallowsyncptr', 'idnsforwarders', 'idnsforwardpolicy',
+                'idnspersistentsearch', 'idnszonerefresh'
+            },
+            'default_privileges': {'DNS Administrators', 'DNS Servers'},
+        },
+    }
 
     def get_dn(self, *keys, **kwargs):
         return DN(api.env.container_dns, api.env.basedn)
@@ -3490,3 +3710,113 @@ class dnsconfig_show(LDAPRetrieve):
         self.obj.postprocess_result(result)
         return result
 
+
+@register()
+class dnsforwardzone(DNSZoneBase):
+    """
+    DNS Forward zone, container for resource records.
+    """
+    object_name = _('DNS forward zone')
+    object_name_plural = _('DNS forward zones')
+    object_class = DNSZoneBase.object_class + ['idnsforwardzone']
+    label = _('DNS Forward Zones')
+    label_singular = _('DNS Forward Zone')
+    default_forward_policy = u'first'
+
+    # managed_permissions: permissions was apllied in dnszone class, do NOT
+    # add them here, they should not be applied twice.
+
+
+@register()
+class dnsforwardzone_add(DNSZoneBase_add):
+    __doc__ = _('Create new DNS forward zone.')
+
+    def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
+        assert isinstance(dn, DN)
+
+        dn = super(dnsforwardzone_add, self).pre_callback(ldap, dn,
+            entry_attrs, attrs_list, *keys, **options)
+
+        if 'idnsforwardpolicy' not in entry_attrs:
+            entry_attrs['idnsforwardpolicy'] = self.obj.default_forward_policy
+
+        if (not entry_attrs.get('idnsforwarders') and
+                entry_attrs['idnsforwardpolicy'] != u'none'):
+            raise errors.ValidationError(name=u'idnsforwarders',
+                                         error=_('Please specify forwarders.'))
+
+        return dn
+
+
+@register()
+class dnsforwardzone_del(DNSZoneBase_del):
+    __doc__ = _('Delete DNS forward zone.')
+
+    msg_summary = _('Deleted DNS forward zone "%(value)s"')
+
+
+@register()
+class dnsforwardzone_mod(DNSZoneBase_mod):
+    __doc__ = _('Modify DNS forward zone.')
+
+    def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
+        try:
+            entry = ldap.get_entry(dn)
+        except errors.NotFound:
+            self.obj.handle_not_found(*keys)
+
+        if not _check_entry_objectclass(entry, self.obj.object_class):
+            self.obj.handle_not_found(*keys)
+
+        policy = self.obj.default_forward_policy
+        forwarders = []
+
+        if 'idnsforwarders' in entry_attrs:
+            forwarders = entry_attrs['idnsforwarders']
+        elif 'idnsforwarders' in entry:
+            forwarders = entry['idnsforwarders']
+
+        if 'idnsforwardpolicy' in entry_attrs:
+            policy = entry_attrs['idnsforwardpolicy']
+        elif 'idnsforwardpolicy' in entry:
+            policy = entry['idnsforwardpolicy']
+
+        if not forwarders and policy != u'none':
+            raise errors.ValidationError(name=u'idnsforwarders',
+                                         error=_('Please specify forwarders.'))
+
+        return dn
+
+
+@register()
+class dnsforwardzone_find(DNSZoneBase_find):
+    __doc__ = _('Search for DNS forward zones.')
+
+
+@register()
+class dnsforwardzone_show(DNSZoneBase_show):
+    __doc__ = _('Display information about a DNS forward zone.')
+
+    has_output_params = LDAPRetrieve.has_output_params + dnszone_output_params
+
+
+@register()
+class dnsforwardzone_disable(DNSZoneBase_disable):
+    __doc__ = _('Disable DNS Forward Zone.')
+    msg_summary = _('Disabled DNS forward zone "%(value)s"')
+
+
+@register()
+class dnsforwardzone_enable(DNSZoneBase_enable):
+    __doc__ = _('Enable DNS Forward Zone.')
+    msg_summary = _('Enabled DNS forward zone "%(value)s"')
+
+
+@register()
+class dnsforwardzone_add_permission(DNSZoneBase_add_permission):
+    __doc__ = _('Add a permission for per-forward zone access delegation.')
+
+
+@register()
+class dnsforwardzone_remove_permission(DNSZoneBase_remove_permission):
+    __doc__ = _('Remove a permission for per-forward zone access delegation.')

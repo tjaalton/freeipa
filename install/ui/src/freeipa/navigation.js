@@ -21,15 +21,10 @@
 
 define([
         'dojo/_base/lang',
-        './app_container',
-        './ipa'
+        './navigation/routing'
        ],
-       function(lang, app_container, IPA) {
+       function(lang, routing) {
 
-
-    var get_router = function() {
-        return app_container.app.router;
-    };
 
     var navigation = {
         /**
@@ -77,7 +72,7 @@ define([
          * type.
          *
          * When facet is defined as a string it has to be registered in
-         * facet register. //FIXME: not yet implemented
+         * facet register.
          *
          * When it's an object (Facet) and has an entity set it will be
          * dealt as entity facet.
@@ -88,7 +83,6 @@ define([
          */
         show: function(arg1, arg2, arg3) {
 
-            var nav = get_router();
             var params = {};
 
             this.set_params(params, arg1);
@@ -98,21 +92,20 @@ define([
             var facet = params.facet;
 
             if (typeof facet === 'string') {
-                // FIXME: doesn't work at the moment
-                throw 'Not yet supported';
-                //facet = IPA.get_facet(facet);
+                return routing.navigate(['generic', facet, params.args]);
             }
 
             if (!facet) throw 'Argument exception: missing facet';
 
             if (facet && facet.entity) {
-                return nav.navigate_to_entity_facet(
+                return routing.navigate([
+                    'entity',
                     facet.entity.name,
                     facet.name,
                     params.pkeys,
-                    params.args);
+                    params.args]);
             } else {
-                return nav.navigate_to_facet(facet.name, params.args);
+                return routing.navigate(['generic', facet.name, params.args]);
             }
         },
 
@@ -130,14 +123,27 @@ define([
          * @param {Object|facet.facet|string|Function} arg3
          */
         show_entity: function(entity_name, arg1, arg2, arg3) {
-            var nav = get_router();
             var params = {};
-
             this.set_params(params, arg1);
             this.set_params(params, arg2);
             this.set_params(params, arg3);
-            return nav.navigate_to_entity_facet(entity_name, params.facet,
-                                                params.pkeys, params.args);
+            return routing.navigate(['entity', entity_name, params.facet,
+                                                params.pkeys, params.args]);
+        },
+
+        /**
+         * Uses lower level access
+         *
+         * `experimental`
+         *
+         * Navigates to generic page by changing hash.
+         *
+         * @param  {string} hash Hash of the change
+         * @param  {Object} [facet] Facet we are navigating to. Usually used for
+         *                          notification purposes
+         */
+        show_generic: function(hash, facet) {
+            routing.router.navigate_to_hash(hash, facet);
         },
 
         /**
@@ -145,8 +151,7 @@ define([
          * @method show_default
          */
         show_default: function() {
-            // TODO: make configurable
-            return this.show_entity('user', 'search');
+            routing.navigate(routing.default_path);
         }
     };
     return navigation;

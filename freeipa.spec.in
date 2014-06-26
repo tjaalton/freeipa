@@ -299,12 +299,13 @@ Requires: gnupg
 Requires: iproute
 Requires: keyutils
 Requires: pyOpenSSL
-Requires: python-nss
+Requires: python-nss >= 0.15
 Requires: python-lxml
 Requires: python-netaddr
 Requires: libipa_hbac-python
 Requires: python-qrcode
 Requires: python-pyasn1
+Requires: python-dateutil
 
 Obsoletes: ipa-python >= 1.0
 
@@ -506,7 +507,10 @@ fi
 python2 -c "import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);" > /dev/null 2>&1
 # NOTE: systemd specific section
 if [  $? -eq 0 ]; then
-    /bin/systemctl try-restart ipa.service >/dev/null 2>&1 || :
+    /bin/systemctl is-enabled ipa.service >/dev/null 2>&1
+    if [  $? -eq 0 ]; then
+        /bin/systemctl restart ipa.service >/dev/null 2>&1 || :
+    fi
 fi
 # END
 
@@ -635,6 +639,7 @@ fi
 %{_sbindir}/ipa-csreplica-manage
 %{_sbindir}/ipa-server-certinstall
 %{_sbindir}/ipa-ldap-updater
+%{_sbindir}/ipa-otptoken-import
 %{_sbindir}/ipa-compat-manage
 %{_sbindir}/ipa-nis-manage
 %{_sbindir}/ipa-managed-entries
@@ -772,6 +777,7 @@ fi
 %{_mandir}/man1/ipa-backup.1.gz
 %{_mandir}/man1/ipa-restore.1.gz
 %{_mandir}/man1/ipa-advise.1.gz
+%{_mandir}/man1/ipa-otptoken-import.1.gz
 
 %files server-trust-ad
 %{_sbindir}/ipa-adtrust-install
@@ -832,11 +838,7 @@ fi
 %dir %{python_sitelib}/ipalib
 %{python_sitelib}/ipalib/*
 %dir %{python_sitelib}/ipaplatform
-%dir %{python_sitelib}/ipaplatform/base
-%dir %{python_sitelib}/ipaplatform/fedora
 %{python_sitelib}/ipaplatform/*
-%{python_sitelib}/ipaplatform/base/*.py*
-%{python_sitelib}/ipaplatform/fedora/*.py*
 %attr(0644,root,root) %{python_sitearch}/default_encoding_utf8.so
 %{python_sitelib}/ipapython-*.egg-info
 %{python_sitelib}/freeipa-*.egg-info

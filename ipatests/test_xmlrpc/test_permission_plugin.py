@@ -102,6 +102,8 @@ etc_dn = DN('cn=etc', api.env.basedn)
 nonexistent_dn = DN('cn=does not exist', api.env.basedn)
 admin_dn = DN('uid=admin', users_dn)
 
+group_filter = u'(|(objectclass=ipausergroup)(objectclass=posixgroup))'
+
 
 def verify_permission_aci(name, dn, acistring):
     """Return test dict that verifies the ACI at the given location"""
@@ -758,9 +760,9 @@ class test_permission(Declarative):
                 summary=u'2 permissions matched',
                 result=[
                     {
-                        'dn': DN(('cn','Modify Group Password Policy'),
+                        'dn': DN(('cn', 'System: Modify Group Password Policy'),
                                  api.env.container_permission, api.env.basedn),
-                        'cn': [u'Modify Group Password Policy'],
+                        'cn': [u'System: Modify Group Password Policy'],
                     },
                     {
                         'dn': DN(('cn', 'System: Read Group Password Policy'),
@@ -1193,10 +1195,10 @@ class test_permission(Declarative):
                 summary=u'1 permission matched',
                 result=[
                     {
-                        'dn': DN(('cn','Add user to default group'),
+                        'dn': DN(('cn', 'System: Add User to default group'),
                                  api.env.container_permission, api.env.basedn),
-                        'cn': [u'Add user to default group'],
-                        'objectclass': objectclasses.system_permission,
+                        'cn': [u'System: Add User to default group'],
+                        'objectclass': objectclasses.permission,
                         'member_privilege': [u'User Administrators'],
                         'attrs': [u'member'],
                         'targetgroup': [u'ipausers'],
@@ -1206,7 +1208,9 @@ class test_permission(Declarative):
                         'ipapermtarget': [DN(
                             'cn=ipausers', api.env.container_group,
                             api.env.basedn)],
-                        'ipapermlocation': [api.env.basedn],
+                        'ipapermlocation': [groups_dn],
+                        'ipapermdefaultattr': [u'member'],
+                        'ipapermissiontype': [u'V2', u'MANAGED', u'SYSTEM'],
                     }
                 ],
             ),
@@ -1925,7 +1929,7 @@ class test_permission_sync_attributes(Declarative):
         verify_permission_aci(
             permission1, groups_dn,
             '(targetattr = "sn")' +
-            '(targetfilter = "(objectclass=ipausergroup)")'
+            '(targetfilter = "%s")' % group_filter +
             '(version 3.0;acl "permission:%s";' % permission1 +
             'allow (write) groupdn = "ldap:///%s";)' % permission1_dn,
         ),
@@ -1960,7 +1964,103 @@ class test_permission_sync_attributes(Declarative):
             permission1, groups_dn,
             '(targetattr = "sn")' +
             '(target = "ldap:///%s")' % DN(('cn', 'editors'), groups_dn) +
-            '(targetfilter = "(objectclass=ipausergroup)")'
+            '(targetfilter = "%s")' % group_filter +
+            '(version 3.0;acl "permission:%s";' % permission1 +
+            'allow (write) groupdn = "ldap:///%s";)' % permission1_dn,
+        ),
+
+        dict(
+            desc='Set extra targetfilter on %r' % permission1,
+            command=(
+                'permission_mod', [permission1], dict(
+                    extratargetfilter=u'(cn=blabla)',
+                )
+            ),
+            expected=dict(
+                value=permission1,
+                summary=u'Modified permission "%s"' % permission1,
+                result=dict(
+                    dn=permission1_dn,
+                    cn=[permission1],
+                    objectclass=objectclasses.permission,
+                    type=[u'group'],
+                    ipapermright=[u'write'],
+                    attrs=[u'sn'],
+                    ipapermbindruletype=[u'permission'],
+                    ipapermissiontype=[u'SYSTEM', u'V2'],
+                    ipapermtarget=[DN('cn=editors', groups_dn)],
+                    ipapermlocation=[groups_dn],
+                    targetgroup=[u'editors'],
+                    extratargetfilter=[u'(cn=blabla)'],
+                ),
+            ),
+        ),
+
+        verify_permission_aci(
+            permission1, groups_dn,
+            '(targetattr = "sn")' +
+            '(target = "ldap:///%s")' % DN(('cn', 'editors'), groups_dn) +
+            '(targetfilter = "(&(cn=blabla)%s)")' % group_filter +
+            '(version 3.0;acl "permission:%s";' % permission1 +
+            'allow (write) groupdn = "ldap:///%s";)' % permission1_dn,
+        ),
+
+        dict(
+            desc='Retrieve %r with --all' % permission1,
+            command=(
+                'permission_show', [permission1], dict(all=True)
+            ),
+            expected=dict(
+                value=permission1,
+                summary=None,
+                result=dict(
+                    dn=permission1_dn,
+                    cn=[permission1],
+                    objectclass=objectclasses.permission,
+                    type=[u'group'],
+                    ipapermright=[u'write'],
+                    attrs=[u'sn'],
+                    ipapermincludedattr=[u'sn'],
+                    ipapermbindruletype=[u'permission'],
+                    ipapermissiontype=[u'SYSTEM', u'V2'],
+                    ipapermtarget=[DN('cn=editors', groups_dn)],
+                    ipapermlocation=[groups_dn],
+                    targetgroup=[u'editors'],
+                    extratargetfilter=[u'(cn=blabla)'],
+                    ipapermtargetfilter=[u'(cn=blabla)', group_filter],
+                ),
+            ),
+        ),
+
+        dict(
+            desc='Set type of %r back to user' % permission1,
+            command=(
+                'permission_mod', [permission1], dict(
+                    type=u'user', ipapermtarget=None,
+                )
+            ),
+            expected=dict(
+                value=permission1,
+                summary=u'Modified permission "%s"' % permission1,
+                result=dict(
+                    dn=permission1_dn,
+                    cn=[permission1],
+                    objectclass=objectclasses.permission,
+                    type=[u'user'],
+                    ipapermright=[u'write'],
+                    attrs=[u'sn'],
+                    ipapermbindruletype=[u'permission'],
+                    ipapermissiontype=[u'SYSTEM', u'V2'],
+                    ipapermlocation=[users_dn],
+                    extratargetfilter=[u'(cn=blabla)'],
+                ),
+            ),
+        ),
+
+        verify_permission_aci(
+            permission1, users_dn,
+            '(targetattr = "sn")' +
+            '(targetfilter = "(&(cn=blabla)(objectclass=posixaccount))")' +
             '(version 3.0;acl "permission:%s";' % permission1 +
             'allow (write) groupdn = "ldap:///%s";)' % permission1_dn,
         ),
@@ -2100,7 +2200,7 @@ class test_permission_sync_nice(Declarative):
         verify_permission_aci(
             permission1, groups_dn,
             '(targetattr = "sn")' +
-            '(targetfilter = "(objectclass=ipausergroup)")' +
+            '(targetfilter = "%s")' % group_filter +
             '(version 3.0;acl "permission:%s";' % permission1 +
             'allow (write) groupdn = "ldap:///%s";)' % permission1_dn,
         ),
@@ -2135,7 +2235,7 @@ class test_permission_sync_nice(Declarative):
             permission1, groups_dn,
             '(targetattr = "sn")' +
             '(target = "ldap:///%s")' % DN(('cn', 'editors'), groups_dn) +
-            '(targetfilter = "(objectclass=ipausergroup)")' +
+            '(targetfilter = "%s")' % group_filter +
             '(version 3.0;acl "permission:%s";' % permission1 +
             'allow (write) groupdn = "ldap:///%s";)' % permission1_dn,
         ),
@@ -2751,9 +2851,9 @@ class test_permission_legacy(Declarative):
             command=('permission_find', [],
                      {'ipapermlocation': api.env.basedn}),
             expected=dict(
-                count=lambda n: n > 50,
+                count=15,
                 truncated=False,
-                summary=lambda s: True,
+                summary=u'15 permissions matched',
                 result=lambda s: True,
             ),
         ),
