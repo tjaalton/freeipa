@@ -3,8 +3,6 @@ usr/sbin/ipa-client-install
 usr/sbin/ipa-getkeytab
 usr/sbin/ipa-rmkeytab
 usr/sbin/ipa-join
-usr/share/ipa/ipaclient/ipa.cfg
-usr/share/ipa/ipaclient/ipa.js
 usr/lib/python*/dist-packages/ipaclient/*.py
 usr/share/man/man1/ipa-client-automount.1.gz
 usr/share/man/man1/ipa-client-install.1.gz
