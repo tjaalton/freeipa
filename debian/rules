@@ -63,6 +63,13 @@ ifneq ($(ONLY_CLIENT), 1)
 
 	mkdir -p $(DESTDIR)/etc/bash_completion.d
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
+
+	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
+
+	rm -f $(DESTDIR)/usr/share/ipa/ui/js/dojo/dojo.js \
+		$(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
+	ln -s /usr/share/javascript/dojo/dojo.js $(DESTDIR)/usr/share/ipa/ui/js/dojo/dojo.js
+	ln -s /usr/share/javascript/jquery/jquery.js $(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
 else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
 endif
@@ -74,7 +81,7 @@ endif
 	# fix permissions
 	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
 
-	dh_install --list-missing
+	dh_install --fail-missing
 
 %:
 	dh $@ --with quilt,autoreconf,python2

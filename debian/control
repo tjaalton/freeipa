@@ -8,6 +8,7 @@ Build-Depends:
  check,
  debhelper (>= 9),
  dh-autoreconf,
+ dh-python,
  gettext,
  krb5-user,
  libcmocka-dev,
@@ -47,15 +48,14 @@ Build-Depends:
  python-qrcode,
  python-setuptools,
  python-sss (>= 1.8.0),
- python-support,
  python-yubico,
  quilt,
  rhino,
  samba-dev,
  selinux-policy-dev,
  uuid-dev
-Standards-Version: 3.9.3
-Vcs-Git: git://git.debian.org/git/pkg-freeipa/freeipa.git
+Standards-Version: 3.9.5
+Vcs-Git: git://anonscm.debian.org/pkg-freeipa/freeipa.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-freeipa/freeipa.git
 Homepage: http://www.freeipa.org
 
@@ -76,6 +76,8 @@ Depends:
  libapache2-mod-auth-kerb,
  libapache2-mod-nss,
  libapache2-mod-wsgi,
+ libjs-dojo-core,
+ libjs-jquery,
  libnss3-tools,
  libsasl2-modules-gssapi-mit,
  ntp,
@@ -107,7 +109,8 @@ Depends:
  samba,
  winbind,
  ${misc:Depends},
- ${python:Depends}
+ ${python:Depends},
+ ${shlibs:Depends}
 Description: FreeIPA centralized identity framework -- AD trust installer
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
@@ -167,7 +170,7 @@ Description: FreeIPA centralized identity framework -- admintools
 
 Package: freeipa-tests
 Architecture: any
-Depends: tar, xz, ${misc:Depends}, ${python:Depends}
+Depends: xz, ${misc:Depends}, ${python:Depends}
 Description: FreeIPA centralized identity framework -- tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
