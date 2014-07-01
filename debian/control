@@ -34,6 +34,7 @@ Build-Depends: quilt, debhelper (>= 9), dh-autoreconf,
  python-setuptools,
  python-sss (>= 1.8.0),
  python-support,
+ python-yubico,
 # server
  389-ds-base-dev (>= 1.1.3),
  libkrad-dev,
