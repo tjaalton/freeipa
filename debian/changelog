@@ -1,4 +1,4 @@
-freeipa (3.4~git20140617-1) UNRELEASED; urgency=medium
+freeipa (3.4~git20140701-1) UNRELEASED; urgency=medium
 
   * git snapshot.
     - drop a bunch of patches, update others.
