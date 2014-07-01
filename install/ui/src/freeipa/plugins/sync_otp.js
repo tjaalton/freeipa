@@ -23,62 +23,65 @@ define(['dojo/_base/declare',
         'dojo/on',
         '../facets/Facet',
         '../auth',
+        '../navigation',
         '../phases',
         '../reg',
         '../widget',
-        '../widgets/LoginScreen'
+        '../widgets/SyncOTPScreen'
        ],
-       function(declare, lang, on, Facet, auth, phases, reg, widget, LoginScreen) {
+       function(declare, lang, on, Facet, auth, navigation, phases, reg, widget, SyncOTPScreen) {
 
     /**
-     * Login Facet plugin
+     * Sync OTP Facet plugin
      *
-     * Creates and registers a facet with login page.
+     * Creates and registers a facet with sync otp page.
      *
-     * @class plugins.login
+     * @class plugins.sync_otp
      * @singleton
      */
-    var login = {};
+    var sync_otp = {};
 
-    login.facet_spec = {
-        name: 'login',
+    sync_otp.facet_spec = {
+        name: 'sync-otp',
+        'class': 'login-pf-body',
         preferred_container: 'simple',
         requires_auth: false,
         widgets: [
             {
                 $type: 'activity',
                 name: 'activity',
-                text: 'Authenticating',
+                text: 'Synchronizing',
                 visible: false
             },
             {
-                $type: 'login_screen',
-                name: 'login_screen'
+                $type: 'sync_otp_screen',
+                name: 'sync_screen'
             }
         ]
     };
 
-    login.LoginFacet = declare([Facet], {
-
-        can_leave: function() {
-            return auth.current.authenticated;
-        },
+    sync_otp.SyncOTPFacet = declare([Facet], {
 
         init: function() {
             this.inherited(arguments);
-            var login_screen = this.get_widget('login_screen');
+            var sync_screen = this.get_widget('sync_screen');
             var self = this;
-            on(login_screen, 'logged_in', function(args) {
-                self.emit('logged_in', args);
+            on(sync_screen, 'sync-success', function(args) {
+                self.emit('sync-success', args);
+            });
+
+            on(sync_screen, 'sync-cancel', function(args) {
+                self.emit('sync-cancel', args);
             });
 
             on(this, 'show', function(args) {
-                login_screen.refresh();
+                sync_screen.refresh();
             });
+        },
 
-            on(login_screen, 'require-otp-sync', function(args) {
-                self.emit('require-otp-sync', args);
-            });
+        set_user: function(user) {
+            var sync_screen = this.get_widget('sync_screen');
+            sync_screen.set('user', user);
         }
     });
 
@@ -87,14 +90,14 @@ define(['dojo/_base/declare',
         var fa = reg.facet;
         var w = reg.widget;
 
-        w.register('login_screen', LoginScreen);
+        w.register('sync_otp_screen', SyncOTPScreen);
 
         fa.register({
-            type: 'login',
-            factory: login.LoginFacet,
-            spec: login.facet_spec
+            type: 'sync-otp',
+            factory: sync_otp.SyncOTPFacet,
+            spec: sync_otp.facet_spec
         });
     });
 
-    return login;
+    return sync_otp;
 });

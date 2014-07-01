@@ -330,6 +330,165 @@ return {
     }
 };};
 
+var make_forwardzone_spec = function() {
+return {
+    name: 'dnsforwardzone',
+    enable_test: function() {
+        return IPA.dns_enabled;
+    },
+    facet_groups: [ 'dnsrecord', 'settings' ],
+    facets: [
+        {
+            $type: 'search',
+            row_enabled_attribute: 'idnszoneactive',
+            title: '@mo:dnszone.label',
+            columns: [
+                'idnsname',
+                {
+                    name: 'idnszoneactive',
+                    label: '@i18n:status.label',
+                    formatter: 'boolean_status'
+                },
+                'idnsforwarders',
+                'idnsforwardpolicy'
+            ],
+            actions: [
+                'batch_disable',
+                'batch_enable'
+            ],
+            control_buttons: [
+                {
+                    name: 'disable',
+                    label: '@i18n:buttons.disable',
+                    icon: 'fa-minus'
+                },
+                {
+                    name: 'enable',
+                    label: '@i18n:buttons.enable',
+                    icon: 'fa-check'
+                }
+            ]
+        },
+        {
+            $type: 'details',
+            $factory: IPA.dnszone_details_facet,
+            command_mode: 'info',
+            sections: [
+            {
+                name: 'identity',
+                fields: [
+                    'idnsname',
+                    {
+                        $type: 'multivalued',
+                        name: 'idnsforwarders',
+                        validators: ['dnsforwarder']
+                    },
+                    {
+                        $type: 'radio',
+                        name: 'idnsforwardpolicy',
+                        default_value: 'first',
+                        options: [
+                            {
+                                value: 'first',
+                                label: '@i18n:objects.dnsconfig.forward_first'
+                            },
+                            {
+                                value: 'only',
+                                label: '@i18n:objects.dnsconfig.forward_only'
+                            },
+                            {
+                                value: 'none',
+                                label: '@i18n:objects.dnsconfig.forward_none'
+                            }
+                        ]
+                    }
+                ]
+            }],
+            actions: [
+                'enable',
+                'disable',
+                'delete',
+                'dns_add_permission',
+                'dns_remove_permission'
+            ],
+            header_actions: ['enable', 'disable', 'delete',
+                'add_permission', 'remove_permission'],
+            state: {
+                evaluators: [
+                    {
+                        $factory: IPA.enable_state_evaluator,
+                        field: 'idnszoneactive'
+                    },
+                    {
+                        $factory: IPA.acl_state_evaluator,
+                        attribute: 'managedby'
+                    },
+                    IPA.dns.zone_has_permission_evaluator
+                ],
+                summary_conditions: [
+                    IPA.enabled_summary_cond,
+                    IPA.disabled_summary_cond
+                ]
+            }
+        }
+    ],
+    adder_dialog: {
+        sections: [
+            {
+                name: 'name',
+                layout: IPA.dnszone_name_section_layout,
+                fields: [
+                    {
+                        $type: 'dnszone_name',
+                        name: 'idnsname',
+                        required: false,
+                        radio_name: 'dnszone_name_type'
+                    },
+                    {
+                        $type: 'dnszone_name',
+                        name: 'name_from_ip',
+                        radio_name: 'dnszone_name_type',
+                        validators: ['network']
+                    }
+                ]
+            },
+            {
+                name: 'forwarders',
+                fields: [
+                    {
+                        $type: 'multivalued',
+                        name: 'idnsforwarders',
+                        required: true,
+                        validators: ['dnsforwarder']
+                    },
+                    {
+                        $type: 'radio',
+                        name: 'idnsforwardpolicy',
+                        default_value: 'first',
+                        options: [
+                            {
+                                value: 'first',
+                                label: '@i18n:objects.dnsconfig.forward_first'
+                            },
+                            {
+                                value: 'only',
+                                label: '@i18n:objects.dnsconfig.forward_only'
+                            },
+                            {
+                                value: 'none',
+                                label: '@i18n:objects.dnsconfig.forward_none'
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        policies: [
+            IPA.add_dns_zone_name_policy
+        ]
+    }
+};};
+
 
 IPA.dnszone_details_facet = function(spec, no_init) {
 
@@ -344,7 +503,7 @@ IPA.dnszone_details_facet = function(spec, no_init) {
         var pkey = that.get_pkey();
 
         var batch = rpc.batch_command({
-            name: 'dnszone_details_refresh'
+            name: this.entity.name + '_details_refresh'
         });
 
         var dnszone_command = that.details_facet_create_refresh_command();
@@ -581,29 +740,13 @@ IPA.dns.add_permission_action = function(spec) {
 
     spec = spec || {};
     spec.name = spec.name || 'add_permission';
+    spec.method = spec.method || 'add_permission';
     spec.label = spec.label || '@i18n:objects.dnszone.add_permission';
     spec.enable_cond = spec.enable_cond || ['permission-none', 'managedby_w'];
+    spec.needs_confirm = spec.needs_confirm !== undefined ? spec.needs_confirm : true;
+    spec.confirm_msg = spec.confirm_msg || '@i18n:objects.dnszone.add_permission_confirm';
 
-    var that = IPA.action(spec);
-
-    that.execute_action = function(facet) {
-
-        var pkey = facet.get_pkey();
-
-         var command = rpc.command({
-            entity: 'dnszone',
-            method: 'add_permission',
-            args: [pkey],
-            options: {},
-            on_success: function(data, text_status, xhr) {
-                facet.refresh();
-                IPA.notify_success(data.result.summary);
-            }
-        });
-
-        command.execute();
-    };
-
+    var that = IPA.object_action(spec);
     return that;
 };
 
@@ -611,29 +754,13 @@ IPA.dns.remove_permission_action = function(spec) {
 
     spec = spec || {};
     spec.name = spec.name || 'remove_permission';
+    spec.method = spec.method || 'remove_permission';
     spec.label = spec.label || '@i18n:objects.dnszone.remove_permission';
     spec.enable_cond = spec.enable_cond || ['permission-set', 'managedby_w'];
+    spec.needs_confirm = spec.needs_confirm !== undefined ? spec.needs_confirm : true;
+    spec.confirm_msg = spec.confirm_msg || '@i18n:objects.dnszone.remove_permission_confirm';
 
-    var that = IPA.action(spec);
-
-    that.execute_action = function(facet) {
-
-        var pkey = facet.get_pkey();
-
-         var command = rpc.command({
-            entity: 'dnszone',
-            method: 'remove_permission',
-            args: [pkey],
-            options: {},
-            on_success: function(data, text_status, xhr) {
-                facet.refresh();
-                IPA.notify_success(data.result.summary);
-            }
-        });
-
-        command.execute();
-    };
-
+    var that = IPA.object_action(spec);
     return that;
 };
 
@@ -697,7 +824,7 @@ IPA.dns.record_search_facet = function(spec) {
 
             var original = records[i];
             var record = {
-                idnsname: original.idnsname,
+                idnsname: rpc.extract_objects(original.idnsname),
                 values: []
             };
 
@@ -994,6 +1121,23 @@ IPA.dns.get_record_metadata = function() {
             ],
             adder_attributes: [],
             columns: ['sshfp_part_algorithm', 'sshfp_part_fp_type']
+        },
+        {
+            name: 'tlsarecord',
+            attributes: [
+                'tlsa_part_cert_usage',
+                'tlsa_part_selector',
+                'tlsa_part_matching_type',
+                {
+                    name: 'tlsa_part_cert_association_data',
+                    $type: 'textarea'
+                }
+            ],
+            adder_attributes: [],
+            columns: [
+                'tlsa_part_cert_usage', 'tlsa_part_selector',
+                'tlsa_part_matching_type'
+            ]
         },
         {
             name: 'txtrecord',
@@ -1380,7 +1524,7 @@ IPA.dns_record_types = function() {
     //only supported
     var attrs = ['A', 'AAAA', 'A6', 'AFSDB', 'CERT', 'CNAME', 'DNAME',
                    'DS', 'DLV', 'KX', 'LOC', 'MX', 'NAPTR', 'NS',
-                   'NSEC3PARAM', 'PTR', 'SRV', 'SSHFP', 'TXT'];
+                   'NSEC3PARAM', 'PTR', 'SRV', 'SSHFP', 'TLSA', 'TXT'];
     var record_types = [];
     for (var i=0; i<attrs.length; i++) {
         var attr = attrs[i];
@@ -2153,7 +2297,7 @@ IPA.dns.ptr_redirection_dialog = function(spec) {
 
         for (var i=0; i<zones.length; i++) {
 
-            var zone_name = zones[i].idnsname[0];
+            var zone_name = rpc.extract_objects(zones[i].idnsname)[0];
             if (that.reverse_address.indexOf(zone_name) > -1) {
                 var msg = text.get('@i18n:objects.dnsrecord.ptr_redir_zone');
                 msg = msg.replace('${zone}', zone_name);
@@ -2406,6 +2550,7 @@ exp.remove_menu_item = function() {
 exp.config_spec = make_config_spec();
 exp.zone_spec = make_zone_spec();
 exp.record_spec = make_record_spec();
+exp.forwardzone_spec = make_forwardzone_spec();
 exp.register = function() {
     var e = reg.entity;
     var w = reg.widget;
@@ -2416,6 +2561,7 @@ exp.register = function() {
     e.register({type: 'dnsconfig', spec: exp.config_spec});
     e.register({type: 'dnszone', spec: exp.zone_spec});
     e.register({type: 'dnsrecord', spec: exp.record_spec});
+    e.register({type: 'dnsforwardzone', spec: exp.forwardzone_spec});
 
     w.register('dnszone_name', IPA.dnszone_name_widget);
     w.register('force_dnszone_add_checkbox', IPA.force_dnszone_add_checkbox_widget);

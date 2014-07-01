@@ -245,7 +245,9 @@
                     "radiusproxy",
                     "user",
                     "plugins.load",
-                    "plugins.login"
+                    "plugins.login",
+                    "plugins.login_process",
+                    "plugins.sync_otp"
                 ]
             }
         ]

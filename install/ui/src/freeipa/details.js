@@ -31,9 +31,10 @@ define([
         './rpc',
         './spec_util',
         './text',
+        './widget',
         './facet',
         './add'],
-    function(lang, builder, IPA, $, phases, reg, rpc, su, text) {
+    function(lang, builder, IPA, $, phases, reg, rpc, su, text, widget_mod) {
 
 /**
  * Details module
@@ -930,12 +931,7 @@ exp.details_facet = IPA.details_facet = function(spec, no_init) {
      * @protected
      */
     that.show_validation_error = function() {
-        var dialog = IPA.message_dialog({
-            name: 'validation_error',
-            title: '@i18n:dialogs.validation_title',
-            message: '@i18n:dialogs.validation_message'
-        });
-        dialog.open();
+        IPA.notify('@i18n:dialogs.validation_message', 'error');
     };
 
     /**
@@ -1441,6 +1437,7 @@ exp.update_action = IPA.update_action = function(spec) {
 
         if (!facet.validate()) {
             facet.show_validation_error();
+            widget_mod.focus_invalid(facet);
             return;
         }
 

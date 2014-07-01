@@ -19,35 +19,9 @@
 */
 
 define([
-    // core
     './app_container',
     './plugins/sync_otp',
-    './plugins/login',
-    './plugins/login_process',
-    // entities
-    './aci',
-    './automember',
-    './automount',
-    './dns',
-    './group',
-    './hbac',
-    './hbactest',
-    './hostgroup',
-    './host',
-    './idrange',
-    './netgroup',
-    './otptoken',
-    './policy',
-    './radiusproxy',
-    './realmdomains',
-    './rule',
-    './selinux',
-    './serverconfig',
-    './service',
-    './sudo',
-    './trust',
-    './user',
-    'dojo/domReady!'
+    './plugins/login'
 ],function(app_container) {
     return app_container;
 });

@@ -32,6 +32,7 @@ define(['dojo/_base/array',
        'dojo/topic',
        './builder',
        './datetime',
+       './entity',
        './ipa',
        './jquery',
        './navigation',
@@ -39,10 +40,11 @@ define(['dojo/_base/array',
        './reg',
        './rpc',
        './text',
-       './util'
+       './util',
+       'exports'
        ],
        function(array, lang, Evented, has, keys, on, string, topic, builder,
-                datetime, IPA, $, navigation, phases, reg, rpc, text, util) {
+                datetime, entity_mod, IPA, $, navigation, phases, reg, rpc, text, util, exp) {
 
 /**
  * Widget module
@@ -54,7 +56,6 @@ define(['dojo/_base/array',
  * @class widget
  * @singleton
  */
-var exp = {};
 
 /**
  * Width of column which contains only checkbox
@@ -916,7 +917,7 @@ IPA.multivalued_widget = function(spec) {
         var old = that.valid;
         that.valid = result.valid;
 
-        if (!result.valid && result.errors) {
+        if (!result.valid && result.results) {
             var offset = 0;
             for (var i=0; i<that.rows.length; i++) {
 
@@ -935,10 +936,9 @@ IPA.multivalued_widget = function(spec) {
                 var error_link = that.get_error_link();
                 error_link.css('display', 'none');
                 error_link.html('');
-            } else {
-                that.show_error(result.message);
             }
-
+        } else if (!result.valid) {
+            that.show_error(result.message);
         } else {
             that.hide_error();
         }
@@ -2257,11 +2257,13 @@ IPA.column = function (spec) {
 
     that.entity = IPA.get_entity(spec.entity);
     that.name = spec.name;
+    that.param = spec.param || that.name;
 
     that.label = text.get(spec.label);
     that.width = spec.width;
     that.primary_key = spec.primary_key;
     that.link = spec.link;
+    that.adapter = builder.build('adapter', spec.adapter || 'adapter', { context: that });
     that.formatter = builder.build('formatter', spec.formatter);
 
     if (!that.entity) {
@@ -2290,7 +2292,7 @@ IPA.column = function (spec) {
      * @param {boolean} suppress_link
      */
     that.setup = function(container, record, suppress_link) {
-        var value = record[that.name];
+        var value = that.adapter.load(record);
         var type;
         if (that.formatter) {
             value = that.formatter.parse(value);
@@ -2327,6 +2329,9 @@ IPA.column = function (spec) {
      */
     that.set_value = function(container, value, type, suppress_link) {
 
+        if (value instanceof Array) {
+            value = value.join(', ');
+        }
         value = value ? value.toString() : '';
         container.empty();
 
@@ -2835,8 +2840,9 @@ IPA.table_widget = function (spec) {
 
         var columns = that.columns.values;
         for (var i=0; i<columns.length; i++){
+
             var name = columns[i].name;
-            var values = result[name];
+            var values = columns[i].adapter.load(result);
             if (!values) continue;
 
             if (values instanceof Array){
@@ -2865,7 +2871,7 @@ IPA.table_widget = function (spec) {
         for (var i=0; i<columns.length; i++){
             var column = columns[i];
 
-            value = record[column.name];
+            value = column.adapter.load(record);
             value = value ? value.toString() : '';
 
             if (column.primary_key) {
@@ -3825,13 +3831,15 @@ IPA.entity_select_widget = function(spec) {
 
     that.search_success = function(data, text_status, xhr) {
 
+        var adapter = builder.build('adapter', 'adapter', { context: that });
+
         //get options
         var options = [];
 
         var entries = data.result.result;
         for (var i=0; i<data.result.count; i++) {
             var entry = entries[i];
-            var values = entry[that.other_field];
+            var values = adapter.load(entry, that.other_field);
             var value = values[0];
 
             options.push(value);
@@ -5745,6 +5753,28 @@ exp.activity_widget = IPA.activity_widget = function(spec) {
     };
 
     return that;
+};
+
+/**
+ * Find and focus first focusable invalid widget
+ * @member widget
+ * @param {IPA.widget|facet.facet} widget Widget container
+ * @return {boolean} A widget was focused
+ */
+exp.focus_invalid = function(widget) {
+
+    var widgets = widget.widgets.widgets;
+    var focused = false;
+    for (var i=0, l=widgets.length; i<l; i++) {
+        var w = widgets.values[i];
+        if (w.valid === false && w.focus_input) {
+            w.focus_input();
+            focused = true;
+        }
+        else if (w.widgets) focused = exp.focus_invalid(w);
+        if (focused) break;
+    }
+    return focused;
 };
 
 /**

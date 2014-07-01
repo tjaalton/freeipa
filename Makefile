@@ -1,6 +1,6 @@
 include VERSION
 
-SUBDIRS=daemons install ipapython ipa-client smartproxy
+SUBDIRS=daemons install ipapython ipa-client
 CLIENTDIRS=ipapython ipa-client
 
 PRJ_PREFIX=freeipa
@@ -76,7 +76,6 @@ bootstrap-autogen: version-update client-autogen
 	@echo "Building IPA $(IPA_VERSION)"
 	cd daemons; if [ ! -e Makefile ]; then ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR) --with-openldap; fi
 	cd install; if [ ! -e Makefile ]; then ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR); fi
-	cd smartproxy; if [ ! -e Makefile ]; then ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR); fi
 
 client-autogen: version-update
 	cd ipa-client; if [ ! -e Makefile ]; then ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR); fi
@@ -136,6 +135,7 @@ version-update: release-update
 		> ipatests/setup.py
 	sed -e s/__NUM_VERSION__/$(IPA_NUM_VERSION)/ install/ui/src/libs/loader.js.in \
 		> install/ui/src/libs/loader.js
+	perl -pi -e "s:__API_VERSION__:$(IPA_API_VERSION_MAJOR).$(IPA_API_VERSION_MINOR):" install/ui/src/libs/loader.js
 	perl -pi -e "s:__NUM_VERSION__:$(IPA_NUM_VERSION):" ipapython/version.py
 	perl -pi -e "s:__VENDOR_VERSION__:$(IPA_VENDOR_VERSION):" ipapython/version.py
 	perl -pi -e "s:__API_VERSION__:$(IPA_API_VERSION_MAJOR).$(IPA_API_VERSION_MINOR):" ipapython/version.py
@@ -201,7 +201,6 @@ tarballs: local-archive
 	cd dist/$(TARBALL_PREFIX)/ipa-client; ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR); make distclean
 	cd dist/$(TARBALL_PREFIX)/daemons; ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR); make distclean
 	cd dist/$(TARBALL_PREFIX)/install; ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR); make distclean
-	cd dist/$(TARBALL_PREFIX)/smartproxy; ../autogen.sh --prefix=/usr --sysconfdir=/etc --localstatedir=/var --libdir=$(LIBDIR); make distclean
 	cd dist; tar cfz sources/$(TARBALL) $(TARBALL_PREFIX)
 	rm -rf dist/$(TARBALL_PREFIX)
 
@@ -268,6 +267,5 @@ maintainer-clean: clean
 	cd install && $(MAKE) maintainer-clean
 	cd ipa-client && $(MAKE) maintainer-clean
 	cd ipapython && $(MAKE) maintainer-clean
-	cd smartproxy && $(MAKE) maintainer-clean
 	rm -f version.m4
 	rm -f freeipa.spec

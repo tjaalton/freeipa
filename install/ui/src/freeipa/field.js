@@ -775,8 +775,8 @@ field.Adapter = declare(null, {
     get_record: function(data) {
 
         // detection if it's result or raw RPC command response
-        // all raw responses should contain `version` and `principal`
-        if (!data.version || !data.principal) {
+        // each RPC response should define properties as follows
+        if (data.id === undefined || data.result === undefined || data.error === undefined) {
             return data;
         }
 
@@ -824,6 +824,7 @@ field.Adapter = declare(null, {
         if (util.is_empty(value) && !util.is_empty(def)) {
             value = util.normalize_value(def);
         }
+        value = rpc.extract_objects(value);
         return value;
     },
 
