@@ -1,6 +1,6 @@
 etc/ipa/html/*
-lib/systemd/system/ipa-otpd@.service
 lib/systemd/system/ipa-otpd.socket
+lib/systemd/system/ipa-otpd@.service
 usr/lib/*/dirsrv/plugins/libipa_cldap.so
 usr/lib/*/dirsrv/plugins/libipa_dns.so
 usr/lib/*/dirsrv/plugins/libipa_enrollment_extop.so
@@ -11,8 +11,8 @@ usr/lib/*/dirsrv/plugins/libipa_range_check.so
 usr/lib/*/dirsrv/plugins/libipa_repl_version.so
 usr/lib/*/dirsrv/plugins/libipa_uuid.so
 usr/lib/*/dirsrv/plugins/libipa_winsync.so
-usr/lib/*/ipa/certmonger/*
 usr/lib/*/ipa-otpd
+usr/lib/*/ipa/certmonger/*
 usr/lib/*/krb5/plugins/kdb/*.so
 usr/lib/python*/dist-packages/ipaserver/*
 usr/sbin/ipa-advise
@@ -33,17 +33,17 @@ usr/sbin/ipa-server-certinstall
 usr/sbin/ipa-server-install
 usr/sbin/ipa-upgradeconfig
 usr/sbin/ipactl
+usr/share/ipa/*.ldif
+usr/share/ipa/*.template
+usr/share/ipa/*.uldif
 usr/share/ipa/advise/legacy/*.template
 usr/share/ipa/copy-schema-to-ca.py
 usr/share/ipa/ffextension/*
-usr/share/ipa/ipa.conf
 usr/share/ipa/ipa-pki-proxy.conf
 usr/share/ipa/ipa-rewrite.conf
-usr/share/ipa/*.ldif
+usr/share/ipa/ipa.conf
 usr/share/ipa/migration/*
-usr/share/ipa/*.template
 usr/share/ipa/ui/*
-usr/share/ipa/*.uldif
 usr/share/ipa/updates/*
 usr/share/ipa/wsgi.py
 usr/share/ipa/wsgi/*
@@ -63,6 +63,6 @@ usr/share/man/man1/ipa-replica-prepare.1*
 usr/share/man/man1/ipa-restore.1*
 usr/share/man/man1/ipa-server-certinstall.1*
 usr/share/man/man1/ipa-server-install.1*
-usr/share/man/man8/ipactl.8*
 usr/share/man/man8/ipa-upgradeconfig.8*
+usr/share/man/man8/ipactl.8*
 var/lib/ipa/sysrestore
