@@ -70,6 +70,8 @@ ifneq ($(ONLY_CLIENT), 1)
 		$(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
 	ln -s /usr/share/javascript/dojo/dojo.js $(DESTDIR)/usr/share/ipa/ui/js/dojo/dojo.js
 	ln -s /usr/share/javascript/jquery/jquery.js $(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
+
+	mkdir -m 700 $(DESTDIR)/var/lib/ipa/backup
 else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
 endif
