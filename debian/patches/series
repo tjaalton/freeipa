@@ -10,4 +10,3 @@ add-debian-platform.diff
 
 fix-pykerberos-api.diff
 fix-match-hostname.diff
-fix-rhino-path.diff
