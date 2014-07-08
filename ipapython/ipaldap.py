@@ -263,6 +263,10 @@ class IPASimpleLDAPObject(object):
         'idnssoamname':    DNSName,
         'idnssoarname':    DNSName,
         'dnszoneidnsname': DNSName,
+        'nsds5replicalastupdatestart': unicode,
+        'nsds5replicalastupdateend': unicode,
+        'nsds5replicalastinitstart': unicode,
+        'nsds5replicalastinitend': unicode,
     })
     _SINGLE_VALUE_OVERRIDE = CIDict({
         'nsslapd-ssl-check-hostname': True,
@@ -1200,6 +1204,10 @@ class LDAPClient(object):
             pass
         except ldap.CONNECT_ERROR:
             raise errors.DatabaseError(desc=desc, info=info)
+        except ldap.UNWILLING_TO_PERFORM:
+            raise errors.DatabaseError(desc=desc, info=info)
+        except ldap.AUTH_UNKNOWN:
+            raise errors.ACIError(info='%s (%s)' % (info,desc))
         except ldap.LDAPError, e:
             if 'NOT_ALLOWED_TO_DELEGATE' in info:
                 raise errors.ACIError(

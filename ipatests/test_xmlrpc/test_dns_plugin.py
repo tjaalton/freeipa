@@ -73,6 +73,23 @@ zone3_ns2_arec = u'ns2'
 zone3_ns2_arec_dnsname = DNSName(zone3_ns2_arec)
 zone3_ns2_arec_dn = DN(('idnsname',zone3_ns2_arec), zone3_dn)
 
+zone4_upper = u'ZONE4.test'
+zone4 = u'zone4.test.'
+zone4_dnsname = DNSName(zone4)
+zone4_dn = DN(('idnsname', zone4), api.env.container_dns, api.env.basedn)
+zone4_ns = u'ns1.%s' % zone4
+zone4_ns_dnsname = DNSName(zone4_ns)
+zone4_rname = u'root.%s' % zone4
+zone4_rname_dnsname = DNSName(zone4_rname)
+
+zone5 = u'zone--5.test.'
+zone5_dnsname = DNSName(zone5)
+zone5_dn = DN(('idnsname', zone5), api.env.container_dns, api.env.basedn)
+zone5_ns = u'ns1.%s' % zone5
+zone5_ns_dnsname = DNSName(zone5_ns)
+zone5_rname = u'root.%s' % zone5
+zone5_rname_dnsname = DNSName(zone5_rname)
+
 revzone1 = u'31.16.172.in-addr.arpa.'
 revzone1_dnsname = DNSName(revzone1)
 revzone1_ip = u'172.16.31.0'
@@ -95,6 +112,10 @@ revzone3_classless2_dnsname = DNSName(revzone3_classless2)
 revzone3_classless2_ip = u'172.16.70.128'
 revzone3_classless2_ipprefix = u'172.16.70.'
 revzone3_classless2_dn = DN(('idnsname', revzone3_classless2), api.env.container_dns, api.env.basedn)
+
+revzone3_classless2_permission = u'Manage DNS zone %s' % revzone3_classless2
+revzone3_classless2_permission_dn = DN(('cn', revzone3_classless2_permission),
+                           api.env.container_permission, api.env.basedn)
 
 name1 = u'testdnsres'
 name1_dnsname = DNSName(name1)
@@ -125,6 +146,15 @@ dlv_dnsname = DNSName(dlv)
 dlv_dn = DN(('idnsname', dlv), zone1_dn)
 
 dlvrec = u'60485 5 1 2BB183AF5F22588179A53B0A98631FAD1A292118'
+
+tlsa = u'tlsa'
+tlsa_dnsname = DNSName(tlsa)
+tlsa_dn = DN(('idnsname', tlsa), zone1_dn)
+
+tlsarec_err1 = u'300 0 1 d2abde240d7cd3ee6b4b28c54df034b97983a1d16e8a410e4561cb106618e971'
+tlsarec_err2 = u'0 300 1 d2abde240d7cd3ee6b4b28c54df034b97983a1d16e8a410e4561cb106618e971'
+tlsarec_err3 = u'0 0 300 d2abde240d7cd3ee6b4b28c54df034b97983a1d16e8a410e4561cb106618e971'
+tlsarec_ok = u'0 0 1 d2abde240d7cd3ee6b4b28c54df034b97983a1d16e8a410e4561cb106618e971'
 
 wildcard_rec1 = u'*.test'
 wildcard_rec1_dnsname = DNSName(wildcard_rec1)
@@ -255,7 +285,7 @@ class test_dns(Declarative):
             pass
 
     cleanup_commands = [
-        ('dnszone_del', [zone1, zone2, zone3, revzone1, revzone2,
+        ('dnszone_del', [zone1, zone2, zone3, zone4, zone5, revzone1, revzone2,
                          revzone3_classless1, revzone3_classless2,
                          idnzone1, revidnzone1, zone_findtest_master],
             {'continue': True}),
@@ -266,7 +296,8 @@ class test_dns(Declarative):
                                'idnsallowsyncptr' : None,
                                }),
         ('permission_del', [zone1_permission, idnzone1_permission,
-                            fwzone1_permission], {'force': True}
+                            fwzone1_permission,
+                            revzone3_classless2_permission], {'force': True}
         ),
     ]
 
@@ -401,6 +432,80 @@ class test_dns(Declarative):
 
 
         dict(
+            desc='Create a zone with upper case name with --force',
+            command=(
+                'dnszone_add', [zone4_upper], {
+                    'idnssoamname': zone4_ns,
+                    'idnssoarname': zone4_rname,
+                    'force'       : True,
+                }
+            ),
+            expected={
+                'value': zone4_dnsname,
+                'summary': None,
+                'result': {
+                    'dn': zone4_dn,
+                    'idnsname': [zone4_dnsname],
+                    'idnszoneactive': [u'TRUE'],
+                    'idnssoamname': [zone4_ns_dnsname],
+                    'nsrecord': [zone4_ns],
+                    'idnssoarname': [zone4_rname_dnsname],
+                    'idnssoaserial': [fuzzy_digits],
+                    'idnssoarefresh': [fuzzy_digits],
+                    'idnssoaretry': [fuzzy_digits],
+                    'idnssoaexpire': [fuzzy_digits],
+                    'idnssoaminimum': [fuzzy_digits],
+                    'idnsallowdynupdate': [u'FALSE'],
+                    'idnsupdatepolicy': [u'grant %(realm)s krb5-self * A; '
+                                         u'grant %(realm)s krb5-self * AAAA; '
+                                         u'grant %(realm)s krb5-self * SSHFP;'
+                                         % dict(realm=api.env.realm)],
+                    'idnsallowtransfer': [u'none;'],
+                    'idnsallowquery': [u'any;'],
+                    'objectclass': objectclasses.dnszone,
+                },
+            },
+        ),
+
+
+        dict(  # https://fedorahosted.org/freeipa/ticket/4268
+            desc='Create a zone with consecutive dash characters with --force',
+            command=(
+                'dnszone_add', [zone5], {
+                    'idnssoamname': zone5_ns,
+                    'idnssoarname': zone5_rname,
+                    'force'       : True,
+                }
+            ),
+            expected={
+                'value': zone5_dnsname,
+                'summary': None,
+                'result': {
+                    'dn': zone5_dn,
+                    'idnsname': [zone5_dnsname],
+                    'idnszoneactive': [u'TRUE'],
+                    'idnssoamname': [zone5_ns_dnsname],
+                    'nsrecord': [zone5_ns],
+                    'idnssoarname': [zone5_rname_dnsname],
+                    'idnssoaserial': [fuzzy_digits],
+                    'idnssoarefresh': [fuzzy_digits],
+                    'idnssoaretry': [fuzzy_digits],
+                    'idnssoaexpire': [fuzzy_digits],
+                    'idnssoaminimum': [fuzzy_digits],
+                    'idnsallowdynupdate': [u'FALSE'],
+                    'idnsupdatepolicy': [u'grant %(realm)s krb5-self * A; '
+                                         u'grant %(realm)s krb5-self * AAAA; '
+                                         u'grant %(realm)s krb5-self * SSHFP;'
+                                         % dict(realm=api.env.realm)],
+                    'idnsallowtransfer': [u'none;'],
+                    'idnsallowquery': [u'any;'],
+                    'objectclass': objectclasses.dnszone,
+                },
+            },
+        ),
+
+
+        dict(
             desc='Retrieve zone %r' % zone1,
             command=('dnszone_show', [zone1], {}),
             expected={
@@ -428,6 +533,111 @@ class test_dns(Declarative):
         dict(
             desc='Update zone %r' % zone1,
             command=('dnszone_mod', [zone1], {'idnssoarefresh': 5478}),
+            expected={
+                'value': zone1_absolute_dnsname,
+                'summary': None,
+                'result': {
+                    'idnsname': [zone1_absolute_dnsname],
+                    'idnszoneactive': [u'TRUE'],
+                    'nsrecord': [zone1_ns],
+                    'idnssoamname': [zone1_ns_dnsname],
+                    'idnssoarname': [zone1_rname_dnsname],
+                    'idnssoaserial': [fuzzy_digits],
+                    'idnssoarefresh': [u'5478'],
+                    'idnssoaretry': [fuzzy_digits],
+                    'idnssoaexpire': [fuzzy_digits],
+                    'idnssoaminimum': [fuzzy_digits],
+                    'idnsallowtransfer': [u'none;'],
+                    'idnsallowquery': [u'any;'],
+                },
+            },
+        ),
+
+        dict(
+            desc='Try to add invalid NSEC3PARAM record to zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u'0 0 0 0 X'}),
+            expected=errors.ValidationError(name="nsec3param_rec",
+                        error=(u'expected format: <0-255> <0-255> <0-65535> '
+                               u'even-length_hexadecimal_digits_or_hyphen')
+            )
+        ),
+
+
+        dict(
+            desc='Try to add invalid NSEC3PARAM record to zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u'0 0 0 X'}),
+            expected=errors.ValidationError(name="nsec3param_rec",
+                        error=(u'expected format: <0-255> <0-255> <0-65535> '
+                               u'even-length_hexadecimal_digits_or_hyphen')
+            )
+        ),
+
+
+        dict(
+            desc='Try to add invalid NSEC3PARAM record to zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u'333 0 0 -'}),
+            expected=errors.ValidationError(name="nsec3param_rec",
+                        error=u'algorithm value: allowed interval 0-255'
+            )
+        ),
+
+
+        dict(
+            desc='Try to add invalid NSEC3PARAM record to zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u'0 333 0 -'}),
+            expected=errors.ValidationError(name="nsec3param_rec",
+                        error=u'flags value: allowed interval 0-255'
+            )
+        ),
+
+
+        dict(
+            desc='Try to add invalid NSEC3PARAM record to zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u'0 0 65536 -'}),
+            expected=errors.ValidationError(name="nsec3param_rec",
+                        error=u'iterations value: allowed interval 0-65535'
+            )
+        ),
+
+
+        dict(
+            desc='Try to add invalid NSEC3PARAM record to zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u'0 0 0 A'}),
+            expected=errors.ValidationError(name="nsec3param_rec",
+                        error=(u'expected format: <0-255> <0-255> <0-65535> '
+                               u'even-length_hexadecimal_digits_or_hyphen')
+            )
+        ),
+
+
+        dict(
+            desc='Add NSEC3PARAM record to zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u'0 0 0 -'}),
+            expected={
+                'value': zone1_absolute_dnsname,
+                'summary': None,
+                'result': {
+                    'idnsname': [zone1_absolute_dnsname],
+                    'idnszoneactive': [u'TRUE'],
+                    'nsrecord': [zone1_ns],
+                    'idnssoamname': [zone1_ns_dnsname],
+                    'idnssoarname': [zone1_rname_dnsname],
+                    'idnssoaserial': [fuzzy_digits],
+                    'idnssoarefresh': [u'5478'],
+                    'idnssoaretry': [fuzzy_digits],
+                    'idnssoaexpire': [fuzzy_digits],
+                    'idnssoaminimum': [fuzzy_digits],
+                    'idnsallowtransfer': [u'none;'],
+                    'idnsallowquery': [u'any;'],
+                    'nsec3paramrecord': [u'0 0 0 -'],
+                },
+            },
+        ),
+
+
+        dict(
+            desc='Delete NSEC3PARAM record from zone %s' % (zone1),
+            command=('dnszone_mod', [zone1], {'nsec3paramrecord': u''}),
             expected={
                 'value': zone1_absolute_dnsname,
                 'summary': None,
@@ -1122,6 +1332,63 @@ class test_dns(Declarative):
 
 
         dict(
+            desc='Try to add invalid TLSA record to %r using dnsrecord_add (1)' % (tlsa),
+            command=('dnsrecord_add', [zone1, tlsa], {'tlsarecord': tlsarec_err1}),
+            expected=errors.ValidationError(
+                name="cert_usage",
+                error=u'can be at most 255'
+            ),
+        ),
+
+
+        dict(
+            desc='Try to add invalid TLSA record to %r using dnsrecord_add (2)' % (tlsa),
+            command=('dnsrecord_add', [zone1, tlsa], {'tlsarecord': tlsarec_err2}),
+            expected=errors.ValidationError(
+                name="selector",
+                error=u'can be at most 255'
+            ),
+        ),
+
+
+        dict(
+            desc='Try to add invalid TLSA record to %r using dnsrecord_add (3)' % (tlsa),
+            command=('dnsrecord_add', [zone1, tlsa], {'tlsarecord': tlsarec_err3}),
+            expected=errors.ValidationError(
+                name="matching_type",
+                error=u'can be at most 255'
+            ),
+        ),
+
+
+        dict(
+            desc='Add TLSA record to %r using dnsrecord_add' % (tlsa),
+            command=('dnsrecord_add', [zone1, tlsa], {'tlsarecord': tlsarec_ok}),
+            expected={
+                'value': tlsa_dnsname,
+                'summary': None,
+                'result': {
+                    'objectclass': objectclasses.dnsrecord,
+                    'dn': tlsa_dn,
+                    'idnsname': [tlsa_dnsname],
+                    'tlsarecord': [tlsarec_ok],
+                },
+            },
+        ),
+
+
+        dict(
+            desc='Delete record %r in zone %r' % (tlsa, zone1),
+            command=('dnsrecord_del', [zone1, tlsa], {'del_all': True}),
+            expected={
+                'value': [tlsa_dnsname],
+                'summary': u'Deleted record "%s"' % tlsa,
+                'result': {'failed': []},
+            },
+        ),
+
+
+        dict(
             desc='Try to create a reverse zone from invalid IP',
             command=(
                 'dnszone_add', [], {
@@ -1594,68 +1861,6 @@ class test_dns(Declarative):
 
 
         dict(
-            desc='Try to add NSEC3PARAM record out of zone record %r' % (zone1),
-            command=('dnsrecord_add', [zone1, u'test'],
-                     {'nsec3paramrecord': u'1 0 2 ad50f1'}),
-            expected=errors.ValidationError(name='nsec3paramrecord',
-                        error=u'must be in zone record'),
-        ),
-
-
-        dict(
-            desc='Try to add invalid NSEC3PARAM record to zone %r' % (zone1),
-            command=('dnsrecord_add', [zone1, u'@'],
-                     {'nsec3paramrecord': u'1 0 2 -ad50f1'}),
-            expected=errors.ValidationError(name='salt',
-                        error=u'only hexadecimal digits or single hyphen ("-") are allowed'),
-        ),
-
-
-        dict(
-            desc='Add NSEC3PARAM record to zone %r' % (zone1),
-            command=('dnsrecord_add', [zone1, u'@'],
-                     {'nsec3paramrecord': u'1 0 2 ad50f1'}),
-            expected={
-                'value': _dns_zone_record,
-                'summary': None,
-                'result': {
-                    'dn': zone1_dn,
-                    'arecord': [u'172.16.29.111'],
-                    'idnsname': [_dns_zone_record],
-                    'nsrecord': [zone1_absolute],
-                    'nsec3paramrecord': [u'1 0 2 ad50f1'],
-                    'objectclass': objectclasses.dnszone,
-                },
-            },
-        ),
-
-
-        dict(
-            desc='Try to add another NSEC3PARAM record to zone %r' % (zone1),
-            command=('dnsrecord_add', [zone1, u'@'],
-                     {'nsec3paramrecord': u'1 0 2 -'}),
-            expected=errors.ValidationError(name='nsec3paramrecord',
-                        error=u'Only one NSEC3PARAM record is allowed per zone'),
-        ),
-
-
-        dict(
-            desc='Remove NSEC3PARAM record from zone %r' % (zone1),
-            command=('dnsrecord_del', [zone1, u'@'],
-                     {'nsec3paramrecord': u'1 0 2 ad50f1'}),
-            expected={
-                'value': [_dns_zone_record],
-                'summary': None,
-                'result': {
-                    'arecord': [u'172.16.29.111'],
-                    'idnsname': [_dns_zone_record],
-                    'nsrecord': [zone1_absolute],
-                },
-            },
-        ),
-
-
-        dict(
             desc='Create zone %r' % zone3,
             command=(
                 'dnszone_add', [zone3], {
@@ -1771,6 +1976,33 @@ class test_dns(Declarative):
                 },
             },
         ),
+
+
+        dict(
+            desc='Add per-zone permission for classless zone %r' % revzone3_classless2,
+            command=(
+                'dnszone_add_permission', [revzone3_classless2], {}
+            ),
+            expected=dict(
+                result=True,
+                value=revzone3_classless2_permission,
+                summary=u'Added system permission "%s"' % revzone3_classless2_permission,
+            ),
+        ),
+
+
+        dict(
+            desc='Remove per-zone permission for classless zone %r' % revzone3_classless2,
+            command=(
+                'dnszone_remove_permission', [revzone3_classless2], {}
+            ),
+            expected=dict(
+                result=True,
+                value=revzone3_classless2_permission,
+                summary=u'Removed system permission "%s"' % revzone3_classless2_permission,
+            ),
+        ),
+
 
         dict(
             desc='Add NS record to %r in revzone %r' % (nsrev, revzone3_classless1),

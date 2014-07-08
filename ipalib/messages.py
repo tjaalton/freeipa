@@ -135,6 +135,28 @@ class VersionMissing(PublicMessage):
         "guaranteed. Assuming server's API version, %(server_version)s")
 
 
+class ForwardersWarning(PublicMessage):
+    """
+    **13002** Used when (master) zone contains forwarders
+    """
+
+    errno = 13002
+    type = 'warning'
+    format =  _(
+        u"DNS forwarder semantics changed since IPA 4.0.\n"
+        u"You may want to use forward zones (dnsforwardzone-*) instead.\n"
+        u"For more details read the docs.")
+
+
+class DNSSECWarning(PublicMessage):
+    """
+    **13003** Used when user change DNSSEC settings
+    """
+
+    errno = 13003
+    type = "warning"
+    format = _("DNSSEC support is experimental.\n%(additional_info)s")
+
 def iter_messages(variables, base):
     """Return a tuple with all subclasses
     """

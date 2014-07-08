@@ -222,7 +222,8 @@ return {
                     {
                         $type: 'checkbox',
                         name: 'idnssecinlinesigning'
-                    }
+                    },
+                    'nsec3paramrecord'
                 ]
             }],
             actions: [
@@ -1076,20 +1077,6 @@ IPA.dns.get_record_metadata = function() {
             columns: ['ns_part_hostname']
         },
         {
-            name: 'nsec3paramrecord',
-            attributes: [
-                'nsec3param_part_algorithm',
-                'nsec3param_part_flags',
-                'nsec3param_part_iterations',
-                'nsec3param_part_salt'
-            ],
-            adder_attributes: [],
-            columns: [
-                'nsec3param_part_algorithm', 'nsec3param_part_flags',
-                'nsec3param_part_iterations', 'nsec3param_part_salt'
-            ]
-        },
-        {
             name: 'ptrrecord',
             attributes: [
                 'ptr_part_hostname'
@@ -1524,7 +1511,7 @@ IPA.dns_record_types = function() {
     //only supported
     var attrs = ['A', 'AAAA', 'A6', 'AFSDB', 'CERT', 'CNAME', 'DNAME',
                    'DS', 'DLV', 'KX', 'LOC', 'MX', 'NAPTR', 'NS',
-                   'NSEC3PARAM', 'PTR', 'SRV', 'SSHFP', 'TLSA', 'TXT'];
+                   'PTR', 'SRV', 'SSHFP', 'TLSA', 'TXT'];
     var record_types = [];
     for (var i=0; i<attrs.length; i++) {
         var attr = attrs[i];
@@ -2543,7 +2530,7 @@ IPA.network_validator = function(spec) {
 
 exp.remove_menu_item = function() {
     if (!IPA.dns_enabled) {
-        menu.remove_item('identity/dns');
+        menu.remove_item('network_services/dns');
     }
 };
 

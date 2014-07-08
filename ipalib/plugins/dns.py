@@ -23,6 +23,7 @@ from __future__ import absolute_import
 import netaddr
 import time
 import re
+import binascii
 import dns.name
 import dns.exception
 import dns.resolver
@@ -31,11 +32,13 @@ import encodings.idna
 from ipalib.request import context
 from ipalib import api, errors, output
 from ipalib import Command
+from ipalib.capabilities import VERSION_WITHOUT_CAPABILITIES
 from ipalib.parameters import (Flag, Bool, Int, Decimal, Str, StrEnum, Any,
                                DeprecatedParam, DNSNameParam)
 from ipalib.plugable import Registry
 from ipalib.plugins.baseldap import *
 from ipalib import _, ngettext
+from ipalib import messages
 from ipalib.util import (validate_zonemgr, normalize_zonemgr,
                          get_dns_forward_zone_update_policy,
                          get_dns_reverse_zone_update_policy,
@@ -45,18 +48,23 @@ from ipapython.dnsutil import DNSName
 
 __doc__ = _("""
 Domain Name System (DNS)
-
+""") + _("""
 Manage DNS zone and resource records.
+""") + _("""
+SUPPORTED ZONE TYPES
 
-
+ * Master zone (dnszone-*), contains authoritative data.
+ * Forward zone (dnsforwardzone-*), forwards queries to configured forwarders
+ (a set of DNS servers).
+""") + _("""
 USING STRUCTURED PER-TYPE OPTIONS
-
+""") + _("""
 There are many structured DNS RR types where DNS data stored in LDAP server
 is not just a scalar value, for example an IP address or a domain name, but
 a data structure which may be often complex. A good example is a LOC record
 [RFC1876] which consists of many mandatory and optional parts (degrees,
 minutes, seconds of latitude and longitude, altitude or precision).
-
+""") + _("""
 It may be difficult to manipulate such DNS records without making a mistake
 and entering an invalid value. DNS module provides an abstraction over these
 raw records and allows to manipulate each RR type with specific options. For
@@ -64,7 +72,7 @@ each supported RR type, DNS module provides a standard option to manipulate
 a raw records with format --<rrtype>-rec, e.g. --mx-rec, and special options
 for every part of the RR structure with format --<rrtype>-<partname>, e.g.
 --mx-preference and --mx-exchanger.
-
+""") + _("""
 When adding a record, either RR specific options or standard option for a raw
 value can be used, they just should not be combined in one add operation. When
 modifying an existing entry, new RR specific options can be used to change
@@ -73,41 +81,41 @@ to specify the modified value. The following example demonstrates
 a modification of MX record preference from 0 to 1 in a record without
 modifying the exchanger:
 ipa dnsrecord-mod --mx-rec="0 mx.example.com." --mx-preference=1
-
+""") + _("""
 
 EXAMPLES:
-
+""") + _("""
  Add new zone:
    ipa dnszone-add example.com --name-server=ns \\
                                --admin-email=admin@example.com \\
-                               --ip-address=10.0.0.1
-
+                               --ip-address=192.0.2.1
+""") + _("""
  Add system permission that can be used for per-zone privilege delegation:
    ipa dnszone-add-permission example.com
-
+""") + _("""
  Modify the zone to allow dynamic updates for hosts own records in realm EXAMPLE.COM:
    ipa dnszone-mod example.com --dynamic-update=TRUE
-
+""") + _("""
    This is the equivalent of:
      ipa dnszone-mod example.com --dynamic-update=TRUE \\
       --update-policy="grant EXAMPLE.COM krb5-self * A; grant EXAMPLE.COM krb5-self * AAAA; grant EXAMPLE.COM krb5-self * SSHFP;"
-
+""") + _("""
  Modify the zone to allow zone transfers for local network only:
-   ipa dnszone-mod example.com --allow-transfer=10.0.0.0/8
-
+   ipa dnszone-mod example.com --allow-transfer=192.0.2.0/24
+""") + _("""
  Add new reverse zone specified by network IP address:
-   ipa dnszone-add --name-from-ip=80.142.15.0/24 \\
+   ipa dnszone-add --name-from-ip=192.0.2.0/24 \\
                    --name-server=ns.example.com.
-
+""") + _("""
  Add second nameserver for example.com:
    ipa dnsrecord-add example.com @ --ns-rec=nameserver2.example.com
-
+""") + _("""
  Add a mail server for example.com:
    ipa dnsrecord-add example.com @ --mx-rec="10 mail1"
-
+""") + _("""
  Add another record using MX record specific options:
   ipa dnsrecord-add example.com @ --mx-preference=20 --mx-exchanger=mail2
-
+""") + _("""
  Add another record using interactive mode (started when dnsrecord-add, dnsrecord-mod,
  or dnsrecord-del are executed with no options):
   ipa dnsrecord-add example.com @
@@ -120,28 +128,28 @@ EXAMPLES:
     Record name: example.com
     MX record: 10 mail1, 20 mail2, 30 mail3
     NS record: nameserver.example.com., nameserver2.example.com.
-
+""") + _("""
  Delete previously added nameserver from example.com:
    ipa dnsrecord-del example.com @ --ns-rec=nameserver2.example.com.
-
+""") + _("""
  Add LOC record for example.com:
    ipa dnsrecord-add example.com @ --loc-rec="49 11 42.4 N 16 36 29.6 E 227.64m"
-
+""") + _("""
  Add new A record for www.example.com. Create a reverse record in appropriate
  reverse zone as well. In this case a PTR record "2" pointing to www.example.com
- will be created in zone 15.142.80.in-addr.arpa.
-   ipa dnsrecord-add example.com www --a-rec=80.142.15.2 --a-create-reverse
-
+ will be created in zone 2.0.192.in-addr.arpa.
+   ipa dnsrecord-add example.com www --a-rec=192.0.2.2 --a-create-reverse
+""") + _("""
  Add new PTR record for www.example.com
-   ipa dnsrecord-add 15.142.80.in-addr.arpa. 2 --ptr-rec=www.example.com.
-
+   ipa dnsrecord-add 2.0.192.in-addr.arpa. 2 --ptr-rec=www.example.com.
+""") + _("""
  Add new SRV records for LDAP servers. Three quarters of the requests
  should go to fast.example.com, one quarter to slow.example.com. If neither
  is available, switch to backup.example.com.
    ipa dnsrecord-add example.com _ldap._tcp --srv-rec="0 3 389 fast.example.com"
    ipa dnsrecord-add example.com _ldap._tcp --srv-rec="0 1 389 slow.example.com"
    ipa dnsrecord-add example.com _ldap._tcp --srv-rec="1 1 389 backup.example.com"
-
+""") + _("""
  The interactive mode can be used for easy modification:
   ipa dnsrecord-mod example.com _ldap._tcp
   No option to modify specific record provided.
@@ -158,76 +166,110 @@ EXAMPLES:
   1 SRV record skipped. Only one value per DNS record type can be modified at one time.
     Record name: _ldap._tcp
     SRV record: 0 3 389 fast.example.com, 1 1 389 backup.example.com, 0 2 389 slow.example.com
-
+""") + _("""
  After this modification, three fifths of the requests should go to
  fast.example.com and two fifths to slow.example.com.
-
+""") + _("""
  An example of the interactive mode for dnsrecord-del command:
    ipa dnsrecord-del example.com www
    No option to delete specific record provided.
    Delete all? Yes/No (default No):     (do not delete all records)
    Current DNS record contents:
 
-   A record: 1.2.3.4, 11.22.33.44
+   A record: 192.0.2.2, 192.0.2.3
 
-   Delete A record '1.2.3.4'? Yes/No (default No):
-   Delete A record '11.22.33.44'? Yes/No (default No): y
+   Delete A record '192.0.2.2'? Yes/No (default No):
+   Delete A record '192.0.2.3'? Yes/No (default No): y
      Record name: www
-     A record: 1.2.3.4                  (A record 11.22.33.44 has been deleted)
-
+     A record: 192.0.2.2               (A record 192.0.2.3 has been deleted)
+""") + _("""
  Show zone example.com:
    ipa dnszone-show example.com
-
+""") + _("""
  Find zone with "example" in its domain name:
    ipa dnszone-find example
-
+""") + _("""
  Find records for resources with "www" in their name in zone example.com:
    ipa dnsrecord-find example.com www
-
- Find A records with value 10.10.0.1 in zone example.com
-   ipa dnsrecord-find example.com --a-rec=10.10.0.1
-
+""") + _("""
+ Find A records with value 192.0.2.2 in zone example.com
+   ipa dnsrecord-find example.com --a-rec=192.0.2.2
+""") + _("""
  Show records for resource www in zone example.com
    ipa dnsrecord-show example.com www
-
+""") + _("""
  Delegate zone sub.example to another nameserver:
-   ipa dnsrecord-add example.com ns.sub --a-rec=10.0.100.5
+   ipa dnsrecord-add example.com ns.sub --a-rec=203.0.113.1
    ipa dnsrecord-add example.com sub --ns-rec=ns.sub.example.com.
-
- If global forwarder is configured, all requests to sub.example.com will be
- routed through the global forwarder. To change the behavior for example.com
- zone only and forward the request directly to ns.sub.example.com., global
- forwarding may be disabled per-zone:
-   ipa dnszone-mod example.com --forward-policy=none
-
- Forward all requests for the zone external.com to another nameserver using
- a "first" policy (it will send the queries to the selected forwarder and if
- not answered it will use global resolvers):
-   ipa dnszone-add external.com
-   ipa dnszone-mod external.com --forwarder=10.20.0.1 \\
-                                --forward-policy=first
-
+""") + _("""
  Delete zone example.com with all resource records:
    ipa dnszone-del example.com
+""") + _("""
+ If a global forwarder is configured, all queries for which this server is not
+ authoritative (e.g. sub.example.com) will be routed to the global forwarder.
+ Global forwarding configuration can be overridden per-zone.
+""") + _("""
+ Semantics of forwarding in IPA matches BIND sematics and depends on type
+ of the zone:
+   * Master zone: local BIND replies authoritatively to queries for data in
+   the given zone (including authoritative NXDOMAIN answers) and forwarding
+   affects only queries for names bellow zone cuts (NS records) of locally
+   served zones.
 
+   * Forward zone: forward zone contains no authoritative data. BIND forwards
+   queries, which cannot be answered from its local cache, to configured
+   forwarders.
+""") + _("""
+ Semantics of the --forwarder-policy option:
+   * none - disable forwarding for the given zone.
+   * first - forward all queries to configured forwarders. If they fail,
+   do resolution using DNS root servers.
+   * only - forward all queries to configured forwarders and if they fail,
+   return failure.
+""") + _("""
+ Disable global forwarding for given sub-tree:
+   ipa dnszone-mod example.com --forward-policy=none
+""") + _("""
+ This configuration forwards all queries for names outside the example.com
+ sub-tree to global forwarders. Normal recursive resolution process is used
+ for names inside the example.com sub-tree (i.e. NS records are followed etc.).
+""") + _("""
+ Forward all requests for the zone external.example.com to another forwarder
+ using a "first" policy (it will send the queries to the selected forwarder
+ and if not answered it will use global root servers):
+   ipa dnsforwardzone-add external.example.com --forward-policy=first \\
+                               --forwarder=203.0.113.1
+""") + _("""
+ Change forward-policy for external.example.com:
+   ipa dnsforwardzone-mod external.example.com --forward-policy=only
+""") + _("""
+ Show forward zone external.example.com:
+   ipa dnsforwardzone-show external.example.com
+""") + _("""
+ List all forward zones:
+   ipa dnsforwardzone-find
+""") + _("""
+ Delete forward zone external.example.com:
+   ipa dnsforwardzone-del external.example.com
+""") + _("""
  Resolve a host name to see if it exists (will add default IPA domain
  if one is not included):
    ipa dns-resolve www.example.com
    ipa dns-resolve www
-
+""") + _("""
 
 GLOBAL DNS CONFIGURATION
-
+""") + _("""
 DNS configuration passed to command line install script is stored in a local
 configuration file on each IPA server where DNS service is configured. These
 local settings can be overridden with a common configuration stored in LDAP
 server:
-
+""") + _("""
  Show global DNS configuration:
    ipa dnsconfig-show
-
+""") + _("""
  Modify global DNS configuration and set a list of global forwarders:
-   ipa dnsconfig-mod --forwarder=10.0.0.1
+   ipa dnsconfig-mod --forwarder=203.0.113.113
 """)
 
 register = Registry()
@@ -266,6 +308,7 @@ _output_permissions = (
     output.Output('result', bool, _('True means the operation was successful')),
     output.Output('value', unicode, _('Permission value')),
 )
+
 
 def _rname_validator(ugettext, zonemgr):
     try:
@@ -404,6 +447,40 @@ def _validate_bind_forwarder(ugettext, forwarder):
             return _('%(port)s is not a valid port' % dict(port=port))
 
     return None
+
+def _validate_nsec3param_record(ugettext, value):
+    _nsec3param_pattern = (r'^(?P<alg>\d+) (?P<flags>\d+) (?P<iter>\d+) '
+        r'(?P<salt>([0-9a-fA-F]{2})+|-)$')
+    rec = re.compile(_nsec3param_pattern, flags=re.U)
+    result = rec.match(value)
+
+    if result is None:
+        return _(u'expected format: <0-255> <0-255> <0-65535> '
+                 'even-length_hexadecimal_digits_or_hyphen')
+
+    alg = int(result.group('alg'))
+    flags = int(result.group('flags'))
+    iterations = int(result.group('iter'))
+    salt = result.group('salt')
+
+    if alg > 255:
+        return _('algorithm value: allowed interval 0-255')
+
+    if flags > 255:
+        return _('flags value: allowed interval 0-255')
+
+    if iterations > 65535:
+        return _('iterations value: allowed interval 0-65535')
+
+    if salt == u'-':
+        return None
+
+    try:
+        binascii.a2b_hex(salt)
+    except TypeError, e:
+        return _('salt value: %(err)s') % {'err': e}
+    return None
+
 
 def _hostname_validator(ugettext, value):
     assert isinstance(value, DNSName)
@@ -1229,34 +1306,7 @@ class NSEC3Record(DNSRecord):
 class NSEC3PARAMRecord(DNSRecord):
     rrtype = 'NSEC3PARAM'
     rfc = 5155
-    parts = (
-        Int('algorithm',
-            label=_('Algorithm'),
-            minvalue=0,
-            maxvalue=255,
-            ),
-        Int('flags',
-            label=_('Flags'),
-            minvalue=0,
-            maxvalue=255,
-            default=0,
-            ),
-        Int('iterations',
-            label=_('Iterations'),
-            minvalue=0,
-            maxvalue=65535,
-            ),
-        Str('salt',
-            label=_('Salt'),
-            doc=_('A hexadecimal salt value. Requires hexadecimal digits '
-                  'or hyphen ("-") if no salt is required'),
-            minlength=1,
-            default=u'-',  # no salt
-            pattern=r'^([0-9a-fA-F]+|-)$',
-            pattern_errmsg=u'only hexadecimal digits or single hyphen ("-") '
-                           u'are allowed'
-            ),
-    )
+    supported = False  # this is part of zone in IPA
 
 def _validate_naptr_flags(ugettext, flags):
     allowed_flags = u'SAUP'
@@ -1658,6 +1708,15 @@ def _records_idn_postprocess(record, **options):
                 rrs.append(dnsvalue)
         record[attr] = rrs
 
+def _normalize_zone(zone):
+    if isinstance(zone, unicode):
+        # normalize only non-IDNA zones
+        try:
+            return unicode(zone.encode('ascii')).lower()
+        except UnicodeError:
+            pass
+    return zone
+
 
 class DNSZoneBase(LDAPObject):
     """
@@ -1677,6 +1736,7 @@ class DNSZoneBase(LDAPObject):
             label=_('Zone name'),
             doc=_('Zone name (FQDN)'),
             default_from=lambda name_from_ip: _reverse_zone_name(name_from_ip),
+            normalizer=_normalize_zone,
             primary_key=True,
         ),
         Str('name_from_ip?', _validate_ipnet,
@@ -1751,6 +1811,21 @@ class DNSZoneBase(LDAPObject):
 
         return None
 
+    def _remove_permission(self, zone):
+        permission_name = self.permission_name(zone)
+        try:
+            api.Command['permission_del'](permission_name, force=True)
+        except errors.NotFound, e:
+            # compatibility, older IPA versions which allows to create zone
+            # without absolute zone name
+            permission_name_rel = self.permission_name(
+                zone.relativize(DNSName.root)
+            )
+            try:
+                api.Command['permission_del'](permission_name_rel, force=True)
+            except errors.NotFound:
+                raise e  # re-raise original exception
+
 
 class DNSZoneBase_add(LDAPCreate):
 
@@ -1788,8 +1863,7 @@ class DNSZoneBase_del(LDAPDelete):
 
     def post_callback(self, ldap, dn, *keys, **options):
         try:
-            api.Command['permission_del'](self.obj.permission_name(keys[-1]),
-                    force=True)
+            self.obj._remove_permission(keys[-1])
         except errors.NotFound:
             pass
 
@@ -1967,18 +2041,9 @@ class DNSZoneBase_remove_permission(LDAPQuery):
 
         permission_name = self.obj.permission_name(keys[-1])
         try:
-            api.Command['permission_del'](permission_name, force=True)
-        except errors.NotFound, e:
-            # compatibility, older IPA versions which allows to create zone
-            # without absolute zone name
-            permission_name_rel = self.obj.permission_name(
-                keys[-1].relativize(DNSName.root)
-            )
-            try:
-                api.Command['permission_del'](permission_name_rel, force=True)
-            except errors.NotFound:
-                raise e  # re-raise original exception
-
+            self.obj._remove_permission(keys[-1])
+        except errors.NotFound:
+            pass
 
         return dict(
             result=True,
@@ -2120,6 +2185,15 @@ class dnszone(DNSZoneBase):
             label=_('Allow in-line DNSSEC signing'),
             doc=_('Allow inline DNSSEC signing of records in the zone'),
         ),
+        Str('nsec3paramrecord?',
+            _validate_nsec3param_record,
+            cli_name='nsec3param_rec',
+            label=_('NSEC3PARAM record'),
+            doc=_('NSEC3PARAM record for zone in format: hash_algorithm flags iterations salt'),
+            pattern=r'^\d+ \d+ \d+ (([0-9a-fA-F]{2})+|-)$',
+            pattern_errmsg=(u'expected format: <0-255> <0-255> <0-65535> '
+                 'even-length_hexadecimal_digits_or_hyphen'),
+        ),
     )
     # Permissions will be apllied for forwardzones too
     managed_permissions = {
@@ -2204,6 +2278,28 @@ class dnszone(DNSZoneBase):
             return
         _records_idn_postprocess(record, **options)
 
+    def _warning_forwarding(self, result, **options):
+        if ('idnsforwarders' in result['result']):
+            messages.add_message(options.get('version', VERSION_WITHOUT_CAPABILITIES),
+                                 result, messages.ForwardersWarning())
+
+    def _warning_dnssec_experimental(self, result, *keys, **options):
+        # add warning when user use option --dnssec
+        if 'idnssecinlinesigning' in options:
+            if options['idnssecinlinesigning'] is True:
+                messages.add_message(options['version'], result,
+                    messages.DNSSECWarning(
+                    additional_info=_("Manual configuration needed, please "
+                    "visit 'http://www.freeipa.org/page/Releases/4.0.0#"
+                    "Experimental_DNSSEC_Support'")
+                ))
+            else:
+                messages.add_message(options['version'], result,
+                    messages.DNSSECWarning(
+                    additional_info=_("If you encounter any problems please "
+                    "report them and restart 'named' service on affected IPA "
+                    "server.")
+                ))
 
 
 @register()
@@ -2292,6 +2388,12 @@ class dnszone_add(DNSZoneBase_add):
         entry_attrs['idnssoamname'] = nameserver
         return dn
 
+    def execute(self, *keys, **options):
+        result = super(dnszone_add, self).execute(*keys, **options)
+        self.obj._warning_forwarding(result, **options)
+        self.obj._warning_dnssec_experimental(result, *keys, **options)
+        return result
+
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
         nameserver_ip_address = options.get('ip_address')
@@ -2369,6 +2471,12 @@ class dnszone_mod(DNSZoneBase_mod):
 
         return dn
 
+    def execute(self, *keys, **options):
+        result = super(dnszone_mod, self).execute(*keys, **options)
+        self.obj._warning_forwarding(result, **options)
+        self.obj._warning_dnssec_experimental(result, *keys, **options)
+        return result
+
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
         self.obj._rr_zone_postprocess(entry_attrs, **options)
@@ -2416,6 +2524,11 @@ class dnszone_find(DNSZoneBase_find):
 @register()
 class dnszone_show(DNSZoneBase_show):
     __doc__ = _('Display information about a DNS zone (SOA record).')
+
+    def execute(self, *keys, **options):
+        result = super(dnszone_show, self).execute(*keys, **options)
+        self.obj._warning_forwarding(result, **options)
+        return result
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
@@ -2495,13 +2608,6 @@ class dnsrecord(LDAPObject):
             return
         for nsrecord in nsrecords:
             check_ns_rec_resolvable(keys[0], DNSName(nsrecord))
-
-    def _nsec3paramrecord_pre_callback(self, ldap, dn, entry_attrs, *keys, **options):
-        assert isinstance(dn, DN)
-        nsec3paramrecord = entry_attrs.get('nsec3paramrecord')
-        if nsec3paramrecord and not self.is_pkey_zone_record(*keys):
-            raise errors.ValidationError(name='nsec3paramrecord',
-                        error=unicode(_('must be in zone record')))
 
     def _idnsname_pre_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
@@ -2788,14 +2894,6 @@ class dnsrecord(LDAPObject):
                           error=_('DNAME record is not allowed to coexist with an '
                                   'NS record except when located in a zone root '
                                   'record (RFC 6672, section 2.3)'))
-
-        # NSEC3PARAM record validation
-        nsec3params = rrattrs.get('nsec3paramrecord')
-        if nsec3params is not None:
-            if len(nsec3params) > 1:
-                raise errors.ValidationError(name='nsec3paramrecord',
-                    error=_('Only one NSEC3PARAM record is '
-                            'allowed per zone'))
 
     def _entry2rrsets(self, entry_attrs, dns_name, dns_domain):
         '''Convert entry_attrs to a dictionary {rdtype: rrset}.
