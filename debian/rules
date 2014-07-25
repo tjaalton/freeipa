@@ -83,6 +83,7 @@ endif
 	# fix permissions
 	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
 
+override_dh_install:
 	dh_install --fail-missing
 
 %:
