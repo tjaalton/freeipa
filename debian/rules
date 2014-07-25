@@ -24,8 +24,6 @@ override_dh_auto_clean:
 	find . -name "configure" -exec rm -f "{}" \;
 	rm -rf daemons/ipa-version.h freeipa.spec freeipa.egg-info ipa-client/ipa-client.spec version.m4
 	rm -rf ipapython/build RELEASE build
-	dh_clean 
-	rm -rf $(DESTDIR)
 
 override_dh_autoreconf:
 	make IPA_VERSION_IS_GIT_SNAPSHOT=no version-update
