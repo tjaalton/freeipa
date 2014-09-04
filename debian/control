@@ -49,7 +49,6 @@ Build-Depends:
  python-setuptools,
  python-sss (>= 1.8.0),
  python-yubico,
- quilt,
  rhino,
  samba-dev,
  selinux-policy-dev,
