@@ -16,6 +16,7 @@ usr/lib/*/dirsrv/plugins/libipa_winsync.so
 usr/lib/*/ipa-otpd
 usr/lib/*/ipa/certmonger/*
 usr/lib/*/krb5/plugins/kdb/*.so
+usr/lib/python*/dist-packages/ipaserver/__init__*
 usr/lib/python*/dist-packages/ipaserver/advise/*
 usr/lib/python*/dist-packages/ipaserver/install/__init__.py
 usr/lib/python*/dist-packages/ipaserver/install/bindinstance.py
@@ -37,7 +38,6 @@ usr/lib/python*/dist-packages/ipaserver/install/service.py
 usr/lib/python*/dist-packages/ipaserver/install/sysupgrade.py
 usr/lib/python*/dist-packages/ipaserver/install/upgradeinstance.py
 usr/lib/python*/dist-packages/ipaserver/plugins/*
-usr/lib/python*/dist-packages/ipaserver/__init__*
 usr/lib/python*/dist-packages/ipaserver/rpcserver*
 usr/sbin/ipa-advise
 usr/sbin/ipa-backup
