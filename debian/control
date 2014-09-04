@@ -29,7 +29,7 @@ Build-Depends:
  libtevent-dev,
  libunistring-dev,
  libverto-dev,
- libxmlrpc-core-c3-dev,
+ libxmlrpc-core-c3-dev (>= 1.33.14),
  python-all-dev,
  python-dnspython,
  python-kerberos,
