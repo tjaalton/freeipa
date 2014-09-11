@@ -584,6 +584,12 @@ class InvalidSessionPassword(SessionError):
     errno = 1201
     format= _('Principal %(principal)s cannot be authenticated: %(message)s')
 
+class PasswordExpired(InvalidSessionPassword):
+    """
+    **1202** Raised when we cannot obtain a TGT for a principal because the password is expired.
+    """
+    errno = 1202
+
 ##############################################################################
 # 2000 - 2999: Authorization errors
 class AuthorizationError(PublicError):
@@ -810,6 +816,22 @@ class DeprecationError(InvocationError):
     """
     errno = 3015
     format = _("Command '%(name)s' has been deprecated")
+
+class NotAForestRootError(InvocationError):
+    """
+    **3016** Raised when an attempt to establish trust is done against non-root domain
+             Forest root domain has the same name as the forest itself
+
+    For example:
+
+    >>> raise NotAForestRootError(forest='example.test', domain='jointops.test')
+    Traceback (most recent call last):
+      ...
+    NotAForestRootError: Domain 'jointops.test' is not a root domain for forest 'example.test'
+    """
+
+    errno = 3016
+    format = _("Domain '%(domain)s' is not a root domain for forest '%(forest)s'")
 
 
 ##############################################################################
@@ -1113,19 +1135,19 @@ class DefaultGroupError(ExecutionError):
 
 class DNSNotARecordError(ExecutionError):
     """
-    **4019** Raised when a hostname is not a DNS A record
+    **4019** Raised when a hostname is not a DNS A/AAAA record
 
     For example:
 
     >>> raise DNSNotARecordError()
     Traceback (most recent call last):
       ...
-    DNSNotARecordError: Host does not have corresponding DNS A record
+    DNSNotARecordError: Host does not have corresponding DNS A/AAAA record
 
     """
 
     errno = 4019
-    format = _('Host does not have corresponding DNS A record')
+    format = _('Host does not have corresponding DNS A/AAAA record')
 
 class ManagedGroupError(ExecutionError):
     """

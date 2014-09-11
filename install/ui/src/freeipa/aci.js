@@ -544,8 +544,16 @@ return {
 aci.attributes_widget = function(spec) {
 
     spec = spec || {};
+    spec.layout = spec.layout || 'columns attribute_widget';
+    spec.sort = spec.sort === undefined ? true : spec.sort;
 
     var that = IPA.checkboxes_widget(spec);
+
+    /**
+     * Additional options which are not defined in metadata
+     * @property {string[]}
+     */
+    that.custom_options = spec.custom_options || [];
 
     that.object_type = spec.object_type;
     that.skip_unmatched = spec.skip_unmatched === undefined ? false : spec.skip_unmatched;
@@ -554,79 +562,93 @@ aci.attributes_widget = function(spec) {
 
     that.create = function(container) {
         that.container = container;
+        that.widget_create(container);
 
-        var attr_container = $('<div/>', {
-            'class': 'aci-attribute-table-container'
-        }).appendTo(container);
-
-        that.$node = that.table = $('<table/>', {
-            id: id,
-            name: that.name,
-            'class': 'table table-bordered table-condensed aci-attribute-table scrollable'
-        }).
-            append('<thead/>').
-            append('<tbody/>').
-            appendTo(attr_container);
-
-        var tr = $('<tr></tr>').appendTo($('thead', that.table));
-
-        var th = $('<th/>').appendTo(tr);
-        IPA.standalone_option({
-            type: "checkbox",
-            click: function() {
-                $('.aci-attribute', that.table).
-                    prop('checked', $(this).prop('checked'));
-                that.value_changed.notify([], that);
-                that.emit('value-change', { source: that });
-            }
-        }, th);
-
-        tr.append($('<th/>', {
-            'class': 'aci-attribute-column',
-            html: text.get('@i18n:objects.aci.attribute')
-        }));
-
+        that.controls = $('<div/>', {
+            'class': 'form-inline controls'
+        });
+        that.controls.appendTo(container);
+        that.create_search_filter(that.controls);
+        that.create_add_control(that.controls);
         if (that.undo) {
-            that.create_undo(container);
+            that.create_undo(that.controls);
         }
 
-        if (that.object_type) {
-            that.populate(that.object_type);
-        }
+        that.owb_create(container);
 
         that.create_error_link(container);
     };
 
-    that.create_options = function(options) {
-        var tbody = $('tbody', that.table);
+    that.create_search_filter = function(container) {
+        var filter_container = $('<div/>', {
+            'class': 'search-filter'
+        });
 
-        for (var i=0; i<options.length ; i++){
-            var option = options[i];
-            var value = option.value.toLowerCase();
-            var tr = $('<tr/>').appendTo(tbody);
+        that.filter = $('<input/>', {
+            type: 'text',
+            name: 'filter',
+            'class': 'form-control',
+            placeholder: text.get('@i18n:objects.permission.filter')
+        }).appendTo(filter_container);
 
-            var td =  $('<td/>').appendTo(tr);
-            var name = that.get_input_name();
-            var id = that._option_next_id + name;
-            var opt = IPA.standalone_option({
-                id: id,
-                type: 'checkbox',
-                name: name,
-                value: value,
-                'class': 'aci-attribute',
-                change: function() {
-                    that.value_changed.notify([], that);
-                    that.emit('value-change', { source: that });
+        that.filter.keyup(function(e) {
+            that.filter_options();
+        });
+
+        var find_button = IPA.action_button({
+            name: 'find',
+            icon: 'fa-search',
+            click: function() {
+                that.filter_options();
+                return false;
+            }
+        }).appendTo(filter_container);
+
+        filter_container.appendTo(container);
+    };
+
+    that.create_add_control = function(container) {
+
+        that.add_button = IPA.button({
+            label: '@i18n:buttons.add',
+            click: that.show_add_dialog
+        });
+        container.append(' ');
+        that.add_button.appendTo(container);
+    };
+
+    that.show_add_dialog = function() {
+
+        var dialog = IPA.form_dialog({
+            name: "add_option",
+            title: "@i18n:objects.permission.add_custom_attr",
+            fields: [
+                {
+                    name: 'attr',
+                    label: '@i18n:objects.permission.attribute',
+                    required: true
                 }
-            }, td);
-            td = $('<td/>').appendTo(tr);
-            td.append($('<label/>',{
-                text: value,
-                'for': id
-            }));
-            option.input_node = opt[0];
-            that.new_option_id();
-        }
+            ]
+        });
+        dialog.on_confirm = function() {
+            if (!dialog.validate()) return;
+            var attr = dialog.get_field('attr');
+            var value = attr.get_value()[0];
+            that.add_custom_option(value, false, true, true);
+            dialog.close();
+        };
+        dialog.open();
+    };
+
+    that.filter_options = function() {
+        $("li", that.$node).each(function() {
+            var item = $(this);
+            if(item.find('input').val().indexOf(that.filter.val()) === -1) {
+                item.css('display','none');
+            } else {
+                item.css('display','inline');
+            }
+        });
     };
 
     that.update = function(values) {
@@ -646,13 +668,11 @@ aci.attributes_widget = function(spec) {
 
         that.populate(that.object_type);
         that.append();
-        that.create_options(that.options);
+        that.owb_create(that.container);
         that.owb_update(values);
     };
 
     that.populate = function(object_type) {
-
-        $('tbody tr', that.table).remove();
 
         if (!object_type || object_type === '') return;
 
@@ -666,19 +686,29 @@ aci.attributes_widget = function(spec) {
 
     that.append = function() {
 
-        if (!that.values) return;
-
         var unmatched = [];
 
-        for (var i=0; i<that.values.length; i++) {
-            if (!that.has_option(that.values[i])) {
-                unmatched.push(that.values[i]);
+        function add_unmatched(source) {
+            for (var i=0, l=source.length; i<l; i++) {
+                if (!that.has_option(source[i])) {
+                    that.add_option(source[i], true /* suppress update */);
+                }
             }
         }
 
-        if (unmatched.length > 0 && !that.skip_unmatched) {
-            that.options.push.apply(that.options, that.prepare_options(unmatched));
+        add_unmatched(that.custom_options);
+
+        if (that.values && !that.skip_unmatched) {
+            add_unmatched(that.values);
         }
+    };
+
+    that.add_custom_option = function(name, to_custom, check, update) {
+
+        var value = (name || '').toLowerCase();
+        if (to_custom) that.custom_options.push(value);
+        if (check) that.values.push(value);
+        if (update) that.update(that.values);
     };
 
     that.has_option = function(value) {
@@ -687,10 +717,6 @@ aci.attributes_widget = function(spec) {
             if (o[i].value === value) return true;
         }
         return false;
-    };
-
-    that.show_undo = function() {
-        $(that.undo_span).css('display', 'inline-block');
     };
 
     return that;
@@ -873,6 +899,16 @@ aci.permission_target_policy = function (spec) {
         var attribute_table = that.permission_target.widgets.get_widget('attrs');
         var skip_unmatched_org = attribute_table.skip_unmatched;
         attribute_table.object_type = type;
+
+        // UI doesn't always know what are the possible attributes.
+        // In case of managed permissions, one of the possible lists is in ipapermdefaultattr.
+        var default_attrs = that.container.fields.get_field('ipapermdefaultattr');
+        if (default_attrs && default_attrs.enabled) { // if managed permission
+            attribute_table.custom_options = default_attrs.get_value();
+        } else {
+            attribute_table.custom_options = [];
+        }
+
         // skip values which don't belong to new type. Bug #2617
         attribute_table.skip_unmatched =  skip_unmatched || skip_unmatched_org;
         attribute_field.reset();
@@ -936,9 +972,7 @@ aci.permission_target_policy = function (spec) {
         var widget = that.permission_target.widgets.get_widget(target_info.name);
         var field = that.container.fields.get_field(target_info.name);
         that.permission_target.set_row_visible(target_info.name, visible);
-        var managed_f = aci.managed_fields.indexOf(target_info.name) > -1;
-        var enabled = !(managed_f && that.managed) && visible && !that.system;
-        field.set_enabled(enabled);
+        field.set_enabled(visible);
         field.set_required(visible && target_info.required);
         widget.set_visible(visible);
     };
@@ -1007,7 +1041,9 @@ aci.permission_managed_policy = function (spec) {
     var that = IPA.facet_policy();
 
     that.post_load = function(data) {
-        var permtype = data.result.result.ipapermissiontype;
+
+        var result = data.result.result;
+        var permtype = result.ipapermissiontype;
         var managed = permtype && permtype.indexOf("MANAGED") > -1;
         var system = permtype && permtype.indexOf("SYSTEM") > -1 && permtype.length === 1;
         var m_section = that.container.widgets.get_widget("managed");
@@ -1018,7 +1054,14 @@ aci.permission_managed_policy = function (spec) {
             var field = fields[i];
             if (field.read_only) continue;
             var managed_f = aci.managed_fields.indexOf(field.name) > -1;
-            field.set_enabled(!system && !(managed_f && managed));
+            field.set_writable(!system && !(managed_f && managed) && field.writable);
+        }
+
+        // Bind rule type cannot be changed if permission is in a privilege
+        var privileges = result.member_privilege;
+        if (privileges && privileges.length > 0) {
+            var f = that.container.fields.get_field('ipapermbindruletype');
+            f.set_writable(false);
         }
     };
 

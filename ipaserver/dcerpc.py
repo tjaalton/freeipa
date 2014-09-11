@@ -589,7 +589,11 @@ class DomainValidator(object):
         try:
             result = netrc.finddc(domain=domain, flags=nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_GC | nbt.NBT_SERVER_CLOSEST)
         except RuntimeError, e:
-            finddc_error = e
+            try:
+                # If search of closest GC failed, attempt to find any one
+                result = netrc.finddc(domain=domain, flags=nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_GC)
+            except RuntimeError, e:
+                finddc_error = e
 
         if not self._domains:
             self._domains = self.get_trusted_domains()
@@ -703,16 +707,19 @@ class TrustDomainInstance(object):
         binding_template=lambda x,y,z: u'%s:%s[%s]' % (x, y, z)
         return [binding_template(t, remote_host, o) for t in transports for o in options]
 
-    def retrieve_anonymously(self, remote_host, discover_srv=False):
+    def retrieve_anonymously(self, remote_host, discover_srv=False, search_pdc=False):
         """
         When retrieving DC information anonymously, we can't get SID of the domain
         """
         netrc = net.Net(creds=self.creds, lp=self.parm)
+        flags = nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_DS | nbt.NBT_SERVER_WRITABLE
+        if search_pdc:
+            flags = flags | nbt.NBT_SERVER_PDC
         try:
             if discover_srv:
-                result = netrc.finddc(domain=remote_host, flags=nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_DS)
+                result = netrc.finddc(domain=remote_host, flags=flags)
             else:
-                result = netrc.finddc(address=remote_host, flags=nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_DS)
+                result = netrc.finddc(address=remote_host, flags=flags)
         except RuntimeError, e:
             raise assess_dcerpc_exception(message=str(e))
 
@@ -723,6 +730,7 @@ class TrustDomainInstance(object):
         self.info['dns_forest'] = unicode(result.forest)
         self.info['guid'] = unicode(result.domain_uuid)
         self.info['dc'] = unicode(result.pdc_dns_name)
+        self.info['is_pdc'] = (result.server_type & nbt.NBT_SERVER_PDC) != 0
 
         # Netlogon response doesn't contain SID of the domain.
         # We need to do rootDSE search with LDAP_SERVER_EXTENDED_DN_OID control to reveal the SID
@@ -770,6 +778,13 @@ class TrustDomainInstance(object):
         self.info['guid'] = unicode(result.domain_guid)
         self.info['sid'] = unicode(result.sid)
         self.info['dc'] = remote_host
+
+        try:
+            result = self._pipe.QueryInfoPolicy2(self._policy_handle, lsa.LSA_POLICY_INFO_ROLE)
+        except RuntimeError, (num, message):
+            raise assess_dcerpc_exception(num=num, message=message)
+
+        self.info['is_pdc'] = (result.role == lsa.LSA_ROLE_PRIMARY)
 
     def generate_auth(self, trustdom_secret):
         def arcfour_encrypt(key, data):
@@ -886,7 +901,7 @@ class TrustDomainInstance(object):
         info.sid = security.dom_sid(another_domain.info['sid'])
         info.trust_direction = lsa.LSA_TRUST_DIRECTION_INBOUND | lsa.LSA_TRUST_DIRECTION_OUTBOUND
         info.trust_type = lsa.LSA_TRUST_TYPE_UPLEVEL
-        info.trust_attributes = lsa.LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE
+        info.trust_attributes = 0
 
         try:
             dname = lsa.String()
@@ -902,8 +917,6 @@ class TrustDomainInstance(object):
             trustdom_handle = self._pipe.CreateTrustedDomainEx2(self._policy_handle, info, self.auth_info, security.SEC_STD_DELETE)
         except RuntimeError, (num, message):
             raise assess_dcerpc_exception(num=num, message=message)
-
-        self.update_ftinfo(another_domain)
 
         # We should use proper trustdom handle in order to modify the
         # trust settings. Samba insists this has to be done with LSA
@@ -922,6 +935,15 @@ class TrustDomainInstance(object):
             # well. In particular, the call may fail against Windows 2003
             # server as that one doesn't support AES encryption types
             pass
+
+        try:
+            info.trust_attributes = lsa.LSA_TRUST_ATTRIBUTE_FOREST_TRANSITIVE
+            self._pipe.SetInformationTrustedDomain(trustdom_handle, lsa.LSA_TRUSTED_DOMAIN_INFO_INFO_EX, info)
+        except RuntimeError, e:
+            root_logger.error('unable to set trust to transitive: %s' % (str(e)))
+            pass
+        if self.info['is_pdc']:
+            self.update_ftinfo(another_domain)
 
     def verify_trust(self, another_domain):
         def retrieve_netlogon_info_2(domain, function_code, data):
@@ -1017,7 +1039,7 @@ def fetch_domains(api, mydomain, trustdomain, creds=None):
 
     result = []
     for t in domains.array:
-        if ((t.trust_attributes & trust_attributes['NETR_TRUST_ATTRIBUTE_WITHIN_FOREST']) and
+        if (not (t.trust_flags & trust_flags['NETR_TRUST_FLAG_PRIMARY']) and
             (t.trust_flags & trust_flags['NETR_TRUST_FLAG_IN_FOREST'])):
             res = dict()
             res['cn'] = unicode(t.dns_name)
@@ -1066,9 +1088,9 @@ class TrustDomainJoins(object):
         rd.creds.set_anonymous()
         rd.creds.set_workstation(self.local_domain.hostname)
         if realm_server is None:
-            rd.retrieve_anonymously(realm, discover_srv=True)
+            rd.retrieve_anonymously(realm, discover_srv=True, search_pdc=True)
         else:
-            rd.retrieve_anonymously(realm_server, discover_srv=False)
+            rd.retrieve_anonymously(realm_server, discover_srv=False, search_pdc=True)
         rd.read_only = True
         if realm_admin and realm_passwd:
             if 'name' in rd.info:
@@ -1129,6 +1151,9 @@ class TrustDomainJoins(object):
                 realm_passwd
             )
 
+        if self.remote_domain.info['dns_domain'] != self.remote_domain.info['dns_forest']:
+            raise errors.NotAForestRootError(forest=self.remote_domain.info['dns_forest'], domain=self.remote_domain.info['dns_domain'])
+
         if not self.remote_domain.read_only:
             trustdom_pass = samba.generate_random_password(128, 128)
             self.get_realmdomains()
@@ -1144,6 +1169,9 @@ class TrustDomainJoins(object):
 
         if not(isinstance(self.remote_domain, TrustDomainInstance)):
             self.populate_remote_domain(realm, realm_server, realm_passwd=None)
+
+        if self.remote_domain.info['dns_domain'] != self.remote_domain.info['dns_forest']:
+            raise errors.NotAForestRootError(forest=self.remote_domain.info['dns_forest'], domain=self.remote_domain.info['dns_domain'])
 
         self.local_domain.establish_trust(self.remote_domain, trustdom_passwd)
         return dict(local=self.local_domain, remote=self.remote_domain, verified=False)

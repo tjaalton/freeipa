@@ -598,6 +598,11 @@ def named_enable_dnssec():
     """
     Enable dnssec in named.conf
     """
+    if not bindinstance.named_conf_exists():
+        # DNS service may not be configured
+        root_logger.info('DNS is not configured')
+        return False
+
     if not sysupgrade.get_upgrade_state('named.conf', 'dnssec_enabled'):
         root_logger.info('[Enabling "dnssec-enable" configuration in DNS]')
         try:
@@ -672,24 +677,25 @@ def certificate_renewal_update(ca):
         return False
 
     # State not set, lets see if we are already configured
-    for nss_dir, nickname, ca_name, pre_command, post_command in requests:
-        criteria = (
-            ('cert_storage_location', nss_dir, certmonger.NPATH),
-            ('cert_nickname', nickname, None),
-            ('ca_name', ca_name, None),
-        )
+    for request in requests:
+        nss_dir, nickname, ca_name, pre_command, post_command = request
+        criteria = {
+            'cert-database': nss_dir,
+            'cert-nickname': nickname,
+            'ca-name': ca_name,
+        }
         request_id = certmonger.get_request_id(criteria)
         if request_id is None:
             break
 
-        val = certmonger.get_request_value(request_id, 'pre_certsave_command')
+        val = certmonger.get_request_value(request_id, 'cert-presave-command')
         if val is not None:
             val = val.split(' ', 1)[0]
             val = os.path.basename(val)
         if pre_command != val:
             break
 
-        val = certmonger.get_request_value(request_id, 'post_certsave_command')
+        val = certmonger.get_request_value(request_id, 'post-certsave-command')
         if val is not None:
             val = val.split(' ', 1)[0]
             val = os.path.basename(val)
@@ -1074,6 +1080,7 @@ def main():
         sub_dict['SUBJECT_BASE'] = subject_base
 
     ca = cainstance.CAInstance(api.env.realm, certs.NSS_DIR)
+    ca.backup_config()
 
     # migrate CRL publish dir before the location in ipa.conf is updated
     ca_restart = migrate_crl_publish_dir(ca)

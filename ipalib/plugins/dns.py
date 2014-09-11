@@ -209,11 +209,11 @@ EXAMPLES:
  authoritative (e.g. sub.example.com) will be routed to the global forwarder.
  Global forwarding configuration can be overridden per-zone.
 """) + _("""
- Semantics of forwarding in IPA matches BIND sematics and depends on type
- of the zone:
+ Semantics of forwarding in IPA matches BIND semantics and depends on the type
+ of zone:
    * Master zone: local BIND replies authoritatively to queries for data in
    the given zone (including authoritative NXDOMAIN answers) and forwarding
-   affects only queries for names bellow zone cuts (NS records) of locally
+   affects only queries for names below zone cuts (NS records) of locally
    served zones.
 
    * Forward zone: forward zone contains no authoritative data. BIND forwards
@@ -487,6 +487,14 @@ def _hostname_validator(ugettext, value):
     if len(value.make_absolute().labels) < 3:
         return _('invalid domain-name: not fully qualified')
 
+    return None
+
+def _no_wildcard_validator(ugettext, value):
+    """Disallow usage of wildcards as RFC 4592 section 4 recommends
+    """
+    assert isinstance(value, DNSName)
+    if value.is_wild():
+        return _('should not be a wildcard domain name (RFC 4592 section 4)')
     return None
 
 def is_forward_record(zone, str_address):
@@ -1731,6 +1739,7 @@ class DNSZoneBase(LDAPObject):
 
     takes_params = (
         DNSNameParam('idnsname',
+            _no_wildcard_validator,  # RFC 4592 section 4
             only_absolute=True,
             cli_name='name',
             label=_('Zone name'),
@@ -2619,6 +2628,19 @@ class dnsrecord(LDAPObject):
                         error=unicode(_('out-of-zone data: record name must '
                                         'be a subdomain of the zone or a '
                                         'relative name')))
+        # dissallowed wildcard (RFC 4592 section 4)
+        no_wildcard_rtypes = ['DNAME', 'DS', 'NS']
+        if (keys[-1].is_wild() and
+            any(entry_attrs.get('%srecord' % r.lower())
+            for r in no_wildcard_rtypes)
+        ):
+            raise errors.ValidationError(
+                name='idnsname',
+                error=(_('owner of %(types)s records '
+                    'should not be a wildcard domain name (RFC 4592 section 4)') %
+                    {'types': ', '.join(no_wildcard_rtypes)}
+                )
+            )
 
     def _ptrrecord_pre_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
@@ -3374,6 +3396,13 @@ class dnsrecord_mod(LDAPUpdate):
             if del_all:
                 result = self.obj.methods.delentry(*keys,
                                                    version=options['version'])
+
+                # we need to modify delete result to match mod output type
+                # only one value is expected, not a list
+                if client_has_capability(options['version'], 'primary_key_types'):
+                    assert len(result['value']) == 1
+                    result['value'] = result['value'][0]
+
                 # indicate that entry was deleted
                 context.dnsrecord_entry_mods[(keys[0], keys[1])] = None
 

@@ -374,6 +374,9 @@
                             "enable": "Enable token"
                         },
                         "permission": {
+                            "add_custom_attr": "Add custom attribute",
+                            "attribute": "Attribute",
+                            "filter": "Filter",
                             "identity": "Permission settings",
                             "managed": "Attribute breakdown",
                             "target": "Target"

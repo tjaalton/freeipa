@@ -25,7 +25,8 @@ import os
 import krbV
 from ipapython.ipa_log_manager import *
 
-from ipaserver.install import replication, installutils, bindinstance
+from ipaserver.install import (replication, installutils, bindinstance,
+    cainstance, certs)
 from ipalib import api, errors, util
 from ipalib.constants import CACERT
 from ipapython import ipautil, ipaldap, version, dogtag
@@ -33,15 +34,16 @@ from ipapython.dn import DN
 
 # dict of command name and tuples of min/max num of args needed
 commands = {
-    "list":(0, 1, "[master fqdn]", ""),
-    "connect":(1, 2, "<master fqdn> [other master fqdn]",
-                    "must provide the name of the servers to connect"),
-    "disconnect":(1, 2, "<master fqdn> [other master fqdn]",
-                    "must provide the name of the server to disconnect"),
-    "del":(1, 1, "<master fqdn>",
-                    "must provide hostname of master to delete"),
-    "re-initialize":(0, 0, "", ""),
-    "force-sync":(0, 0, "", "")
+    "list": (0, 1, "[master fqdn]", ""),
+    "connect": (1, 2, "<master fqdn> [other master fqdn]",
+                "must provide the name of the servers to connect"),
+    "disconnect": (1, 2, "<master fqdn> [other master fqdn]",
+                   "must provide the name of the server to disconnect"),
+    "del": (1, 1, "<master fqdn>",
+            "must provide hostname of master to delete"),
+    "re-initialize": (0, 0, "", ""),
+    "force-sync": (0, 0, "", ""),
+    "set-renewal-master": (0, 1, "[master fqdn]", "")
 }
 
 
@@ -272,7 +274,12 @@ def del_master(realm, hostname, options):
         except Exception, e:
             sys.exit("There were issues removing a connection: %s" % e)
 
-    # 6. And clean up the removed replica DNS entries if any.
+    # 6. Pick CA renewal master
+    ca = cainstance.CAInstance(api.env.realm, certs.NSS_DIR)
+    if ca.is_renewal_master(hostname):
+        ca.set_renewal_master(options.host)
+
+    # 7. And clean up the removed replica DNS entries if any.
     try:
         if bindinstance.dns_container_exists(options.host, api.env.basedn,
                                              dm_password=options.dirman_passwd):
@@ -369,6 +376,21 @@ def force_sync(realm, thishost, fromhost, dirman_passwd):
     except Exception, e:
         sys.exit(str(e))
 
+def set_renewal_master(realm, replica):
+    if not replica:
+        replica = installutils.get_fqdn()
+
+    ca = cainstance.CAInstance(realm, certs.NSS_DIR)
+    if ca.is_renewal_master(replica):
+        sys.exit("%s is already the renewal master" % replica)
+
+    try:
+        ca.set_renewal_master(replica)
+    except Exception, e:
+        sys.exit("Failed to set renewal master to %s: %s" % (replica, e))
+
+    print "%s is now the renewal master" % replica
+
 def main():
     options, args = parse_options()
 
@@ -433,6 +455,11 @@ def main():
             replica1 = host
             replica2 = args[1]
         del_link(realm, replica1, replica2, dirman_passwd, options.force)
+    elif args[0] == 'set-renewal-master':
+        replica = None
+        if len(args) > 1:
+            replica = args[1]
+        set_renewal_master(realm, replica)
 
 try:
     main()

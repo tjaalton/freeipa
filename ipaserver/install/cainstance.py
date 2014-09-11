@@ -318,13 +318,13 @@ def stop_tracking_certificates(dogtag_constants):
         try:
             certmonger.stop_tracking(
                 dogtag_constants.ALIAS_DIR, nickname=nickname)
-        except (ipautil.CalledProcessError, RuntimeError), e:
+        except RuntimeError, e:
             root_logger.error(
                 "certmonger failed to stop tracking certificate: %s" % str(e))
 
     try:
         certmonger.stop_tracking(paths.HTTPD_ALIAS_DIR, nickname='ipaCert')
-    except (ipautil.CalledProcessError, RuntimeError), e:
+    except RuntimeError, e:
         root_logger.error(
             "certmonger failed to stop tracking certificate: %s" % str(e))
     cmonger.stop()
@@ -449,6 +449,7 @@ class CAInstance(service.Service):
                 self.step("creating pki-ca instance", self.create_instance)
             self.step("configuring certificate server instance", self.__configure_instance)
         self.step("stopping certificate server instance to update CS.cfg", self.__stop)
+        self.step("backing up CS.cfg", self.backup_config)
         self.step("disabling nonces", self.__disable_nonce)
         self.step("set up CRL publishing", self.__enable_crl_publish)
         self.step("starting certificate server instance", self.__start)
@@ -583,9 +584,25 @@ class CAInstance(service.Service):
             config.set("CA", "pki_external_csr_path", self.csr_file)
 
         elif self.external == 2:
+            cert = x509.load_certificate_from_file(self.cert_file)
+            cert_file = tempfile.NamedTemporaryFile()
+            x509.write_certificate(cert.der_data, cert_file.name)
+            cert_file.flush()
+
+            cert_chain, stderr, rc = ipautil.run(
+                [paths.OPENSSL, 'crl2pkcs7',
+                 '-certfile', self.cert_chain_file,
+                 '-nocrl'])
+            # Dogtag chokes on the header and footer, remove them
+            # https://bugzilla.redhat.com/show_bug.cgi?id=1127838
+            cert_chain = re.search(
+                r'(?<=-----BEGIN PKCS7-----).*?(?=-----END PKCS7-----)',
+                cert_chain, re.DOTALL).group(0)
+            cert_chain_file = ipautil.write_tmp_file(cert_chain)
+
             config.set("CA", "pki_external", "True")
-            config.set("CA", "pki_external_ca_cert_path", self.cert_file)
-            config.set("CA", "pki_external_ca_cert_chain_path", self.cert_chain_file)
+            config.set("CA", "pki_external_ca_cert_path", cert_file.name)
+            config.set("CA", "pki_external_ca_cert_chain_path", cert_chain_file.name)
             config.set("CA", "pki_external_step_two", "True")
 
         # Generate configuration file
@@ -602,6 +619,7 @@ class CAInstance(service.Service):
                 'Contents of pkispawn configuration file (%s):\n%s' %
                     (cfg_file, ipautil.nolog_replace(f.read(), nolog)))
 
+        self.backup_state('installed', True)
         try:
             ipautil.run(args, nolog=nolog)
         except ipautil.CalledProcessError, e:
@@ -646,6 +664,7 @@ class CAInstance(service.Service):
                 '-redirect', 'logs=/var/log/pki-ca',
                 '-enable_proxy'
         ]
+        self.backup_state('installed', True)
         ipautil.run(args, env={'PKI_HOSTNAME':self.fqdn})
 
     def __enable(self):
@@ -717,10 +736,15 @@ class CAInstance(service.Service):
                 args.append("-ext_csr_file")
                 args.append(self.csr_file)
             elif self.external == 2:
+                cert = x509.load_certificate_from_file(self.cert_file)
+                cert_file = tempfile.NamedTemporaryFile()
+                x509.write_certificate(cert.der_data, cert_file.name)
+                cert_file.flush()
+
                 args.append("-external")
                 args.append("true")
                 args.append("-ext_ca_cert_file")
-                args.append(self.cert_file)
+                args.append(cert_file.name)
                 args.append("-ext_ca_cert_chain_file")
                 args.append(self.cert_chain_file)
             else:
@@ -787,6 +811,12 @@ class CAInstance(service.Service):
             # TODO: roll back here?
             root_logger.debug(traceback.format_exc())
             root_logger.critical("Failed to restart the certificate server. See the installation log for details.")
+
+    def backup_config(self):
+        try:
+            backup_config(self.dogtag_constants)
+        except Exception, e:
+            root_logger.warning("Failed to backup CS.cfg: %s", e)
 
     def __disable_nonce(self):
         # Turn off Nonces
@@ -1320,6 +1350,8 @@ class CAInstance(service.Service):
         if not enabled is None and not enabled:
             self.disable()
 
+        # Just eat this state if it exists
+        installed = self.restore_state("installed")
         try:
             if self.dogtag_constants.DOGTAG_VERSION >= 10:
                 ipautil.run([paths.PKIDESTROY, "-i",
@@ -1355,9 +1387,12 @@ class CAInstance(service.Service):
 
         # remove CRL files
         root_logger.info("Remove old CRL files")
-        for f in get_crl_files():
-            root_logger.debug("Remove %s", f)
-            installutils.remove_file(f)
+        try:
+            for f in get_crl_files():
+                root_logger.debug("Remove %s", f)
+                installutils.remove_file(f)
+        except OSError, e:
+            root_logger.warning("Error while removing old CRL files: %s" % e)
 
         # remove CRL directory
         root_logger.info("Remove CRL directory")
@@ -1417,7 +1452,7 @@ class CAInstance(service.Service):
                 secdir=paths.HTTPD_ALIAS_DIR,
                 pre_command=None,
                 post_command='renew_ra_cert')
-        except (ipautil.CalledProcessError, RuntimeError), e:
+        except RuntimeError, e:
             root_logger.error(
                 "certmonger failed to start tracking certificate: %s" % e)
 
@@ -1445,7 +1480,7 @@ class CAInstance(service.Service):
                     secdir=self.dogtag_constants.ALIAS_DIR,
                     pre_command='stop_pkicad',
                     post_command='renew_ca_cert "%s"' % nickname)
-            except (ipautil.CalledProcessError, RuntimeError), e:
+            except RuntimeError, e:
                 root_logger.error(
                     "certmonger failed to start tracking certificate: %s" % e)
 
@@ -1465,7 +1500,7 @@ class CAInstance(service.Service):
                 secdir=self.dogtag_constants.ALIAS_DIR,
                 pre_command=None,
                 post_command=None)
-        except (ipautil.CalledProcessError, RuntimeError), e:
+        except RuntimeError, e:
             root_logger.error(
                 "certmonger failed to start tracking certificate: %s" % e)
 
@@ -1596,12 +1631,15 @@ class CAInstance(service.Service):
             return True
         return False
 
-    def is_renewal_master(self):
+    def is_renewal_master(self, fqdn=None):
+        if fqdn is None:
+            fqdn = api.env.host
+
         if not self.admin_conn:
             self.ldap_connect()
 
-        dn = DN(('cn', 'CA'), ('cn', api.env.host), ('cn', 'masters'),
-                ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
+        dn = DN(('cn', 'CA'), ('cn', fqdn), ('cn', 'masters'), ('cn', 'ipa'),
+                ('cn', 'etc'), api.env.basedn)
         filter = '(ipaConfigString=caRenewalMaster)'
         try:
             self.admin_conn.get_entries(base_dn=dn, filter=filter,
@@ -1610,6 +1648,38 @@ class CAInstance(service.Service):
             return False
 
         return True
+
+    def set_renewal_master(self, fqdn=None):
+        if fqdn is None:
+            fqdn = api.env.host
+
+        if not self.admin_conn:
+            self.ldap_connect()
+
+        base_dn = DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'),
+                     api.env.basedn)
+        filter = '(&(cn=CA)(ipaConfigString=caRenewalMaster))'
+        try:
+            entries = self.admin_conn.get_entries(
+                base_dn=base_dn, filter=filter, attrs_list=['ipaConfigString'])
+        except errors.NotFound:
+            entries = []
+
+        dn = DN(('cn', 'CA'), ('cn', fqdn), base_dn)
+        master_entry = self.admin_conn.get_entry(dn, ['ipaConfigString'])
+
+        for entry in entries:
+            if master_entry is not None and entry.dn == master_entry.dn:
+                master_entry = None
+                continue
+
+            entry['ipaConfigString'] = [x for x in entry['ipaConfigString']
+                                        if x.lower() != 'carenewalmaster']
+            self.admin_conn.update_entry(entry)
+
+        if master_entry is not None:
+            master_entry['ipaConfigString'].append('caRenewalMaster')
+            self.admin_conn.update_entry(master_entry)
 
 
 def replica_ca_install_check(config):
@@ -1740,6 +1810,16 @@ def install_replica_ca(config, postinstall=False):
 
     return ca
 
+def backup_config(dogtag_constants=None):
+    """
+    Create a backup copy of CS.cfg
+    """
+    if dogtag_constants is None:
+        dogtag_constants = dogtag.configured_constants()
+
+    shutil.copy(dogtag_constants.CS_CFG_PATH,
+                dogtag_constants.CS_CFG_PATH + '.ipabkp')
+
 def update_cert_config(nickname, cert, dogtag_constants=None):
     """
     When renewing a CA subsystem certificate the configuration file
@@ -1761,6 +1841,10 @@ def update_cert_config(nickname, cert, dogtag_constants=None):
 
     with stopped_service(dogtag_constants.SERVICE_NAME,
                          instance_name=dogtag_constants.PKI_INSTANCE_NAME):
+        try:
+            backup_config(dogtag_constants)
+        except Exception, e:
+            syslog.syslog(syslog.LOG_ERR, "Failed to backup CS.cfg: %s" % e)
 
         installutils.set_directive(dogtag.configured_constants().CS_CFG_PATH,
                                     directives[nickname],

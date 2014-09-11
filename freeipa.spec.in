@@ -65,13 +65,14 @@ BuildRequires:  m2crypto
 BuildRequires:  check
 BuildRequires:  libsss_idmap-devel
 BuildRequires:  libsss_nss_idmap-devel
-BuildRequires:  java-1.7.0-openjdk
+BuildRequires:  java-headless
 BuildRequires:  rhino
 BuildRequires:  libverto-devel
 BuildRequires:  systemd
 BuildRequires:  libunistring-devel
 BuildRequires:  python-lesscpy
 BuildRequires:  python-yubico
+BuildRequires:  python-backports-ssl_match_hostname
 
 %description
 IPA is an integrated solution to provide centrally managed Identity (machine,
@@ -86,11 +87,11 @@ Group: System Environment/Base
 Requires: %{name}-python = %{version}-%{release}
 Requires: %{name}-client = %{version}-%{release}
 Requires: %{name}-admintools = %{version}-%{release}
-Requires: 389-ds-base >= 1.3.2.19
+Requires: 389-ds-base >= 1.3.2.20
 Requires: openldap-clients > 2.4.35-4
 Requires: nss >= 3.14.3-12.0
 Requires: nss-tools >= 3.14.3-12.0
-Requires: krb5-server >= 1.11.5-3
+Requires: krb5-server >= 1.11.5-5
 Requires: krb5-pkinit-openssl
 Requires: cyrus-sasl-gssapi%{?_isa}
 Requires: ntp
@@ -122,8 +123,8 @@ Requires: python-dns
 Requires: zip
 Requires: policycoreutils >= %{POLICYCOREUTILSVER}
 Requires: tar
-Requires(pre): certmonger >= 0.65
-Requires(pre): 389-ds-base >= 1.3.2.19
+Requires(pre): certmonger >= 0.75.13
+Requires(pre): 389-ds-base >= 1.3.2.20
 Requires: fontawesome-fonts
 Requires: open-sans-fonts
 
@@ -203,6 +204,7 @@ Requires: libsss_autofs
 Requires: autofs
 Requires: libnfsidmap
 Requires: nfs-utils
+Requires: python-backports-ssl_match_hostname
 Requires(post): policycoreutils
 
 Obsoletes: ipa-client >= 1.0

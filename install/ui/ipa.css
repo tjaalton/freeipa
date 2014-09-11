@@ -189,7 +189,6 @@ div[name=settings].facet-group li a {
 /* --- Facet error --- */
 
 .facet-error {
-    padding: 2em 15em;
     background-color: white;
 }
 
@@ -199,7 +198,10 @@ div[name=settings].facet-group li a {
 
 .facet-error .error-details {
     margin-top: 2em;
-    font-family: monospace;
+}
+
+.facet-error .error-details code {
+    white-space: pre;
 }
 
 /* ---- Search Facet ---- */
@@ -250,15 +252,6 @@ div[name=settings].facet-group li a {
 .modal code {
     white-space: normal;
     word-wrap: break-word;
-}
-
-.action-button-disabled,
-.action-button-disabled:focus,
-.action-button-disabled:hover {
-    color: gray;
-    cursor: default;
-    text-decoration: none;
-    outline: none;
 }
 
 .aci-attribute-table tbody {
@@ -345,7 +338,7 @@ table.scrollable tbody {
 .option_widget {
     list-style-type: none;
     margin: 0;
-    padding: 0;
+    padding: 0 0 0 1px;
 }
 
 .option_widget.nested {
@@ -363,6 +356,19 @@ table.scrollable tbody {
     width: 33%;
     min-width: 90px;
     max-width: 150px;
+}
+
+.option_widget.columns.attribute_widget {
+    position: relative;
+    overflow-y: auto;
+    max-height: 36em;
+}
+
+.option_widget.columns.attribute_widget > li {
+    float: left;
+    width: 50%;
+    min-width: 90px;
+    max-width: 200px;
 }
 
 .combobox-widget-input {

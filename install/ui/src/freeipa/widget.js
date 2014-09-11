@@ -24,6 +24,7 @@
 
 define(['dojo/_base/array',
        'dojo/_base/lang',
+       'dojo/dom-construct',
        'dojo/Evented',
        'dojo/has',
        'dojo/keys',
@@ -43,7 +44,7 @@ define(['dojo/_base/array',
        './util',
        'exports'
        ],
-       function(array, lang, Evented, has, keys, on, string, topic, builder,
+       function(array, lang, construct, Evented, has, keys, on, string, topic, builder,
                 datetime, entity_mod, IPA, $, navigation, phases, reg, rpc, text, util, exp) {
 
 /**
@@ -568,6 +569,7 @@ IPA.input_widget = function(spec) {
         var changed = writable !== that.writable;
 
         that.writable = writable;
+        that.update_read_only();
 
         if (changed) {
             that.emit('writable-change', { source: that, writable: writable });
@@ -584,9 +586,22 @@ IPA.input_widget = function(spec) {
         var changed = read_only !== that.read_only;
 
         that.read_only = read_only;
+        that.update_read_only();
 
         if (changed) {
             that.emit('readonly-change', { source: that, read_only: read_only });
+        }
+    };
+
+    /**
+     * Update widget's HTML based on `read_only` and `writable` properties
+     * @protected
+     */
+    that.update_read_only = function() {
+        var input = that.get_input();
+        if (input) {
+            var ro = that.is_writable();
+            input.prop('readOnly', !ro);
         }
     };
 
@@ -635,6 +650,8 @@ IPA.input_widget = function(spec) {
     that.widget_set_valid = that.set_valid;
     that.widget_hide_undo = that.hide_undo;
     that.widget_show_undo = that.show_undo;
+    that.widget_set_writable = that.set_writable;
+    that.widget_set_read_only = that.set_read_only;
 
     return that;
 };
@@ -736,6 +753,7 @@ IPA.text_widget = function(spec) {
 
         that.create_error_link(container);
         that.set_enabled(that.enabled);
+        that.update_read_only();
         that.update_input_group_state();
     };
 
@@ -744,18 +762,23 @@ IPA.text_widget = function(spec) {
      */
     that.update = function(values) {
         var value = values && values.length ? values[0] : '';
+        that.display_control.text(value);
+        that.input.val(value);
+        that.on_value_changed();
+    };
 
+    /**
+     * @inheritDoc
+     */
+    that.update_read_only = function() {
+        if (!that.input) return;
         if (!that.is_writable()) {
-            that.display_control.text(value);
             that.display_control.css('display', '');
             that.input_group.css('display', 'none');
         } else {
-            that.input.val(value);
             that.display_control.css('display', 'none');
             that.input_group.css('display', '');
         }
-
-        that.on_value_changed();
     };
 
     /**
@@ -811,7 +834,10 @@ IPA.text_widget = function(spec) {
      * visible content.
      */
     that.update_input_group_state = function() {
-        var visible = $(':visible', that.input_group_btn).length > 0;
+        var children = that.input_group_btn.children();
+        var visible = $.grep(children, function(el, i) {
+            return $(el).css('display') !== 'none';
+        }).length > 0;
         that.input_group.toggleClass('input-group', visible);
     };
 
@@ -1182,12 +1208,52 @@ IPA.multivalued_widget = function(spec) {
         that.on_value_changed();
     };
 
+    /** @inheritDoc */
+    that.update_read_only = function() {
+        that.update_add_link_visibility();
+    };
+
     that.update_add_link_visibility = function() {
+        if (!that.add_link) return;
         var visible = that.is_writable() && that.enabled;
         if (visible) {
             that.add_link.css('display', '');
         } else {
             that.add_link.css('display', 'none');
+        }
+    };
+
+    that.update_row_buttons = function(row) {
+
+        var w = that.is_writable();
+        if (!that.enabled || !w) {
+            row.widget.hide_undo();
+            that.toggle_remove_link(row, false);
+        } else {
+            if (row.is_new || that.test_dirty_row(row)) {
+                row.widget.show_undo();
+                that.toggle_remove_link(row, false);
+            } else {
+                that.toggle_remove_link(row, w);
+            }
+        }
+    };
+
+    that.set_writable = function(writable) {
+        that.widget_set_writable(writable);
+        for (var i=0,l=that.rows.length; i<l; i++) {
+            var row = that.rows[i];
+            row.widget.set_writable(writable);
+            that.update_row_buttons(row);
+        }
+    };
+
+    that.set_read_only = function(read_only) {
+        that.widget_set_read_only(read_only);
+        for (var i=0,l=that.rows.length; i<l; i++) {
+            var row = that.rows[i];
+            row.widget.set_read_only(read_only);
+            that.update_row_buttons(row);
         }
     };
 
@@ -1199,17 +1265,7 @@ IPA.multivalued_widget = function(spec) {
         for (var i=0,l=that.rows.length; i<l; i++) {
             var row = that.rows[i];
             row.widget.set_enabled(enabled);
-
-            if (!enabled) {
-                row.widget.hide_undo();
-                that.toggle_remove_link(row, false);
-            } else {
-                if (row.is_new || that.test_dirty_row(row)) {
-                    row.widget.show_undo();
-                } else if (that.is_writable()) {
-                    that.toggle_remove_link(row, true);
-                }
-            }
+            that.update_row_buttons(row);
         }
     };
 
@@ -1258,8 +1314,19 @@ IPA.option_widget_base = function(spec, that) {
     that.name = spec.name;
     that.label = spec.label;
     that.tooltip = spec.tooltip;
+    that.sort = spec.sort === undefined ? false : spec.sort;
     that.value_changed = that.value_changed || IPA.observer();
+
+    /**
+     * Value which should be check when no value supplied
+     * @type {string|null}
+     */
     that.default_value = spec.default_value || null;
+
+    /**
+     * Consider empty string as non-value -> enable setting default value in such case
+     * @type {string}
+     */
     that.default_on_empty = spec.default_on_empty === undefined ? true : spec.default_on_empty;
 
     /**
@@ -1378,17 +1445,32 @@ IPA.option_widget_base = function(spec, that) {
         }
     };
 
+    that.sort_options = function() {
+        var options = that.options.concat();
+        options.sort(function(a,b) {
+            if (a.value > b.value)
+              return 1;
+            if (a.value < b.value)
+              return -1;
+            return 0;
+        });
+        return options;
+    };
+
     that.create_options = function(container) {
-        for (var i=0; i<that.options.length; i++) {
+        container = $(container)[0];
+        var options = that.options;
+        if (that.sort) options = that.sort_options();
+        for (var i=0, l=options.length; i<l; i++) {
             var option_container = that.create_option_container();
-            var option = that.options[i];
+            var option = options[i];
             that.create_option(option, option_container);
-            option_container.appendTo(container);
+            construct.place(option_container, container);
         }
     };
 
     that.create_option_container = function() {
-        return $('<li/>');
+        return construct.create('li');
     };
 
     that._create_option = function(option, container) {
@@ -1396,11 +1478,11 @@ IPA.option_widget_base = function(spec, that) {
         var id = that._option_next_id + input_name;
         var enabled = that.enabled && option.enabled;
 
-        var opt_cont = $('<span/>', {
+        var opt_cont = construct.create('span', {
             "class": that.intput_type + '-cnt'
-        }).appendTo(container);
+        });
 
-        option.input_node = $('<input/>', {
+        option.input_node = construct.create('input', {
             id: id,
             type: that.input_type,
             name: input_name,
@@ -1408,15 +1490,16 @@ IPA.option_widget_base = function(spec, that) {
             value: option.value,
             title: option.tooltip || that.tooltip,
             change: that.on_input_change
-        }).appendTo(opt_cont);
+        }, opt_cont);
 
-        option.label_node =  $('<label/>', {
-            html: option.label || '',
+        option.label_node = construct.create('label', {
             title: option.tooltip || that.tooltip,
             'for': id
-        }).appendTo(opt_cont);
+        }, opt_cont);
+        option.label_node.textContent = option.label || '';
 
         that.new_option_id();
+        construct.place(opt_cont, container);
     };
 
     that.create_option = function(option, container) {
@@ -1444,7 +1527,6 @@ IPA.option_widget_base = function(spec, that) {
 
     that.create = function(container) {
         that.destroy();
-        that.create_options(that.$node);
         var css_class = [that.css_class, 'option_widget', that.layout,
                 that.nested ? 'nested': ''].join(' ');
 
@@ -1553,6 +1635,8 @@ IPA.option_widget_base = function(spec, that) {
 
     that.update = function(values) {
 
+        var i;
+
         var check = function(selector, uncheck) {
             $(selector, that.$node).prop('checked', !uncheck);
         };
@@ -1562,55 +1646,59 @@ IPA.option_widget_base = function(spec, that) {
             // uncheck all inputs
             check(that._selector, true /*uncheck*/);
 
+            // enable/disable the inputs and their children
+            // they might be disabled later if not checked
             var writable = !that.read_only && !!that.writable && that.enabled;
             if (!that.nested) {
                 that.update_enabled(writable);
             }
 
-            if (values && values.length > 0) {
-
-                if (that.default_on_empty && that.default_value !== null) {
-                    for (var i=0; i<values.length; i++) {
-                        if (values[i] === '') {
-                            values[i] = that.default_value;
-                        }
+            // use default value if none supplied
+            var def_used = false;
+            if (values && values.length > 0 && that.default_on_empty &&
+                    that.default_value !== null) {
+                for (i=0; i<values.length; i++) {
+                    if (values[i] === '') {
+                        values[i] = that.default_value;
+                        def_used = true;
                     }
                 }
+            } else if (!values || !values.length) {
+                var default_value = that.default_value || '';
+                values = [default_value];
+                def_used = true;
+            }
 
-                // check the option when option or some of its child should be
-                // checked
-                for (i=0; i<that.options.length; i++) {
-                    var option = that.options[i];
-                    var opt_vals = that.get_values(option);
-                    var has_opt = array.some(values, function(val) {
-                        return array.indexOf(opt_vals, val) > -1;
-                    });
+            // check the option if it or some of its children should be checked
+            for (i=0; i<that.options.length; i++) {
+                var option = that.options[i];
+                var opt_vals = that.get_values(option);
+                var has_opt = array.some(values, function(val) {
+                    return array.indexOf(opt_vals, val) > -1;
+                });
 
-                    if (has_opt) {
-                        check(that._selector+'[value="'+ option.value +'"]');
-                    }
-                    if (option.widget) {
-                        option.widget.update_enabled(writable && has_opt, false);
-                    }
+                if (has_opt) {
+                    check(that._selector+'[value="'+ option.value +'"]');
                 }
-            } else {
-                // select default if none specified
-                if (that.default_value !== null) {
-                    check(that._selector+'[value="'+that.default_value+'"]');
-                    // default was selected instead of supplied value, hence notify
-                    util.emit_delayed(that, 'value-change', { source: that });
-                } else {
-                    // otherwise select empty
-                    check(that._selector+'[value=""]');
+
+                // disable options without value
+                if (option.widget && !has_opt) {
+                    option.widget.update_enabled(false);
                 }
             }
 
+            // update nested
             for (var j=0; j<that._child_widgets.length; j++) {
                 var widget = that._child_widgets[j];
                 widget.writable = that.writable;
                 widget.read_only = that.read_only;
                 widget.enabled = that.enabled;
                 widget.update(values);
+            }
+
+            // notify if a value other than supplied was used
+            if (def_used) {
+                util.emit_delayed(that, 'value-change', { source: that });
             }
         }
 
@@ -1636,6 +1724,12 @@ IPA.option_widget_base = function(spec, that) {
         for (var i=0; i<that._child_widgets.length;i++) {
             that._child_widgets[i].update_enabled(enabled, clear);
         }
+    };
+
+    that.update_read_only = function() {
+        // a little hack
+        var enabled = that.is_writable() && that.enabled;
+        that.update_enabled(enabled);
     };
 
 
@@ -1841,6 +1935,12 @@ IPA.select_widget = function(spec) {
 
         that.widget_create(container);
 
+        that.display_control = $('<p/>', {
+            name: that.name,
+            'class': 'form-control-static',
+            style: 'display: none;'
+        }).appendTo(container);
+
         that.select = $('<select/>', {
             name: that.name,
             'class':'form-control',
@@ -1897,15 +1997,27 @@ IPA.select_widget = function(spec) {
 
     that.update = function(values) {
         var old = that.save()[0];
-        var value = values[0];
+        var value = values[0] || "";
         var option = $('option[value="'+value+'"]', that.select);
         if (option.length) {
             option.prop('selected', true);
+            that.display_control.text(option.text());
         } else {
             // default was selected instead of supplied value, hence notify
             util.emit_delayed(that,'value-change', { source: that });
         }
         that.on_value_changed();
+    };
+
+    that.update_read_only = function() {
+        if (!that.select) return;
+        if (!that.is_writable()) {
+            that.display_control.css('display', '');
+            that.select.css('display', 'none');
+        } else {
+            that.display_control.css('display', 'none');
+            that.select.css('display', '');
+        }
     };
 
     that.empty = function() {
@@ -2011,12 +2123,16 @@ IPA.textarea_widget = function (spec) {
     };
 
     that.update = function(values) {
-        var read_only = !that.is_writable();
-        that.input.prop('readOnly', read_only);
 
         var value = values && values.length ? values[0] : '';
         that.input.val(value);
         that.on_value_changed();
+    };
+
+    that.update_read_only = function() {
+        if (!that.input) return;
+        var read_only = !that.is_writable();
+        that.input.prop('readOnly', read_only);
     };
 
     that.clear = function() {
@@ -3036,30 +3152,24 @@ IPA.attribute_table_widget = function(spec) {
 
     that.create_buttons = function(container) {
 
-        that.remove_button = IPA.action_button({
+        that.remove_button = IPA.button_widget({
             name: 'remove',
             label: '@i18n:buttons.remove',
             icon: 'fa-trash-o',
-            'class': 'action-button-disabled',
-            click: function() {
-                if (!that.remove_button.hasClass('action-button-disabled')) {
-                    that.remove_handler();
-                }
-                return false;
-            }
-        }).appendTo(container);
+            enabled: false,
+            button_class: 'btn btn-link',
+            click: that.remove_handler
+        });
+        that.remove_button.create(container);
 
-        that.add_button = IPA.action_button({
+        that.add_button = IPA.button_widget({
             name: 'add',
             label: '@i18n:buttons.add',
             icon: 'fa-plus',
-            click: function() {
-                if (!that.add_button.hasClass('action-button-disabled')) {
-                    that.add_handler();
-                }
-                return false;
-            }
-        }).appendTo(container);
+            button_class: 'btn btn-link',
+            click: that.add_handler
+        });
+        that.add_button.create(container);
     };
 
     that.create = function(container) {
@@ -3073,13 +3183,12 @@ IPA.attribute_table_widget = function(spec) {
 
     that.set_enabled = function(enabled) {
         that.table_set_enabled(enabled);
-        if (enabled) {
-            if(that.add_button) {
-                that.add_button.removeClass('action-button-disabled');
-            }
-        } else {
-            $('.action-button', that.table).addClass('action-button-disabled');
+        if (!enabled) {
             that.unselect_all();
+        }
+        if (that.add_button) {
+            that.add_button.set_enabled(enabled);
+            that.remove_button.set_enabled(false);
         }
     };
 
@@ -3088,11 +3197,7 @@ IPA.attribute_table_widget = function(spec) {
         var values = that.get_selected_values();
 
         if (that.remove_button) {
-            if (values.length === 0) {
-                that.remove_button.addClass('action-button-disabled');
-            } else {
-                that.remove_button.removeClass('action-button-disabled');
-            }
+            that.remove_button.set_enabled(values.length > 0);
         }
     };
 
@@ -3675,16 +3780,6 @@ IPA.combobox_widget = function(spec) {
     that.update = function(values) {
         that.close();
 
-        if (that.writable) {
-            that.text.css('display', 'none');
-            that.input.css('display', 'inline');
-            that.open_button.css('display', 'inline');
-        } else {
-            that.text.css('display', 'inline');
-            that.input.css('display', 'none');
-            that.open_button.css('display', 'none');
-        }
-
         if (that.searchable) {
             that.filter.empty();
         }
@@ -3709,6 +3804,19 @@ IPA.combobox_widget = function(spec) {
             }
         );
         that.on_value_changed();
+    };
+
+    that.update_read_only = function() {
+        if (!that.input) return;
+        if (that.is_writable()) {
+            that.text.css('display', 'none');
+            that.input.css('display', 'inline');
+            that.open_button.css('display', 'inline');
+        } else {
+            that.text.css('display', 'inline');
+            that.input.css('display', 'none');
+            that.open_button.css('display', 'none');
+        }
     };
 
     that.set_value = function(value) {
@@ -4114,6 +4222,12 @@ IPA.button_widget = function(spec) {
     that['class'] = spec['class'];
 
     /**
+     * Override for button classes
+     * @property {string}
+     */
+    that.button_class = spec.button_class;
+
+    /**
      * Icon name
      * @property {string}
      */
@@ -4126,7 +4240,7 @@ IPA.button_widget = function(spec) {
      */
     that.on_click = function() {
 
-        if (that.click) {
+        if (that.click && that.enabled) {
             that.click();
         }
         return false;
@@ -4140,6 +4254,7 @@ IPA.button_widget = function(spec) {
             title: that.tooltip,
             label: that.label,
             'class': that['class'],
+            button_class: that.button_class,
             style: that.style,
             icon: that.icon,
             click: that.on_click
@@ -4147,6 +4262,7 @@ IPA.button_widget = function(spec) {
         that.container = that.button;
 
         that.set_enabled(that.enabled);
+        return that.button;
     };
 
     /** @inheritDoc */
