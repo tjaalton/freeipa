@@ -86,6 +86,7 @@ Depends:
  python-krbv,
  python-ldap,
  python-pyasn1,
+ slapi-nis,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
