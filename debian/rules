@@ -59,9 +59,6 @@ ifneq ($(ONLY_CLIENT), 1)
 #	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no install DESTDIR=$(DESTDIR)
 	cd ..
 
-	mkdir -p $(DESTDIR)/etc/bash_completion.d
-	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
-
 	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
 
 	rm -f $(DESTDIR)/usr/share/ipa/ui/js/dojo/dojo.js \
@@ -70,6 +67,19 @@ ifneq ($(ONLY_CLIENT), 1)
 	ln -s /usr/share/javascript/jquery/jquery.js $(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
 
 	mkdir -m 700 $(DESTDIR)/var/lib/ipa/backup
+
+	mkdir -p $(DESTDIR)/etc/apache2/conf-enabled \
+		 $(DESTDIR)/etc/bash_completion.d \
+		 $(DESTDIR)/etc/default \
+		 $(DESTDIR)/usr/share/ipa/html
+	touch $(DESTDIR)/etc/apache2/conf-enabled/ipa.conf
+	touch $(DESTDIR)/etc/apache2/conf-enabled/ipa-pki-proxy.conf
+	touch $(DESTDIR)/etc/apache2/conf-enabled/ipa-rewrite.conf
+	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
+	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
+	install -m 0755 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa-memcached
+	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
+	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
 endif
@@ -85,4 +95,4 @@ override_dh_install:
 	dh_install --fail-missing
 
 %:
-	dh $@ --with autoreconf,python2
+	dh $@ --with autoreconf,python2,systemd

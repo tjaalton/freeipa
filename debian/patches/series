@@ -5,7 +5,6 @@ port-ipa-client-automount.diff
 dont-check-for-systemd-pc.diff
 
 # send upstream
-add-debian-platform.diff
-
 fix-pykerberos-api.diff
 fix-match-hostname.diff
+add-debian-platform.diff

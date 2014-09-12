@@ -1,6 +1,7 @@
+etc/apache2/conf-enabled/*
+etc/default/ipa-memcached
 etc/ipa/html/*
-lib/systemd/system/ipa-otpd.socket
-lib/systemd/system/ipa-otpd@.service
+lib/systemd/system/*
 usr/lib/*/certmonger/dogtag-ipa-ca-renew-agent-submit
 usr/lib/*/dirsrv/plugins/libipa_cldap.so
 usr/lib/*/dirsrv/plugins/libipa_dns.so
@@ -64,6 +65,7 @@ usr/share/ipa/*.uldif
 usr/share/ipa/advise/legacy/*.template
 usr/share/ipa/copy-schema-to-ca.py
 usr/share/ipa/ffextension/*
+usr/share/ipa/html/*
 usr/share/ipa/ipa-pki-proxy.conf
 usr/share/ipa/ipa-rewrite.conf
 usr/share/ipa/ipa.conf
@@ -95,3 +97,4 @@ var/lib/ipa/backup
 var/lib/ipa/pki-ca
 var/lib/ipa/sysrestore
 var/lib/ipa/sysupgrade
+debian/generate-dndc-key.sh	usr/share/ipa
