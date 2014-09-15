@@ -97,4 +97,3 @@ var/lib/ipa/backup
 var/lib/ipa/pki-ca
 var/lib/ipa/sysrestore
 var/lib/ipa/sysupgrade
-debian/generate-dndc-key.sh	usr/share/ipa

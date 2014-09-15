@@ -80,6 +80,7 @@ ifneq ($(ONLY_CLIENT), 1)
 	install -m 0755 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa-memcached
 	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
+	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/share/ipa
 else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
 endif
