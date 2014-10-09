@@ -1,0 +1,93 @@
+Description: Fix manpage-has-errors-from-man warning (found by Lintian).
+ See https://lintian.debian.org/tags/manpage-has-errors-from-man.html for
+ an explanation. Issues found were
+ ipa-client-install.1.gz 208: warning [p 5, 4.0i]: cannot adjust line
+ default.conf.5.gz 50: warning: macro `np' not defined
+Author: Benjamin Drung <benjamin.drung@profitbricks.com>
+
+--- freeipa-4.0.2.orig/ipa-client/man/default.conf.5
++++ freeipa-4.0.2/ipa-client/man/default.conf.5
+@@ -47,14 +47,14 @@ Valid lines consist of an option name, a
+ 
+ Values should not be quoted, the quotes will not be stripped.
+ 
+-.np
++.DS L
+     # Wrong \- don't include quotes
+     verbose = "True"
+ 
+     # Right \- Properly formatted options
+     verbose = True
+     verbose=True
+-.fi
++.DE
+ 
+ Options must appear in the section named [global]. There are no other sections defined or used currently.
+ 
+--- freeipa-4.0.2.orig/ipa-client/man/ipa-client-install.1
++++ freeipa-4.0.2/ipa-client/man/ipa-client-install.1
+@@ -205,35 +205,47 @@ Unattended uninstallation. The user will
+ .TP
+ Files that will be replaced if SSSD is configured (default):
+ 
+-/etc/sssd/sssd.conf\p
++/etc/sssd/sssd.conf
+ .TP
+ Files that will be replaced if they exist and SSSD is not configured (\-\-no\-sssd):
+ 
+-/etc/ldap.conf\p
+-/etc/nss_ldap.conf\p
+-/etc/libnss\-ldap.conf\p
+-/etc/pam_ldap.conf\p
+-/etc/nslcd.conf\p
++/etc/ldap.conf
++.br
++/etc/nss_ldap.conf
++.br
++/etc/libnss\-ldap.conf
++.br
++/etc/pam_ldap.conf
++.br
++/etc/nslcd.conf
+ .TP
+ Files replaced if NTP is enabled:
+ 
+-/etc/ntp.conf\p
+-/etc/sysconfig/ntpd\p
+-/etc/ntp/step\-tickers\p
++/etc/ntp.conf
++.br
++/etc/sysconfig/ntpd
++.br
++/etc/ntp/step\-tickers
+ .TP
+ Files always created (replacing existing content):
+ 
+-/etc/krb5.conf\p
+-/etc/ipa/ca.crt\p
+-/etc/ipa/default.conf\p
+-/etc/openldap/ldap.conf\p
++/etc/krb5.conf
++.br
++/etc/ipa/ca.crt
++.br
++/etc/ipa/default.conf
++.br
++/etc/openldap/ldap.conf
+ .TP
+ Files updated, existing content is maintained:
+ 
+-/etc/nsswitch.conf\p
+-/etc/pki/nssdb\p
+-/etc/krb5.keytab\p
+-/etc/sysconfig/network\p
++/etc/nsswitch.conf
++.br
++/etc/pki/nssdb
++.br
++/etc/krb5.keytab
++.br
++/etc/sysconfig/network
+ .SH "EXIT STATUS"
+ 0 if the installation was successful
+ 

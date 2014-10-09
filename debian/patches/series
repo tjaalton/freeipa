@@ -8,3 +8,4 @@ dont-check-for-systemd-pc.diff
 fix-match-hostname.diff
 add-debian-platform.diff
 fix-hyphen-used-as-minus-sign.patch
+fix-manpage-has-errors-from-man.patch
