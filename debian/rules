@@ -77,7 +77,7 @@ ifneq ($(ONLY_CLIENT), 1)
 	touch $(DESTDIR)/etc/apache2/conf-enabled/ipa-rewrite.conf
 	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
-	install -m 0755 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa-memcached
+	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa-memcached
 	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/share/ipa
