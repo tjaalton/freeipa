@@ -200,7 +200,7 @@ Depends:
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
-Description: FreeIPA centralized identity framework -- python modules
+Description: FreeIPA centralized identity framework -- Python modules
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
  (configuration settings, access control information) and Audit (events,
