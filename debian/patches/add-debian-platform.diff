@@ -272,7 +272,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    SYSCONFIG_PKI_TOMCAT = "/etc/default/pki-tomcat"
 +    SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/dogtag/tomcat/pki-tomcat"
 +    HTTPD = "/usr/sbin/apache2ctl"
-+    BIND_LDAP_SO = "/usr/share/doc/bind-dyndb-ldap/copyright"
++    BIND_LDAP_SO = "/usr/share/doc/bind9-dyndb-ldap/copyright"
 +    NAMED_CONF = "/etc/bind/named.conf.local"
 +    NAMED_KEYTAB = "/etc/bind/named.keytab"
 +    NAMED_RFC1912_ZONES = "/etc/bind/named.conf.default-zones"
