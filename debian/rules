@@ -91,6 +91,10 @@ endif
 	find $(CURDIR)/debian/tmp -name '*.py[c,o]' -exec rm '{}' ';'
 	# fix permissions
 	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
+	# tmpfiles.d
+	mkdir -p $(CURDIR)/debian/tmp/usr/lib/tmpfiles.d
+	install -m 0644 $(CURDIR)/init/systemd/ipa.conf.tmpfiles \
+		$(CURDIR)/debian/tmp/usr/lib/tmpfiles.d/freeipa.conf
 
 override_dh_install:
 	dh_install --fail-missing
