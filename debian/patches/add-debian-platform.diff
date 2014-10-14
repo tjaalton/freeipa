@@ -455,7 +455,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +knownservices = DebianServices()
 --- /dev/null
 +++ b/ipaplatform/debian/tasks.py
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,40 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -490,6 +490,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        if fstore.has_file(filepath):
 +            fstore.restore_file(filepath)
 +            hostname_was_configured = True
++
++    def insert_ca_cert_into_systemwide_ca_store(self, cacert_path):
++        return True
 +
 +
 +tasks = DebianTaskNamespace()
