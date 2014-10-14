@@ -40,6 +40,7 @@ usr/lib/python*/dist-packages/ipaserver/install/sysupgrade.py
 usr/lib/python*/dist-packages/ipaserver/install/upgradeinstance.py
 usr/lib/python*/dist-packages/ipaserver/plugins/*
 usr/lib/python*/dist-packages/ipaserver/rpcserver*
+usr/lib/tmpfiles.d/freeipa.conf
 usr/sbin/ipa-advise
 usr/sbin/ipa-backup
 usr/sbin/ipa-ca-install
