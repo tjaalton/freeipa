@@ -12,7 +12,7 @@ PLATFORM="SUPPORTED_PLATFORM=debian"
 SOURCE = freeipa
 gentarball: UV=$(shell dpkg-parsechangelog|awk '/^Version:/ {print $$2}'|sed 's/-.*$$//')
 gentarball:
-	git archive --format=tar experimental --prefix=$(SOURCE)-$(UV)/ | xz --best > ../$(SOURCE)_$(UV).orig.tar.xz
+	git archive --format=tar upstream --prefix=$(SOURCE)-$(UV)/ | xz --best > ../$(SOURCE)_$(UV).orig.tar.xz
 
 override_dh_auto_clean:
 	for i in daemons install ipapython ipaserver ipa-client; do \
