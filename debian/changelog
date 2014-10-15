@@ -1,6 +1,6 @@
-freeipa (4.0.2-1) UNRELEASED; urgency=medium
+freeipa (4.0.3+git20141015-1) UNRELEASED; urgency=medium
 
-  * New upstream release.
+  * New upstream snapshot.
     - drop a bunch of patches, update others.
     - add new build-deps
     - add gentarball target
