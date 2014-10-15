@@ -68,13 +68,13 @@ ifneq ($(ONLY_CLIENT), 1)
 
 	mkdir -m 700 $(DESTDIR)/var/lib/ipa/backup
 
-	mkdir -p $(DESTDIR)/etc/apache2/conf-enabled \
+	mkdir -p $(DESTDIR)/etc/apache2/conf-available \
 		 $(DESTDIR)/etc/bash_completion.d \
 		 $(DESTDIR)/etc/default \
 		 $(DESTDIR)/usr/share/ipa/html
-	touch $(DESTDIR)/etc/apache2/conf-enabled/ipa.conf
-	touch $(DESTDIR)/etc/apache2/conf-enabled/ipa-pki-proxy.conf
-	touch $(DESTDIR)/etc/apache2/conf-enabled/ipa-rewrite.conf
+	touch $(DESTDIR)/etc/apache2/conf-available/ipa.conf
+	touch $(DESTDIR)/etc/apache2/conf-available/ipa-pki-proxy.conf
+	touch $(DESTDIR)/etc/apache2/conf-available/ipa-rewrite.conf
 	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
 	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa-memcached
