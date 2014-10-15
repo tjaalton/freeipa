@@ -289,9 +289,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +from ipaplatform.paths import paths
 +from ipaplatform.base.tasks import *
-+from ipaplatform.redhat.tasks import RedhatTaskNamespace
++from ipaplatform.redhat.tasks import RedHatTaskNamespace
 +
-+class DebianTaskNamespace(RedhatTaskNamespace):
++class DebianTaskNamespace(RedHatTaskNamespace):
 +
 +    def restore_network_configuration(self, fstore, statestore):
 +        filepath = paths.ETC_HOSTNAME
