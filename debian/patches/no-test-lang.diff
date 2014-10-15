@@ -1,6 +1,6 @@
 --- a/Makefile
 +++ b/Makefile
-@@ -111,7 +111,7 @@
+@@ -114,7 +114,7 @@ client-dirs:
  
  lint: bootstrap-autogen
  	./make-lint $(LINT_OPTIONS)

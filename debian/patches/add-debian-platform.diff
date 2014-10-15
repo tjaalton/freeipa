@@ -481,9 +481,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +from ipaplatform.paths import paths
 +from ipaplatform.base.tasks import *
-+from ipaplatform.fedora.tasks import FedoraTaskNamespace
++from ipaplatform.redhat.tasks import RedhatTaskNamespace
 +
-+class DebianTaskNamespace(FedoraTaskNamespace):
++class DebianTaskNamespace(RedhatTaskNamespace):
 +
 +    def restore_network_configuration(self, fstore, statestore):
 +        filepath = paths.ETC_HOSTNAME
@@ -503,9 +503,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
              packages = ["ipaplatform",
                          "ipaplatform.base",
 +                        "ipaplatform.debian",
-                         "ipaplatform.fedora"],
-         )
-     finally:
+                         "ipaplatform.fedora",
+                         "ipaplatform.redhat",
+                         "ipaplatform.rhel"],
 --- a/ipaserver/install/ntpinstance.py
 +++ b/ipaserver/install/ntpinstance.py
 @@ -46,6 +46,8 @@ class NTPInstance(service.Service):
@@ -545,16 +545,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
                      done = True
                  else:
                      fd.write(line)
---- a/setup.py
-+++ b/setup.py
-@@ -80,6 +80,7 @@ setup(
-         'ipalib.plugins',
-         'ipaplatform',
-         'ipaplatform.base',
-+        'ipaplatform.debian',
-         'ipaplatform.fedora',
-         'ipaserver',
-         'ipaserver.advise',
 --- a/ipaserver/install/ldapupdate.py
 +++ b/ipaserver/install/ldapupdate.py
 @@ -247,9 +247,9 @@ class LDAPUpdate:
@@ -619,7 +609,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          os.chown(os.path.join(dirname, 'secmod.db'), 0, pent.pw_gid)
 --- a/ipaserver/install/cainstance.py
 +++ b/ipaserver/install/cainstance.py
-@@ -1122,7 +1122,7 @@ class CAInstance(service.Service):
+@@ -1130,7 +1130,7 @@ class CAInstance(service.Service):
          os.chmod(self.ra_agent_db + "/key3.db", 0640)
          os.chmod(self.ra_agent_db + "/secmod.db", 0640)
  

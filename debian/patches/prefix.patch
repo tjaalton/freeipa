@@ -5,28 +5,39 @@ use the debian layout when installing python modules
 
 --- a/Makefile
 +++ b/Makefile
-@@ -95,9 +95,9 @@ client-install: client client-dirs
+@@ -96,11 +96,11 @@ client-install: client client-dirs
  	done
  	cd install/po && $(MAKE) install || exit 1;
  	if [ "$(DESTDIR)" = "" ]; then \
 -		$(PYTHON) setup-client.py install; \
+-		(cd ipaplatform && $(PYTHON) setup.py install); \
 +		$(PYTHON) setup-client.py install --install-layout=deb; \
++		(cd ipaplatform && $(PYTHON) setup.py install --install-layout=deb); \
  	else \
 -		$(PYTHON) setup-client.py install --root $(DESTDIR); \
+-		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR)); \
 +		$(PYTHON) setup-client.py install --root $(DESTDIR) --install-layout=deb; \
++		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb); \
  	fi
  
  client-dirs:
-@@ -169,7 +169,7 @@ server-install: server
+@@ -171,11 +171,11 @@ server: version-update
+ 
+ server-install: server
  	if [ "$(DESTDIR)" = "" ]; then \
- 		$(PYTHON) setup.py install; \
+-		$(PYTHON) setup.py install; \
+-		(cd ipaplatform && $(PYTHON) setup.py install); \
++		$(PYTHON) setup.py install --install-layout=deb; \
++		(cd ipaplatform && $(PYTHON) setup.py install --install-layout=deb); \
  	else \
 -		$(PYTHON) setup.py install --root $(DESTDIR); \
+-		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR)); \
 +		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
++		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb); \
  	fi
  
  tests: version-update tests-man-autogen
-@@ -180,7 +180,7 @@ tests-install: tests
+@@ -186,7 +186,7 @@ tests-install: tests
  	if [ "$(DESTDIR)" = "" ]; then \
  		cd ipatests; $(PYTHON) setup.py install; \
  	else \
