@@ -1,5 +1,5 @@
 # Authors:
-#   Tomas Babej <tbabej@redhat.com>
+#   Jan Cholasta <jcholast@redhat.com>
 #
 # Copyright (C) 2014  Red Hat
 # see file 'COPYING' for use and warranty information
@@ -18,16 +18,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 '''
-This Fedora base platform module exports default filesystem paths as common
-in Fedora-based systems.
+This module contains default RHEL-specific implementations of system tasks.
 '''
 
-# Fallback to default path definitions
-from ipaplatform.redhat.paths import RedHatPathNamespace
+from ipaplatform.redhat.tasks import RedHatTaskNamespace
 
 
-class FedoraPathNamespace(RedHatPathNamespace):
+class RHELTaskNamespace(RedHatTaskNamespace):
     pass
 
 
-paths = FedoraPathNamespace()
+tasks = RHELTaskNamespace()

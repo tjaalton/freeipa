@@ -166,7 +166,13 @@ def get_request_value(request_id, directive):
         root_logger.error('Failed to get request: %s' % e)
         raise
     if request:
-        return request.prop_if.Get(DBUS_CM_REQUEST_IF, directive)
+        if directive == 'ca-name':
+            ca_path = request.obj_if.get_ca()
+            ca = _cm_dbus_object(request.bus, ca_path, DBUS_CM_CA_IF,
+                                 DBUS_CM_IF)
+            return ca.obj_if.get_nickname()
+        else:
+            return request.prop_if.Get(DBUS_CM_REQUEST_IF, directive)
     else:
         return None
 
@@ -273,7 +279,7 @@ def start_tracking(nickname, secdir, password_file=None, command=None):
     certmonger to run when it renews a certificate. This command must
     reside in /usr/lib/ipa/certmonger to work with SELinux.
 
-    Returns True or False
+    Returns certificate nickname.
     """
     cm = _connect_to_certmonger()
     params = {'TRACK': True}
@@ -283,6 +289,10 @@ def start_tracking(nickname, secdir, password_file=None, command=None):
     params['key-nickname'] = nickname
     params['key-database'] = os.path.abspath(secdir)
     params['key-storage'] = 'NSSDB'
+    ca_path = cm.obj_if.find_ca_by_nickname('IPA')
+    if not ca_path:
+        raise RuntimeError('IPA CA not found')
+    params['ca'] = ca_path
     if command:
         params['cert-postsave-command'] = command
     if password_file:

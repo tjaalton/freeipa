@@ -105,6 +105,14 @@ def check_inst():
 
     return True
 
+def check_port():
+    """
+    Check that dogtag port (8443) is available.
+
+    Returns True when the port is free, False if it's taken.
+    """
+    return not ipautil.host_port_open(None, 8443)
+
 def get_preop_pin(instance_root, instance_name):
     # Only used for Dogtag 9
     preop_pin = None
@@ -1817,6 +1825,9 @@ def backup_config(dogtag_constants=None):
     if dogtag_constants is None:
         dogtag_constants = dogtag.configured_constants()
 
+    if services.knownservices.dogtag.is_running():
+        raise RuntimeError("Dogtag must be stopped when creating backup of %s"
+                           % dogtag_constants.CS_CFG_PATH)
     shutil.copy(dogtag_constants.CS_CFG_PATH,
                 dogtag_constants.CS_CFG_PATH + '.ipabkp')
 

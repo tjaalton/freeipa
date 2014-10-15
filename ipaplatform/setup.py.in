@@ -67,7 +67,9 @@ def setup_package():
             package_dir = {'ipaplatform': ''},
             packages = ["ipaplatform",
                         "ipaplatform.base",
-                        "ipaplatform.fedora"],
+                        "ipaplatform.fedora",
+                        "ipaplatform.redhat",
+                        "ipaplatform.rhel"],
         )
     finally:
         del sys.path[0]

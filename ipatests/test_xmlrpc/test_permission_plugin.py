@@ -2842,19 +2842,27 @@ class test_permission_flags(Declarative):
             'Permission with unknown flag ?? may not be modified or removed'))
 
 
+def check_legacy_results(results):
+    """Check that the expected number of legacy permissions are in $SUFFIX"""
+    legacy_permissions = [p for p in results
+                          if not p.get('ipapermissiontype')]
+    print legacy_permissions
+    assert len(legacy_permissions) == 8, len(legacy_permissions)
+    return True
+
 class test_permission_legacy(Declarative):
     """Tests for non-upgraded permissions"""
 
     tests = [
         dict(
-            desc='Search for all permissions in $SUFFIX',
+            desc='Check that some legacy permission is found in $SUFFIX',
             command=('permission_find', [],
                      {'ipapermlocation': api.env.basedn}),
             expected=dict(
-                count=16,
+                count=lambda count: count,
                 truncated=False,
-                summary=u'16 permissions matched',
-                result=lambda s: True,
+                summary=lambda s: True,
+                result=check_legacy_results,
             ),
         ),
     ]
@@ -4017,4 +4025,48 @@ class test_permission_in_accounts(Declarative):
         ),
 
         verify_permission_aci_missing(permission1, api.env.basedn),
+    ]
+
+
+class test_autoadd_operational_attrs(Declarative):
+    """Test that read access to operational attributes is automatically added
+    """
+    cleanup_commands = [
+        ('permission_del', [permission1], {'force': True}),
+    ]
+
+    tests = [
+        dict(
+            desc='Create %r' % permission1,
+            command=(
+                'permission_add', [permission1], dict(
+                    ipapermlocation=DN('cn=accounts', api.env.basedn),
+                    ipapermright=u'read',
+                    attrs=[u'ObjectClass'],
+                )
+            ),
+            expected=dict(
+                value=permission1,
+                summary=u'Added permission "%s"' % permission1,
+                result=dict(
+                    dn=permission1_dn,
+                    cn=[permission1],
+                    objectclass=objectclasses.permission,
+                    attrs=[u'ObjectClass', u'entryusn', u'createtimestamp',
+                           u'modifytimestamp'],
+                    ipapermright=[u'read'],
+                    ipapermbindruletype=[u'permission'],
+                    ipapermissiontype=[u'SYSTEM', u'V2'],
+                    ipapermlocation=[DN('cn=accounts', api.env.basedn)],
+                ),
+            ),
+        ),
+
+        verify_permission_aci(
+            permission1, DN('cn=accounts', api.env.basedn),
+            '(targetattr = "ObjectClass || createtimestamp || entryusn || ' +
+                'modifytimestamp")' +
+            '(version 3.0;acl "permission:%s";' % permission1 +
+            'allow (read) groupdn = "ldap:///%s";)' % permission1_dn,
+        ),
     ]

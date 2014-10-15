@@ -5,6 +5,7 @@ app_DATA =				\
 	10-config.update		\
 	10-enable-betxn.update		\
 	10-selinuxusermap.update	\
+	10-rootdse.update		\
 	10-uniqueness.update		\
 	10-schema_compat.update		\
 	19-managed-entries.update	\
@@ -14,6 +15,7 @@ app_DATA =				\
 	20-indices.update		\
 	20-nss_ldap.update		\
 	20-replication.update		\
+	20-sslciphers.update		\
 	20-syncrepl.update		\
 	20-user_private_groups.update	\
 	20-winsync_index.update		\
