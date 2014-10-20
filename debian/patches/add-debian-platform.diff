@@ -31,7 +31,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +"""
 --- /dev/null
 +++ b/ipaplatform/debian/paths.py
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,66 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -68,14 +68,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    HTTPD_ALIAS_DIR = "/etc/apache2/nssdb"
 +    ALIAS_CACERT_ASC = "/etc/apache2/nssdb/cacert.asc"
 +    ALIAS_PWDFILE_TXT = "/etc/apache2/nssdb/pwdfile.txt"
-+    HTTPD_CONF_D_DIR = "/etc/apache2/conf-available/"
-+    HTTPD_IPA_PKI_PROXY_CONF = "/etc/apache2/conf-available/ipa-pki-proxy.conf"
-+    HTTPD_IPA_REWRITE_CONF = "/etc/apache2/conf-available/ipa-rewrite.conf"
-+    HTTPD_IPA_CONF = "/etc/apache2/conf-available/ipa.conf"
++    HTTPD_CONF_D_DIR = "/etc/apache2/conf-enabled/"
++    HTTPD_IPA_PKI_PROXY_CONF = "/etc/apache2/conf-enabled/ipa-pki-proxy.conf"
++    HTTPD_IPA_REWRITE_CONF = "/etc/apache2/conf-enabled/ipa-rewrite.conf"
++    HTTPD_IPA_CONF = "/etc/apache2/conf-enabled/ipa.conf"
 +    HTTPD_NSS_CONF = "/etc/apache2/mods-available/nss.conf"
-+    HTTPD_SSL_CONF = "/etc/apache2/conf-available/ssl.conf"
++    HTTPD_SSL_CONF = "/etc/apache2/conf-enabled/ssl.conf"
 +    IPA_KEYTAB = "/etc/apache2/ipa.keytab"
 +    HTTPD_PASSWORD_CONF = "/etc/apache2/password.conf"
++    ETC_SYSCONFIG_DIR = "/etc/default"
 +    SYSCONFIG_PKI = "/etc/dogtag/"
 +    SYSCONFIG_PKI_TOMCAT = "/etc/default/pki-tomcat"
 +    SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/dogtag/tomcat/pki-tomcat"
@@ -99,7 +100,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,161 @@
+@@ -0,0 +1,174 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -127,15 +128,26 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +from ipaplatform.tasks import tasks
 +from ipaplatform.base import services as base_services
-+
++from ipaplatform.redhat import services as redhat_services
 +from ipapython import ipautil
 +from ipapython.ipa_log_manager import root_logger
 +from ipalib import api
 +from ipaplatform.paths import paths
 +
++# Mappings from service names as FreeIPA code references to these services
++# to their actual systemd service names
++debian_system_units = redhat_services.redhat_system_units
++
++debian_system_units['pki-tomcatd'] = 'pki-tomcatd.service'
++debian_system_units['pki_tomcatd'] = debian_system_units['pki-tomcatd']
++
 +# Service classes that implement Debian-specific behaviour
 +
-+class DebianService(base_services.PlatformService):
++class DebianService(redhat_services.RedHatService):
++    system_units = debian_system_units
++
++
++class DebianSysvService(base_services.PlatformService):
 +    def __wait_for_open_ports(self, instance_name=""):
 +        """
 +        If this is a service we need to wait for do so.
@@ -155,7 +167,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +            update_service_list = True
 +        else:
 +            update_service_list = False
-+        super(DebianService, self).stop(instance_name)
++        super(DebianSysvService, self).stop(instance_name)
 +
 +    def start(self, instance_name='', capture_output=True, wait=True):
 +        ipautil.run([paths.SBIN_SERVICE, self.service_name, "start",
@@ -166,7 +178,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +            update_service_list = False
 +        if wait and self.is_running(instance_name):
 +            self.__wait_for_open_ports(instance_name)
-+        super(DebianService, self).start(instance_name)
++        super(DebianSysvService, self).start(instance_name)
 +
 +    def restart(self, instance_name='', capture_output=True, wait=True):
 +        ipautil.run([paths.SBIN_SERVICE, self.service_name, "restart",
@@ -218,7 +230,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        return True
 +
 +
-+class DebianSSHService(DebianService):
++class DebianSSHService(DebianSysvService):
 +    def get_config_dir(self, instance_name=""):
 +        return '/etc/ssh'
 +
@@ -226,20 +238,22 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +# of specified name
 +
 +def debian_service_class_factory(name):
++    if name == 'dirsrv':
++        return redhat_services.RedHatDirectoryService(name)
++    if name == 'ipa':
++        return redhat_services.RedHatIPAService(name)
 +    if name == 'httpd':
-+        return DebianService("apache2")
-+    if name == 'ipa_memcached':
-+        return DebianService("ipa-memcached")
++        return DebianSysvService("apache2")
 +    if name == 'kadmin':
-+        return DebianService("krb5-admin-server")
++        return DebianSysvService("krb5-admin-server")
 +    if name == 'krb5kdc':
-+        return DebianService("krb5-kdc")
++        return DebianSysvService("krb5-kdc")
 +    if name == 'messagebus':
-+        return DebianService("dbus")
++        return DebianSysvService("dbus")
 +    if name == 'named':
-+        return DebianService("bind9")
++        return DebianSysvService("bind9")
 +    if name == 'ntpd':
-+        return DebianService("ntp")
++        return DebianSysvService("ntp")
 +    if name == 'sshd':
 +        return DebianSSHService(name)
 +    return DebianService(name)
@@ -263,7 +277,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +knownservices = DebianServices()
 --- /dev/null
 +++ b/ipaplatform/debian/tasks.py
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,53 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -293,15 +307,28 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +class DebianTaskNamespace(RedHatTaskNamespace):
 +
-+    def restore_network_configuration(self, fstore, statestore):
-+        filepath = paths.ETC_HOSTNAME
-+        if fstore.has_file(filepath):
-+            fstore.restore_file(filepath)
-+            hostname_was_configured = True
-+
-+    def insert_ca_cert_into_systemwide_ca_store(self, cacert_path):
++    def restore_pre_ipa_client_configuration(self, fstore, statestore,
++                                             was_sssd_installed,
++                                             was_sssd_configured):
 +        return True
 +
++    def set_nisdomain(self, nisdomain):
++        return True
++
++    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
++        return True
++
++    def modify_pam_to_use_krb5(self, statestore):
++        return True
++
++    def insert_ca_cert_into_systemwide_ca_store(self, ca_certs):
++        return True
++
++    def remove_ca_certs_from_systemwide_ca_store(self):
++        return True
++
++    def restore_network_configuration(self, fstore, statestore):
++        return True
 +
 +tasks = DebianTaskNamespace()
 --- a/ipaplatform/setup.py.in
@@ -479,7 +506,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  [Service]
  Type=forking
 -EnvironmentFile=/etc/sysconfig/ipa_memcached
-+EnvironmentFile=/etc/default/ipa-memcached
++EnvironmentFile=/etc/default/ipa_memcached
  PIDFile=/var/run/ipa_memcached/ipa_memcached.pid
  ExecStart=/usr/bin/memcached -d -s $SOCKET_PATH -u $USER -m $CACHESIZE -c $MAXCONN -P /var/run/ipa_memcached/ipa_memcached.pid $OPTIONS
  

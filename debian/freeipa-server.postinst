@@ -2,10 +2,29 @@
 set -e
 
 if [ "$1" = configure ]; then
-    if [ -e /usr/share/apache2/apache2-maintscript-helper ] ; then
+    if [ -e /usr/share/apache2/apache2-maintscript-helper ]; then
         . /usr/share/apache2/apache2-maintscript-helper
-        apache2_invoke enmod auth_kerb expires headers proxy rewrite || exit $?
+	if [ ! -e /etc/apache2/mods-enabled/auth_kerb.load ]; then
+            apache2_invoke enmod auth_kerb || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/expires.load ]; then
+            apache2_invoke enmod expires || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then
+            apache2_invoke enmod headers || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy.load ]; then
+            apache2_invoke enmod proxy || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/rewrite.load ]; then
+            apache2_invoke enmod rewrite || exit $?
+        fi
     fi
+fi
+
+if [ ! -e /run/ipa_memcached ]; then
+    mkdir -m 0700 /run/ipa_memcached
+    chown www-data:www-data /run/ipa_memcached
 fi
 
 #DEBHELPER#

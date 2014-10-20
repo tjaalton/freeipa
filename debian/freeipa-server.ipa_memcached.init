@@ -11,8 +11,8 @@ MAXCONN=1024
 CACHESIZE=64
 OPTIONS=""
 
-if [ -f /etc/default/ipa-memcached ];then
-    . /etc/default/ipa-memcached
+if [ -f /etc/default/ipa_memcached ];then
+    . /etc/default/ipa_memcached
 fi
 
 prog="ipa_memcached"
@@ -40,7 +40,7 @@ do_stop () {
 # See how we were called.
 case "$1" in
     start)
-        log_daemon_msg "Starting ipa-memcached"
+        log_daemon_msg "Starting ipa_memcached"
         do_start
         case "$?" in
                 0) log_end_msg 0 ;;
@@ -50,7 +50,7 @@ case "$1" in
         esac
         ;;
     stop)
-        log_daemon_msg "Stopping ipa-memcached"
+        log_daemon_msg "Stopping ipa_memcached"
         do_stop
         case "$?" in
                 0) log_end_msg 0 ;;

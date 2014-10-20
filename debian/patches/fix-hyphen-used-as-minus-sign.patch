@@ -5,7 +5,7 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
 
 --- a/install/tools/man/ipa-adtrust-install.1
 +++ b/install/tools/man/ipa-adtrust-install.1
-@@ -107,7 +107,7 @@
+@@ -107,7 +107,7 @@ The name of the user with administrative
  \fB\-a\fR, \fB\-\-admin\-password\fR=\fIpassword\fR
  The password of the user with administrative privileges for this IPA server. Will be asked interactively if \fB\-U\fR is not specified.
  .TP
@@ -16,7 +16,7 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  Enables support for trusted domains users for old clients through Schema Compatibility plugin.
 --- a/install/tools/man/ipa-replica-conncheck.1
 +++ b/install/tools/man/ipa-replica-conncheck.1
-@@ -70,13 +70,13 @@
+@@ -70,13 +70,13 @@ Output only errors
  
  .SH "EXAMPLES"
  .TP
@@ -35,7 +35,7 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  .SH "EXIT STATUS"
 --- a/install/tools/man/ipa-server-install.1
 +++ b/install/tools/man/ipa-server-install.1
-@@ -49,7 +49,7 @@
+@@ -49,7 +49,7 @@ Create home directories for users on the
  The fully\-qualified DNS name of this server. If the hostname does not match system hostname, the system hostname will be updated accordingly to prevent service failures.
  .TP
  \fB\-\-ip\-address\fR=\fIIP_ADDRESS\fR
@@ -44,18 +44,9 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  .TP
  \fB\-N\fR, \fB\-\-no\-ntp\fR
  Do not configure NTP
-@@ -95,7 +95,7 @@
- 
- If the CA certificate chain is in PKCS#7 format you can convert it to PEM using:
- 
--    openssl pkcs7 -in PKCS7_FILE -print_certs -out PEM_FILE
-+    openssl pkcs7 \-in PKCS7_FILE \-print_certs \-out PEM_FILE
- .TP
- \fB\-\-no\-pkinit\fR
- Disables pkinit setup steps
 --- a/ipatests/man/ipa-test-config.1
 +++ b/ipatests/man/ipa-test-config.1
-@@ -22,7 +22,7 @@
+@@ -22,7 +22,7 @@ ipa\-test\-config \- Generate FreeIPA te
  .SH "SYNOPSIS"
  ipa\-test\-config [options]
  .br
@@ -64,7 +55,7 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  .br
  ipa\-test\-config [options] hostname
  .SH "DESCRIPTION"
-@@ -37,7 +37,7 @@
+@@ -37,7 +37,7 @@ If run without arguments, it prints out
  host.
  Another host may be specified as an argument, or via the \-\-master,
  \-\-replica, and \-\-client options.

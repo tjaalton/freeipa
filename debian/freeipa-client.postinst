@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+if [ ! -e /run/ipa ]; then
+    mkdir -m 0700 /run/ipa
+fi
+
+#DEBHELPER#

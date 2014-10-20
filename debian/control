@@ -4,7 +4,7 @@ Priority: extra
 Maintainer: Debian FreeIPA Team <pkg-freeipa-devel@lists.alioth.debian.org>
 Uploaders: Timo Aaltonen <tjaalton@ubuntu.com>
 Build-Depends:
- 389-ds-base-dev (>= 1.1.3),
+ 389-ds-base-dev (>= 1.3.3.2),
  check,
  debhelper (>= 9),
  dh-autoreconf,
@@ -32,7 +32,7 @@ Build-Depends:
  libverto-dev,
  libxmlrpc-core-c3-dev (>= 1.33.14),
  python-all-dev,
- python-dnspython,
+ python-dnspython (>= 1.11.1),
  python-kerberos,
  python-krbv,
  python-ldap,
@@ -46,7 +46,7 @@ Build-Depends:
  python-openssl,
  python-polib,
  python-pyasn1,
- python-qrcode,
+ python-qrcode (>= 5.0.0),
  python-setuptools,
  python-sss (>= 1.8.0),
  python-yubico,
@@ -62,11 +62,12 @@ Homepage: http://www.freeipa.org
 Package: freeipa-server
 Architecture: any
 Depends:
- 389-ds-base,
+ 389-ds-base (>= 1.3.3.2),
  acl,
  apache2,
  bind9,
  bind9-dyndb-ldap,
+ certmonger (>= 0.75.14),
  dogtag-pki-server-theme,
  freeipa-admintools (= ${binary:Version}),
  freeipa-client (= ${binary:Version}),
@@ -89,7 +90,7 @@ Depends:
  python-krbv,
  python-ldap,
  python-pyasn1,
- slapi-nis,
+ slapi-nis (>= 0.54),
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
@@ -139,7 +140,7 @@ Depends:
  python-freeipa (= ${binary:Version}),
  python-krbv,
  python-ldap,
- sssd (>= 1.9.2),
+ sssd (>= 1.11.1),
  wget,
  ${misc:Depends},
  ${python:Depends},

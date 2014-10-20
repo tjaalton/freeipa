@@ -1,4 +1,5 @@
 usr/lib/python*/dist-packages/ipaclient/*.py
+usr/lib/tmpfiles.d/freeipa-client.conf
 usr/sbin/ipa-client-automount
 usr/sbin/ipa-client-install
 usr/sbin/ipa-getkeytab

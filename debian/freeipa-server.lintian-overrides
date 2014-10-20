@@ -1,2 +1,4 @@
 # lintian is lying
 python-script-but-no-python-dep
+# we really need apache2
+web-application-should-not-depend-unconditionally-on-apache2

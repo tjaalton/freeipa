@@ -51,12 +51,17 @@ endif
 override_dh_auto_test:
 
 override_dh_auto_install:
+	# tmpfiles.d
+	mkdir -p $(DESTDIR)/usr/lib/tmpfiles.d
+	echo "d /var/run/ipa 0700 root root" > \
+		$(DESTDIR)/usr/lib/tmpfiles.d/freeipa-client.conf
 ifneq ($(ONLY_CLIENT), 1)
+	echo "d /var/run/ipa_memcached 0700 www-data www-data" > \
+		$(DESTDIR)/usr/lib/tmpfiles.d/freeipa-server.conf
+
 	# Force re-generate of platform support
 	rm -f ipapython/services.py
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no install DESTDIR=$(DESTDIR)
-#	cd selinux
-#	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no install DESTDIR=$(DESTDIR)
 	cd ..
 
 	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
@@ -66,18 +71,23 @@ ifneq ($(ONLY_CLIENT), 1)
 	ln -s /usr/share/javascript/dojo/dojo.js $(DESTDIR)/usr/share/ipa/ui/js/dojo/dojo.js
 	ln -s /usr/share/javascript/jquery/jquery.js $(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
 
-	mkdir -m 700 $(DESTDIR)/var/lib/ipa/backup
+	mkdir -p -m 700 $(DESTDIR)/var/lib/ipa/backup
 
-	mkdir -p $(DESTDIR)/etc/apache2/conf-available \
-		 $(DESTDIR)/etc/bash_completion.d \
+	mkdir -p $(DESTDIR)/etc/bash_completion.d \
 		 $(DESTDIR)/etc/default \
 		 $(DESTDIR)/usr/share/ipa/html
-	touch $(DESTDIR)/etc/apache2/conf-available/ipa.conf
-	touch $(DESTDIR)/etc/apache2/conf-available/ipa-pki-proxy.conf
-	touch $(DESTDIR)/etc/apache2/conf-available/ipa-rewrite.conf
+
+	touch $(DESTDIR)/usr/share/ipa/html/ca.crt
+	touch $(DESTDIR)/usr/share/ipa/html/configure.jar
+	touch $(DESTDIR)/usr/share/ipa/html/kerberosauth.xpi
+	touch $(DESTDIR)/usr/share/ipa/html/krb.con
+	touch $(DESTDIR)/usr/share/ipa/html/krb.js
 	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
+	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
+	touch $(DESTDIR)/usr/share/ipa/html/preferences.html
+
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
-	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa-memcached
+	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa_memcached
 	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/share/ipa
@@ -91,10 +101,6 @@ endif
 	find $(CURDIR)/debian/tmp -name '*.py[c,o]' -exec rm '{}' ';'
 	# fix permissions
 	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
-	# tmpfiles.d
-	mkdir -p $(CURDIR)/debian/tmp/usr/lib/tmpfiles.d
-	install -m 0644 $(CURDIR)/init/systemd/ipa.conf.tmpfiles \
-		$(CURDIR)/debian/tmp/usr/lib/tmpfiles.d/freeipa.conf
 
 override_dh_install:
 	dh_install --fail-missing
