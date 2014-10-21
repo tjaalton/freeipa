@@ -1,6 +1,16 @@
 #!/bin/sh
 set -e
 
+if [ "$1" = configure ]; then
+    if [ ! -e /etc/pki/nssdb ]; then
+        echo "\n" > /tmp/pwd
+        mkdir -p /etc/pki/nssdb
+        certutil -N -d /etc/pki/nssdb -f /tmp/pwd
+        chmod 644 /etc/pki/nssdb/*
+        rm /tmp/pwd
+    fi
+fi
+
 if [ ! -e /run/ipa ]; then
     mkdir -m 0700 /run/ipa
 fi

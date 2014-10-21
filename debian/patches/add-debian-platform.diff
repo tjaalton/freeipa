@@ -62,7 +62,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +class DebianPathNamespace(BasePathNamespace):
 +    OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
-+    NSS_DB_DIR = "sql:/etc/pki/nssdb"
++    NSS_DB_DIR = "/etc/pki/nssdb"
 +    SBIN_SERVICE = "/usr/sbin/service"
 +    ETC_HTTPD_DIR = "/etc/apache2"
 +    HTTPD_ALIAS_DIR = "/etc/apache2/nssdb"
@@ -481,7 +481,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  d /var/run/ipa 0700 root root
 --- a/ipaserver/install/bindinstance.py
 +++ b/ipaserver/install/bindinstance.py
-@@ -482,7 +482,7 @@ class BindInstance(service.Service):
+@@ -483,7 +483,7 @@ class BindInstance(service.Service):
      suffix = ipautil.dn_attribute_property('_suffix')
  
      def setup(self, fqdn, ip_address, realm_name, domain_name, forwarders, ntp,
@@ -490,7 +490,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
                ca_configured=None):
          self.named_user = named_user
          self.fqdn = fqdn
-@@ -844,7 +844,7 @@ class BindInstance(service.Service):
+@@ -874,7 +874,7 @@ class BindInstance(service.Service):
  
      def __generate_rndc_key(self):
          installutils.check_entropy()
