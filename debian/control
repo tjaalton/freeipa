@@ -69,6 +69,7 @@ Depends:
  bind9-dyndb-ldap,
  certmonger (>= 0.75.14),
  dogtag-pki-server-theme,
+ fonts-font-awesome,
  freeipa-admintools (= ${binary:Version}),
  freeipa-client (= ${binary:Version}),
  krb5-admin-server,
