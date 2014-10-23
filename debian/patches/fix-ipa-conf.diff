@@ -18,6 +18,17 @@
    KrbSaveCredentials on
    KrbConstrainedDelegation on
    Require valid-user
+@@ -138,8 +138,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+ 
+ 
+ #  List explicitly only the fonts we want to serve
+-Alias /ipa/ui/fonts/open-sans "/usr/share/fonts/open-sans"
+-Alias /ipa/ui/fonts/fontawesome "/usr/share/fonts/fontawesome"
++Alias /ipa/ui/fonts/open-sans "/usr/share/fonts/truetype/open-sans"
++Alias /ipa/ui/fonts/fontawesome "/usr/share/fonts/truetype/font-awesome"
+ <Directory "/usr/share/fonts">
+   SetHandler None
+   AllowOverride None
 @@ -175,14 +175,14 @@ Alias /ipa/wsgi "/usr/share/ipa/wsgi"
  </Directory>
  
