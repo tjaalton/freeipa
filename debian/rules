@@ -51,14 +51,7 @@ endif
 override_dh_auto_test:
 
 override_dh_auto_install:
-	# tmpfiles.d
-	mkdir -p $(DESTDIR)/usr/lib/tmpfiles.d
-	echo "d /var/run/ipa 0700 root root" > \
-		$(DESTDIR)/usr/lib/tmpfiles.d/freeipa-client.conf
 ifneq ($(ONLY_CLIENT), 1)
-	echo "d /var/run/ipa_memcached 0700 www-data www-data" > \
-		$(DESTDIR)/usr/lib/tmpfiles.d/freeipa-server.conf
-
 	# Force re-generate of platform support
 	rm -f ipapython/services.py
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no install DESTDIR=$(DESTDIR)
