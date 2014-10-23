@@ -41,11 +41,20 @@ License: GPL-3+ with OpenSSL exception
  Program may make changes or additions to the list of Approved
  Interfaces.
 
+Files: daemons/ipa-slapi-plugins/ipa-dns/ipa_dns.c
+Copyright: 2001, Sun Microsystems, Inc. Used by permission.
+           2013, Red Hat, Inc.
+License: GPL-2
+
 Files: debian/*
 Copyright: Michele Baldessari michele@pupazzo.org>
            Timo Aaltonen <tjaalton@ubuntu.com>
-License: GPL-3+
+License: GPL-2+
 
 License: GPL-3+
  On Debian machines the full text of the GNU General Public License
- can be found in the file /usr/share/common-licenses/GPL-3.
+ version 3 can be found in the file /usr/share/common-licenses/GPL-3.
+
+License: GPL-2
+ On Debian machines the full text of the GNU General Public License
+ version 2 can be found in the file /usr/share/common-licenses/GPL-2.
