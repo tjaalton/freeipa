@@ -31,7 +31,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +"""
 --- /dev/null
 +++ b/ipaplatform/debian/paths.py
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,66 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -86,6 +86,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    NAMED_RFC1912_ZONES = "/etc/bind/named.conf.default-zones"
 +    ETC_DEBIAN_VERSION = "/etc/debian_version"
 +    SYSCONFIG_NTPD = "/etc/default/ntp"
++    LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
 +    SETUP_DS_PL = "/usr/sbin/setup-ds"
 +    VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
 +    VAR_KRB5KDC_K5_REALM = "/var/lib/krb5kdc/.k5."
@@ -99,7 +100,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,174 @@
+@@ -0,0 +1,184 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -228,6 +229,14 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    def tune_nofile_platform(self):
 +        return True
 +
++# For services which have no Debian counterpart
++class DebianNoService(base_services.PlatformService):
++    def restart(self):
++        return True
++
++    def disable(self):
++        return True
++
 +
 +class DebianSSHService(DebianSysvService):
 +    def get_config_dir(self, instance_name=""):
@@ -239,6 +248,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +def debian_service_class_factory(name):
 +    if name == 'dirsrv':
 +        return redhat_services.RedHatDirectoryService(name)
++    if name == 'domainname':
++        return DebianNoService(name)
 +    if name == 'ipa':
 +        return redhat_services.RedHatIPAService(name)
 +    if name == 'httpd':
@@ -395,7 +406,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          try:
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -202,14 +202,14 @@ class HTTPInstance(service.Service):
+@@ -118,6 +118,7 @@ class HTTPInstance(service.Service):
+         self.step("creating a keytab for httpd", self.__create_http_keytab)
+         self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
+         self.step("configuring SELinux for httpd", self.configure_selinux_for_httpd)
++        ipautil.run(["/usr/sbin/a2enmod", "nss"], capture_output=True)
+         self.step("restarting httpd", self.__start)
+         self.step("configuring httpd to start on boot", self.__enable)
+ 
+@@ -204,14 +205,14 @@ class HTTPInstance(service.Service):
          self.move_service(self.principal)
          self.add_cert_to_service()
  
@@ -412,7 +431,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  
      def __configure_http(self):
          target_fname = paths.HTTPD_IPA_CONF
-@@ -255,11 +255,11 @@ class HTTPInstance(service.Service):
+@@ -260,11 +261,11 @@ class HTTPInstance(service.Service):
          installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSRequireSafeNegotiation', 'on', False)
  
      def __set_mod_nss_passwordfile(self):
@@ -426,7 +445,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
              print "Adding Include conf.d/ipa-rewrite to %s failed." % paths.HTTPD_NSS_CONF
  
      def __setup_ssl(self):
-@@ -300,7 +300,7 @@ class HTTPInstance(service.Service):
+@@ -305,7 +306,7 @@ class HTTPInstance(service.Service):
          os.chmod(certs.NSS_DIR + "/secmod.db", 0660)
          os.chmod(certs.NSS_DIR + "/pwdfile.txt", 0660)
  
@@ -435,6 +454,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          os.chown(certs.NSS_DIR + "/cert8.db", 0, pent.pw_gid )
          os.chown(certs.NSS_DIR + "/key3.db", 0, pent.pw_gid )
          os.chown(certs.NSS_DIR + "/secmod.db", 0, pent.pw_gid )
+@@ -400,6 +401,8 @@ class HTTPInstance(service.Service):
+         if not running is None:
+             self.stop()
+ 
++        ipautil.run(["/usr/sbin/a2dismod", "nss"], capture_output=True)
++
+         self.stop_tracking_certificates()
+         if not enabled is None and not enabled:
+             self.disable()
 --- a/ipaserver/install/ipa_server_certinstall.py
 +++ b/ipaserver/install/ipa_server_certinstall.py
 @@ -148,7 +148,7 @@ class ServerCertInstall(admintool.AdminT
