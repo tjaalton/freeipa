@@ -31,7 +31,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +"""
 --- /dev/null
 +++ b/ipaplatform/debian/paths.py
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,69 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -79,6 +79,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    SYSCONFIG_PKI = "/etc/dogtag/"
 +    SYSCONFIG_PKI_TOMCAT = "/etc/default/pki-tomcat"
 +    SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/dogtag/tomcat/pki-tomcat"
++    SYSCONFIG_DIRSRV = "/etc/default/dirsrv"
++    SYSCONFIG_DIRSRV_INSTANCE = "/etc/default/dirsrv-%s"
++    SYSCONFIG_DIRSRV_SYSTEMD = "/etc/default/dirsrv.systemd"
 +    HTTPD = "/usr/sbin/apache2ctl"
 +    BIND_LDAP_SO = "/usr/share/doc/bind9-dyndb-ldap/copyright"
 +    NAMED_CONF = "/etc/bind/named.conf.local"
