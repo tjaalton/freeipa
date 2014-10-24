@@ -3,11 +3,12 @@ set -e
 
 if [ "$1" = configure ]; then
     if [ ! -e /etc/pki/nssdb ]; then
-        echo "\n" > /tmp/pwd
+        tmp=$(mktemp) || exit
+        echo "\n" > $tmp
         mkdir -p /etc/pki/nssdb
-        certutil -N -d /etc/pki/nssdb -f /tmp/pwd
+        certutil -N -d /etc/pki/nssdb -f $tmp
         chmod 644 /etc/pki/nssdb/*
-        rm /tmp/pwd
+        rm $tmp
     fi
 fi
 
