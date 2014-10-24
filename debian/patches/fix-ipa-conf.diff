@@ -1,3 +1,4 @@
+Description: Fix paths
 --- a/install/conf/ipa.conf
 +++ b/install/conf/ipa.conf
 @@ -38,7 +38,7 @@ FileETag None
@@ -42,7 +43,7 @@
    KrbServiceName HTTP
    KrbAuthRealms $REALM
 -  Krb5KeyTab /etc/httpd/conf/ipa.keytab
-+  Krb5KeyTab /etc/apache/ipa.keytab
++  Krb5KeyTab /etc/apache2/ipa.keytab
    KrbSaveCredentials on
    Require valid-user
    ErrorDocument 401 /ipa/errors/unauthorized.html

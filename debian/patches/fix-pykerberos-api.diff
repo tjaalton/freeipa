@@ -1,3 +1,4 @@
+Description: we have a newer pykerberos than Fedora
 diff --git a/ipalib/rpc.py b/ipalib/rpc.py
 index 81e7aa3..ce5f2a0 100644
 --- a/ipalib/rpc.py
