@@ -2,3 +2,5 @@
 python-script-but-no-python-dep
 # we really need apache2
 web-application-should-not-depend-unconditionally-on-apache2
+# embedded versions used for better performance and function
+embedded-javascript-library
