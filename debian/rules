@@ -59,11 +59,6 @@ ifneq ($(ONLY_CLIENT), 1)
 
 	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
 
-	rm -f $(DESTDIR)/usr/share/ipa/ui/js/dojo/dojo.js \
-		$(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
-	ln -s /usr/share/javascript/dojo/dojo.js $(DESTDIR)/usr/share/ipa/ui/js/dojo/dojo.js
-	ln -s /usr/share/javascript/jquery/jquery.js $(DESTDIR)/usr/share/ipa/ui/js/libs/jquery.js
-
 	mkdir -p -m 700 $(DESTDIR)/var/lib/ipa/backup
 
 	mkdir -p $(DESTDIR)/etc/bash_completion.d \
