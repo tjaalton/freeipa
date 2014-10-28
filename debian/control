@@ -175,7 +175,8 @@ Description: FreeIPA centralized identity framework -- admintools
 
 Package: freeipa-tests
 Architecture: any
-Depends: xz, ${misc:Depends}, ${python:Depends}
+Depends: ${misc:Depends}, ${python:Depends},
+ xz-utils,
 Description: FreeIPA centralized identity framework -- tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
