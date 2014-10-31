@@ -91,7 +91,7 @@ Depends:
  python-krbv,
  python-ldap,
  python-pyasn1,
- python-qrcode,
+ python-qrcode (>= 5.0.0),
  python-selinux,
  python-yubico,
  slapi-nis (>= 0.54),
