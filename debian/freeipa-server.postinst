@@ -7,6 +7,12 @@ if [ "$1" = configure ]; then
 	if [ ! -e /etc/apache2/mods-enabled/auth_kerb.load ]; then
             apache2_invoke enmod auth_kerb || exit $?
         fi
+	if [ ! -e /etc/apache2/mods-enabled/authz_user.load ]; then
+            apache2_invoke enmod authz_user || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/deflate.load ]; then
+            apache2_invoke enmod deflate || exit $?
+        fi
 	if [ ! -e /etc/apache2/mods-enabled/expires.load ]; then
             apache2_invoke enmod expires || exit $?
         fi
