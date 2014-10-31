@@ -78,7 +78,7 @@ Depends:
  krb5-pkinit,
  ldap-utils,
  libapache2-mod-auth-kerb (>= 5.4-2.2~),
- libapache2-mod-nss,
+ libapache2-mod-nss (>= 1.0.10-2~),
  libapache2-mod-wsgi,
  libjs-dojo-core,
  libjs-jquery,
