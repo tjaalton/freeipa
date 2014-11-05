@@ -84,7 +84,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    SYSCONFIG_DIRSRV_SYSTEMD = "/etc/default/dirsrv.systemd"
 +    HTTPD = "/usr/sbin/apache2ctl"
 +    BIND_LDAP_SO = "/usr/share/doc/bind9-dyndb-ldap/copyright"
-+    NAMED_CONF = "/etc/bind/named.conf.local"
++    NAMED_CONF = "/etc/bind/named.conf"
 +    NAMED_KEYTAB = "/etc/bind/named.keytab"
 +    NAMED_RFC1912_ZONES = "/etc/bind/named.conf.default-zones"
 +    ETC_DEBIAN_VERSION = "/etc/debian_version"
