@@ -66,7 +66,7 @@ Depends:
  acl,
  apache2,
  bind9,
- bind9-dyndb-ldap (>= 6.0-2~),
+ bind9-dyndb-ldap (>= 6.0-3~),
  certmonger (>= 0.75.14),
  dogtag-pki-server-theme,
  fonts-font-awesome,
