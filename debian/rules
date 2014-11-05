@@ -93,5 +93,12 @@ endif
 override_dh_install:
 	dh_install --fail-missing
 
+ifneq ($(ONLY_CLIENT), 1)
+	mkdir -m 770 -p $(CURDIR)/debian/freeipa-server/var/cache/bind/data
+endif
+
+override_dh_fixperms:
+	dh_fixperms -X var/cache/bind/data
+
 %:
 	dh $@ --with autoreconf,python2,systemd

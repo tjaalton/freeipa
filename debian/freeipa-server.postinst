@@ -26,6 +26,7 @@ if [ "$1" = configure ]; then
             apache2_invoke enmod rewrite || exit $?
         fi
     fi
+    chown root:bind /var/cache/bind/data
 fi
 
 if [ ! -e /run/ipa_memcached ]; then
