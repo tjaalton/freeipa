@@ -10,6 +10,9 @@ freeipa (4.0.4-3) UNRELEASED; urgency=medium
   * Add non-standard-dir-perm to server lintian overrides.
   * copyright: Fix a typo.
   * control: Bump dependency on bind9-dyndb-ldap to 6.0-3~.
+  * control: Move dependency on python-qrcode and python-yubico from
+    server to python-freeipa and drop python-selinux which belongs to
+    pki-server.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 04 Nov 2014 12:16:54 +0200
 

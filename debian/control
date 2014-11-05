@@ -91,9 +91,6 @@ Depends:
  python-krbv,
  python-ldap,
  python-pyasn1,
- python-qrcode (>= 5.0.0),
- python-selinux,
- python-yubico,
  slapi-nis (>= 0.54),
  ${misc:Depends},
  ${python:Depends},
@@ -203,6 +200,8 @@ Depends:
  python-netaddr,
  python-nss,
  python-openssl,
+ python-qrcode (>= 5.0.0),
+ python-yubico,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
