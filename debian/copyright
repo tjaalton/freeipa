@@ -49,7 +49,7 @@ License: GPL-2
 Files: install/share/05rfc2247.ldif install/share/certmap.conf.template
 Copyright: 2001, Sun Microsystems, Inc.
            2005, Red Hat, Inc.
-Copyright: GPL-2
+License: GPL-2
 
 Files: install/ui/css/patternfly.css
 Copyright: Nicolas Gallagher
