@@ -59,8 +59,6 @@ ifneq ($(ONLY_CLIENT), 1)
 
 	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
 
-	mkdir -p -m 700 $(DESTDIR)/var/lib/ipa/backup
-
 	mkdir -p $(DESTDIR)/etc/bash_completion.d \
 		 $(DESTDIR)/etc/default \
 		 $(DESTDIR)/usr/share/ipa/html
@@ -95,10 +93,11 @@ override_dh_install:
 
 ifneq ($(ONLY_CLIENT), 1)
 	mkdir -m 770 -p $(CURDIR)/debian/freeipa-server/var/cache/bind/data
+	mkdir -m 700 -p $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup
 endif
 
 override_dh_fixperms:
-	dh_fixperms -X var/cache/bind/data
+	dh_fixperms -X var/cache/bind/data -X var/lib/ipa/backup
 
 %:
 	dh $@ --with autoreconf,python2,systemd

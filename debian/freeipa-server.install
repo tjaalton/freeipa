@@ -93,7 +93,6 @@ usr/share/man/man1/ipa-server-certinstall.1*
 usr/share/man/man1/ipa-server-install.1*
 usr/share/man/man8/ipa-upgradeconfig.8*
 usr/share/man/man8/ipactl.8*
-var/lib/ipa/backup
 var/lib/ipa/pki-ca
 var/lib/ipa/sysrestore
 var/lib/ipa/sysupgrade
