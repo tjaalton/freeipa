@@ -15,6 +15,8 @@ freeipa (4.0.4-3) UNRELEASED; urgency=medium
     pki-server.
   * control: Relax libxmlrpc-core-c3-dev buil-dep and 389-ds-base dep
     for easier backporting.
+  * control: Add python-dateutils to server, and python-dbus and python-
+    memcache to python-freeipa dependencies. (Closes: #768187)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 04 Nov 2014 12:16:54 +0200
 
