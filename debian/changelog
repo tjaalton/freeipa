@@ -11,7 +11,7 @@ freeipa (4.0.5-1) UNRELEASED; urgency=medium
   * rules: Fix /var/lib/ipa/backup permissions.
   * Add non-standard-dir-perm to server lintian overrides.
   * copyright: Fix a typo.
-  * control: Bump dependency on bind9-dyndb-ldap to 6.0-3~.
+  * control: Bump dependency on bind9-dyndb-ldap to 6.0-4~.
   * control: Move dependency on python-qrcode and python-yubico from
     server to python-freeipa and drop python-selinux which belongs to
     pki-server.
