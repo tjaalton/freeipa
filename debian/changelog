@@ -1,12 +1,14 @@
-freeipa (4.0.4-3) UNRELEASED; urgency=medium
+freeipa (4.0.5-1) UNRELEASED; urgency=medium
 
+  * New upstream release
+    - Fix CVE-2014-7828. (Closes: #768294)
   * control: Update my email address.
   * fix-bind-conf.diff, add-debian-platform.diff: Fix bind config
     template to use Debian specific paths, and replace named.conf not
     named.conf.local. (Closes: #768122)
   * rules, -server.postinst: Create /var/cache/bind/data owned by bind
     user.
-  * rules: Fix var/lib/ipa/backup permissions.
+  * rules: Fix /var/lib/ipa/backup permissions.
   * Add non-standard-dir-perm to server lintian overrides.
   * copyright: Fix a typo.
   * control: Bump dependency on bind9-dyndb-ldap to 6.0-3~.
