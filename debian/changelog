@@ -1,4 +1,4 @@
-freeipa (4.0.5-1) UNRELEASED; urgency=medium
+freeipa (4.0.5-1) unstable; urgency=medium
 
   * New upstream release
     - Fix CVE-2014-7828. (Closes: #768294)
@@ -21,8 +21,9 @@ freeipa (4.0.5-1) UNRELEASED; urgency=medium
     memcache to python-freeipa dependencies. (Closes: #768187)
   * platform: Handle /etc/default/nfs-common and /etc/default/autofs,
     drop NSS_DB_DIR since it's inherited already. (Closes: #769037)
+  * control: Bump policy to 3.9.6, no changes.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Tue, 04 Nov 2014 12:16:54 +0200
+ -- Timo Aaltonen <tjaalton@debian.org>  Tue, 11 Nov 2014 10:38:52 +0200
 
 freeipa (4.0.4-2) unstable; urgency=medium
 

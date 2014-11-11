@@ -54,7 +54,7 @@ Build-Depends:
  samba-dev,
  selinux-policy-dev,
  uuid-dev
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Vcs-Git: git://anonscm.debian.org/pkg-freeipa/freeipa.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-freeipa/freeipa.git
 Homepage: http://www.freeipa.org
