@@ -19,6 +19,8 @@ freeipa (4.0.5-1) UNRELEASED; urgency=medium
     for easier backporting.
   * control: Add python-dateutils to server, and python-dbus and python-
     memcache to python-freeipa dependencies. (Closes: #768187)
+  * platform: Handle /etc/default/nfs-common and /etc/default/autofs,
+    drop NSS_DB_DIR since it's inherited already. (Closes: #769037)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 04 Nov 2014 12:16:54 +0200
 
