@@ -1,3 +1,13 @@
+freeipa (4.0.5-2) unstable; urgency=medium
+
+  * Team upload.
+  * Let python-freeipa depend on python-pyasn1, because pyasn1 is imported
+    by ipalib/pkcs10.py and ipalib/plugins/cert.py.
+  * debian/copyright: Drop unused PD license section
+  * debian/copyright: Fix paths of Javascript files
+
+ -- Benjamin Drung <benjamin.drung@profitbricks.com>  Mon, 24 Nov 2014 12:32:36 +0100
+
 freeipa (4.0.5-1) unstable; urgency=medium
 
   * New upstream release
