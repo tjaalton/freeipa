@@ -87,10 +87,10 @@ Depends:
  memcached,
  ntp,
  pki-ca,
+ python-dateutil,
  python-freeipa (= ${binary:Version}),
  python-krbv,
  python-ldap,
- python-dateutil,
  python-pyasn1,
  slapi-nis (>= 0.54),
  ${misc:Depends},
@@ -176,8 +176,7 @@ Description: FreeIPA centralized identity framework -- admintools
 
 Package: freeipa-tests
 Architecture: any
-Depends: ${misc:Depends}, ${python:Depends},
- xz-utils,
+Depends: xz-utils, ${misc:Depends}, ${python:Depends}
 Description: FreeIPA centralized identity framework -- tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
