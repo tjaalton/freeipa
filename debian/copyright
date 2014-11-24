@@ -60,16 +60,16 @@ Files: install/ui/src/libs/bootstrap.js
 Copyright: 2011-2014 Twitter, Inc.
 License: MIT
 
-Files: install/ui/js/libs/jquery.js
+Files: install/ui/src/libs/jquery.js
 Copyright: 2005, 2013 jQuery Foundation, Inc.
 License: MIT
 
-Files: install/ui/js/libs/json2.js
+Files: install/ui/src/libs/json2.js
 Copyright: None
 License: public-domain
  Public Domain.
 
-Files: install/ui/js/libs/qrcode.js
+Files: install/ui/src/libs/qrcode.js
 Copyright: 2012, Shim Sangmin
 License: MIT
 
