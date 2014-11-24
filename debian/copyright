@@ -119,9 +119,6 @@ License: GPL-3+
  On Debian machines the full text of the GNU General Public License
  version 3 can be found in the file /usr/share/common-licenses/GPL-3.
 
-License: PD
- Public Domain.
-
 License: BSD-2-clause
  Redistribution and use in source and binary forms, with or without
  modification, are permitted provided that the following conditions
