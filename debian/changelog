@@ -1,6 +1,8 @@
 freeipa (4.0.5-3) UNRELEASED; urgency=medium
 
   * rules: Set JAVA_STACK_SIZE to hopefully avoid FTBFS on exotic archs.
+  * freeipa-client.postrm: Remove nssdb files on purge. (Closes:
+    #775387)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 04 Mar 2015 12:11:12 +0200
 
