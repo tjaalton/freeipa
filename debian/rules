@@ -7,7 +7,7 @@ ONLY_CLIENT=0
 DESTDIR=$(CURDIR)/debian/tmp
 
 PLATFORM="SUPPORTED_PLATFORM=debian"
-JAVA_STACK_SIZE ?= "8m"
+JAVA_STACK_SIZE ?= 8m
 export JAVA_STACK_SIZE
 
 # For maintainer use only, generate a tarball:
