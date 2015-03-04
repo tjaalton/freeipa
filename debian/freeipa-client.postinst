@@ -4,7 +4,7 @@ set -e
 if [ "$1" = configure ]; then
     if [ ! -e /etc/pki/nssdb ]; then
         tmp=$(mktemp) || exit
-        echo "\n" > $tmp
+        printf "\n" > $tmp
         mkdir -p /etc/pki/nssdb
         certutil -N -d /etc/pki/nssdb -f $tmp
         chmod 644 /etc/pki/nssdb/*
