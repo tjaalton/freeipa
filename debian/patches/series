@@ -1,0 +1,17 @@
+# not upstreamable
+work-around-apache-fail.diff
+prefix.patch
+no-test-lang.diff
+port-ipa-client-automount.diff
+dont-check-for-systemd-pc.diff
+
+# send upstream
+fix-match-hostname.diff
+add-debian-platform.diff
+fix-hyphen-used-as-minus-sign.patch
+fix-manpage-has-errors-from-man.patch
+fix-typo.patch
+fix-ipa-conf.diff
+fix-pykerberos-api.diff
+revert-pykerberos-api-change.diff
+fix-bind-conf.diff

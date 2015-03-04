@@ -1,0 +1,9 @@
+# lintian is lying
+python-script-but-no-python-dep
+# we really need apache2
+web-application-should-not-depend-unconditionally-on-apache2
+# embedded versions used for better performance and function
+embedded-javascript-library
+# this is how we need them
+non-standard-dir-perm var/cache/bind/data/ *
+non-standard-dir-perm var/lib/ipa/backup/ *

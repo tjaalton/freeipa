@@ -1,0 +1,11 @@
+--- a/ipa-client/ipa-install/ipa-client-automount
++++ b/ipa-client/ipa-install/ipa-client-automount
+@@ -311,7 +311,7 @@
+     Configure secure NFS
+     """
+     replacevars = {
+-        'SECURE_NFS': 'yes',
++        'NEED_GSSD': 'yes',
+     }
+     ipautil.backup_config_and_replace_variables(fstore,
+         NFS_CONF, replacevars=replacevars)

@@ -1,0 +1,70 @@
+#! /bin/sh
+
+# Standard LSB functions
+. /lib/lsb/init-functions
+
+DAEMON=/usr/bin/memcached
+SOCKET_PATH=/var/run/ipa_memcached/ipa_memcached
+USER=www-data
+PIDFILE=/var/run/ipa_memcached/ipa_memcached.pid
+MAXCONN=1024
+CACHESIZE=64
+OPTIONS=""
+
+if [ -f /etc/default/ipa_memcached ];then
+    . /etc/default/ipa_memcached
+fi
+
+prog="ipa_memcached"
+pidfile=${PIDFILE-/var/run/ipa_memcached/ipa_memcached.pid}
+lockfile=${LOCKFILE-/var/lock/subsys/ipa_memcached}
+
+do_start () {
+    # Ensure that $pidfile directory has proper permissions and exists
+    piddir=`dirname $pidfile`
+    if [ ! -d $piddir ]; then
+	mkdir $piddir
+    fi
+    if [ "`stat -c %U $piddir`" != "$USER" ]; then
+	chown $USER $piddir
+    fi
+
+    start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- \
+        -d -s $SOCKET_PATH -u $USER -m $CACHESIZE -c $MAXCONN -P $PIDFILE $OPTIONS
+}
+
+do_stop () {
+    start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE --exec $DAEMON
+}
+
+# See how we were called.
+case "$1" in
+    start)
+        log_daemon_msg "Starting ipa_memcached"
+        do_start
+        case "$?" in
+                0) log_end_msg 0 ;;
+                1) log_progress_msg "already started"
+                   log_end_msg 0 ;;
+                *) log_end_msg 1 ;;
+        esac
+        ;;
+    stop)
+        log_daemon_msg "Stopping ipa_memcached"
+        do_stop
+        case "$?" in
+                0) log_end_msg 0 ;;
+                1) log_progress_msg "already stopped"
+                   log_end_msg 0 ;;
+                *) log_end_msg 1 ;;
+        esac
+        ;;
+    restart|force-reload)
+        $0 stop
+        $0 start
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|status|restart|force-reload}"
+        exit 2
+esac
+exit $?

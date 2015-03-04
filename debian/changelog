@@ -1,0 +1,63 @@
+freeipa (4.0.5-3) unstable; urgency=medium
+
+  * rules: Set JAVA_STACK_SIZE to hopefully avoid FTBFS on exotic archs.
+  * freeipa-client.postrm: Remove nssdb files on purge. (Closes:
+    #775387)
+  * freeipa-client.postinst: Fix bashism with echo. (Closes: #772242)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Wed, 04 Mar 2015 14:51:35 +0200
+
+freeipa (4.0.5-2) unstable; urgency=medium
+
+  * Team upload.
+  * Let python-freeipa depend on python-pyasn1, because pyasn1 is imported
+    by ipalib/pkcs10.py and ipalib/plugins/cert.py.
+  * debian/copyright: Drop unused PD license section
+  * debian/copyright: Fix paths of Javascript files
+
+ -- Benjamin Drung <benjamin.drung@profitbricks.com>  Mon, 24 Nov 2014 12:32:36 +0100
+
+freeipa (4.0.5-1) unstable; urgency=medium
+
+  * New upstream release
+    - Fix CVE-2014-7828. (Closes: #768294)
+  * control: Update my email address.
+  * fix-bind-conf.diff, add-debian-platform.diff: Fix bind config
+    template to use Debian specific paths, and replace named.conf not
+    named.conf.local. (Closes: #768122)
+  * rules, -server.postinst: Create /var/cache/bind/data owned by bind
+    user.
+  * rules: Fix /var/lib/ipa/backup permissions.
+  * Add non-standard-dir-perm to server lintian overrides.
+  * copyright: Fix a typo.
+  * control: Bump dependency on bind9-dyndb-ldap to 6.0-4~.
+  * control: Move dependency on python-qrcode and python-yubico from
+    server to python-freeipa and drop python-selinux which belongs to
+    pki-server.
+  * control: Relax libxmlrpc-core-c3-dev buil-dep and 389-ds-base dep
+    for easier backporting.
+  * control: Add python-dateutils to server, and python-dbus and python-
+    memcache to python-freeipa dependencies. (Closes: #768187)
+  * platform: Handle /etc/default/nfs-common and /etc/default/autofs,
+    drop NSS_DB_DIR since it's inherited already. (Closes: #769037)
+  * control: Bump policy to 3.9.6, no changes.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Tue, 11 Nov 2014 10:38:52 +0200
+
+freeipa (4.0.4-2) unstable; urgency=medium
+
+  * control: Add python-qrcode, python-selinux, python-yubico
+    to freeipa-server dependencies. (Closes: #767427)
+  * freeipa-server.postinst: Enable mod_authz_user and mod_deflate too,
+    but since they should be part of the default apache2 install, don't
+    disable them on uninstall like the other modules. (Closes: #767425)
+  * control: Bump server dependency on -mod-nss to 1.0.10-2 which
+    doesn't enable the module by default.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Fri, 31 Oct 2014 11:36:51 +0200
+
+freeipa (4.0.4-1) unstable; urgency=medium
+
+  * Initial release (Closes: #734703)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Sat, 25 Oct 2014 02:43:59 +0300
