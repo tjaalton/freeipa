@@ -178,12 +178,12 @@ Package: freeipa-tests
 Architecture: any
 Depends:
  freeipa-client (= ${binary:Version}),
+ python-coverage,
  python-freeipa (= ${binary:Version}),
  python-nose,
- python-paste,
- python-coverage,
- python-polib,
  python-paramiko,
+ python-paste,
+ python-polib,
  xz-utils,
  ${misc:Depends},
  ${python:Depends}
