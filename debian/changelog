@@ -1,3 +1,9 @@
+freeipa (4.0.5-4) UNRELEASED; urgency=medium
+
+  * control: Fix freeipa-tests depends.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 05 Mar 2015 15:49:03 +0200
+
 freeipa (4.0.5-3) unstable; urgency=medium
 
   * rules: Set JAVA_STACK_SIZE to hopefully avoid FTBFS on exotic archs.
