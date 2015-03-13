@@ -178,6 +178,7 @@ Package: freeipa-tests
 Architecture: any
 Depends:
  freeipa-client (= ${binary:Version}),
+ libnss3-tools,
  python-coverage,
  python-freeipa (= ${binary:Version}),
  python-nose,
@@ -187,6 +188,8 @@ Depends:
  xz-utils,
  ${misc:Depends},
  ${python:Depends}
+Recommends:
+ python-yaml,
 Description: FreeIPA centralized identity framework -- tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
@@ -205,6 +208,7 @@ Depends:
  python-dbus,
  python-dnspython,
  python-kerberos,
+ python-krbv,
  python-ldap,
  python-libipa-hbac,
  python-lxml,
