@@ -93,6 +93,7 @@ Depends:
  python-ldap,
  python-pyasn1,
  slapi-nis (>= 0.54),
+ systemd-sysv,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
