@@ -3,6 +3,8 @@ freeipa (4.0.5-4) UNRELEASED; urgency=medium
   * control: Fix freeipa-tests depends.
   * control: Add systemd-sysv to server depends. (Closes: #780386)
   * freeipa-client.postrm: Purge /etc/pki if empty. (Closes: #781114)
+  * add-a-clear-openssl-exception.diff: Add a clear OpenSSL exception.
+    (Closes: #772136)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 05 Mar 2015 15:49:03 +0200
 
