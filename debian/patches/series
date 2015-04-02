@@ -3,7 +3,6 @@ work-around-apache-fail.diff
 prefix.patch
 no-test-lang.diff
 port-ipa-client-automount.diff
-dont-check-for-systemd-pc.diff
 
 # send upstream
 fix-match-hostname.diff
