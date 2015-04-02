@@ -1,6 +1,6 @@
 --- a/ipa-client/ipa-install/ipa-client-automount
 +++ b/ipa-client/ipa-install/ipa-client-automount
-@@ -311,7 +311,7 @@
+@@ -311,7 +311,7 @@ def configure_nfs(fstore, statestore):
      Configure secure NFS
      """
      replacevars = {

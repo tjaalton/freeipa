@@ -13,5 +13,5 @@ fix-typo.patch
 fix-ipa-conf.diff
 fix-pykerberos-api.diff
 revert-pykerberos-api-change.diff
-fix-bind-conf.diff
-add-a-clear-openssl-exception.diff
+
+disable-dnssec-support.patch

@@ -1,7 +1,7 @@
 Description: service apache2 restart fails on sid, so don't do that
 --- a/install/tools/ipa-server-install
 +++ b/install/tools/ipa-server-install
-@@ -1212,7 +1212,8 @@ def main():
+@@ -1310,7 +1310,8 @@ def main():
  
      # Restart httpd to pick up the new IPA configuration
      service.print_msg("Restarting the web server")
@@ -13,7 +13,7 @@ Description: service apache2 restart fails on sid, so don't do that
      ds.change_admin_password(admin_password)
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -124,7 +124,8 @@ class HTTPInstance(service.Service):
+@@ -143,7 +143,8 @@ class HTTPInstance(service.Service):
  
      def __start(self):
          self.backup_state("running", self.is_running())

@@ -1,3 +1,14 @@
+freeipa (4.1.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+    - Refresh patches
+    - platform-support.diff: Added NAMED_VAR_DIR.
+    - fix-bind-conf.diff: Dropped, obsolete with above.
+    - disable-dnssec-support.patch: Disable DNSSEC-support as we're
+      missing the dependencies for now.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 02 Apr 2015 13:16:49 +0300
+
 freeipa (4.0.5-4) unstable; urgency=medium
 
   * control: Fix freeipa-tests depends.

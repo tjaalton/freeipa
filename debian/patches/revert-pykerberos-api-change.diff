@@ -1,7 +1,7 @@
 Description: so we don't need to patch pykerberos
 --- a/ipalib/util.py
 +++ b/ipalib/util.py
-@@ -59,15 +59,12 @@ def json_serialize(obj):
+@@ -61,15 +61,12 @@ def json_serialize(obj):
  
  def get_current_principal():
      try:

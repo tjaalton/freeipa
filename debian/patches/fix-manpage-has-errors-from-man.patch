@@ -5,8 +5,8 @@ Description: Fix manpage-has-errors-from-man warning (found by Lintian).
  default.conf.5.gz 50: warning: macro `np' not defined
 Author: Benjamin Drung <benjamin.drung@profitbricks.com>
 
---- freeipa-4.0.2.orig/ipa-client/man/default.conf.5
-+++ freeipa-4.0.2/ipa-client/man/default.conf.5
+--- a/ipa-client/man/default.conf.5
++++ b/ipa-client/man/default.conf.5
 @@ -47,14 +47,14 @@ Valid lines consist of an option name, a
  
  Values should not be quoted, the quotes will not be stripped.
@@ -24,9 +24,9 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  
  Options must appear in the section named [global]. There are no other sections defined or used currently.
  
---- freeipa-4.0.2.orig/ipa-client/man/ipa-client-install.1
-+++ freeipa-4.0.2/ipa-client/man/ipa-client-install.1
-@@ -205,35 +205,47 @@ Unattended uninstallation. The user will
+--- a/ipa-client/man/ipa-client-install.1
++++ b/ipa-client/man/ipa-client-install.1
+@@ -208,36 +208,49 @@ Unattended uninstallation. The user will
  .TP
  Files that will be replaced if SSSD is configured (default):
  
@@ -66,12 +66,15 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
 -/etc/krb5.conf\p
 -/etc/ipa/ca.crt\p
 -/etc/ipa/default.conf\p
+-/etc/ipa/nssdb\p
 -/etc/openldap/ldap.conf\p
 +/etc/krb5.conf
 +.br
 +/etc/ipa/ca.crt
 +.br
 +/etc/ipa/default.conf
++.br
++/etc/ipa/nssdb
 +.br
 +/etc/openldap/ldap.conf
  .TP

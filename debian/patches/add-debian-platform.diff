@@ -31,7 +31,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +"""
 --- /dev/null
 +++ b/ipaplatform/debian/paths.py
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,71 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -93,6 +93,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
 +    HTTPD = "/usr/sbin/apache2ctl"
 +    SETUP_DS_PL = "/usr/sbin/setup-ds"
++    NAMED_VAR_DIR = "/var/cache/bind"
 +    VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
 +    VAR_KRB5KDC_K5_REALM = "/var/lib/krb5kdc/.k5."
 +    CACERT_PEM = "/var/lib/krb5kdc/cacert.pem"
@@ -410,7 +411,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          try:
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -118,6 +118,7 @@ class HTTPInstance(service.Service):
+@@ -136,6 +136,7 @@ class HTTPInstance(service.Service):
          self.step("creating a keytab for httpd", self.__create_http_keytab)
          self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
          self.step("configuring SELinux for httpd", self.configure_selinux_for_httpd)
@@ -418,7 +419,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          self.step("restarting httpd", self.__start)
          self.step("configuring httpd to start on boot", self.__enable)
  
-@@ -204,14 +205,14 @@ class HTTPInstance(service.Service):
+@@ -166,14 +167,14 @@ class HTTPInstance(service.Service):
          self.move_service(self.principal)
          self.add_cert_to_service()
  
@@ -435,7 +436,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  
      def __configure_http(self):
          target_fname = paths.HTTPD_IPA_CONF
-@@ -260,11 +261,11 @@ class HTTPInstance(service.Service):
+@@ -222,11 +223,11 @@ class HTTPInstance(service.Service):
          installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSRequireSafeNegotiation', 'on', False)
  
      def __set_mod_nss_passwordfile(self):
@@ -448,8 +449,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        if installutils.update_file(paths.HTTPD_NSS_CONF, '</VirtualHost>', 'Include conf-available/ipa-rewrite.conf\n</VirtualHost>') != 0:
              print "Adding Include conf.d/ipa-rewrite to %s failed." % paths.HTTPD_NSS_CONF
  
-     def __setup_ssl(self):
-@@ -305,7 +306,7 @@ class HTTPInstance(service.Service):
+     def configure_certmonger_renewal_guard(self):
+@@ -302,7 +303,7 @@ class HTTPInstance(service.Service):
          os.chmod(certs.NSS_DIR + "/secmod.db", 0660)
          os.chmod(certs.NSS_DIR + "/pwdfile.txt", 0660)
  
@@ -458,18 +459,18 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          os.chown(certs.NSS_DIR + "/cert8.db", 0, pent.pw_gid )
          os.chown(certs.NSS_DIR + "/key3.db", 0, pent.pw_gid )
          os.chown(certs.NSS_DIR + "/secmod.db", 0, pent.pw_gid )
-@@ -400,6 +401,8 @@ class HTTPInstance(service.Service):
+@@ -392,6 +393,8 @@ class HTTPInstance(service.Service):
          if not running is None:
              self.stop()
  
 +        ipautil.run(["/usr/sbin/a2dismod", "nss"], capture_output=True)
 +
          self.stop_tracking_certificates()
-         if not enabled is None and not enabled:
-             self.disable()
+ 
+         helper = self.restore_state('certmonger_ipa_helper')
 --- a/ipaserver/install/ipa_server_certinstall.py
 +++ b/ipaserver/install/ipa_server_certinstall.py
-@@ -148,7 +148,7 @@ class ServerCertInstall(admintool.AdminT
+@@ -151,7 +151,7 @@ class ServerCertInstall(admintool.AdminT
          os.chmod(os.path.join(dirname, 'key3.db'), 0640)
          os.chmod(os.path.join(dirname, 'secmod.db'), 0640)
  
@@ -480,7 +481,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          os.chown(os.path.join(dirname, 'secmod.db'), 0, pent.pw_gid)
 --- a/ipaserver/install/cainstance.py
 +++ b/ipaserver/install/cainstance.py
-@@ -1130,7 +1130,7 @@ class CAInstance(service.Service):
+@@ -1160,7 +1160,7 @@ class CAInstance(service.Service):
          os.chmod(self.ra_agent_db + "/key3.db", 0640)
          os.chmod(self.ra_agent_db + "/secmod.db", 0640)
  
@@ -491,7 +492,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          os.chown(self.ra_agent_db + "/secmod.db", 0, pent.pw_gid )
 --- a/ipaserver/install/certs.py
 +++ b/ipaserver/install/certs.py
-@@ -740,7 +740,7 @@ class CertDB(object):
+@@ -519,7 +519,7 @@ class CertDB(object):
          f.close()
          pwdfile.close()
          # TODO: replace explicit uid by a platform-specific one
@@ -511,24 +512,24 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  OPTIONS=
 --- a/ipaserver/install/bindinstance.py
 +++ b/ipaserver/install/bindinstance.py
-@@ -483,7 +483,7 @@ class BindInstance(service.Service):
+@@ -562,7 +562,7 @@ class BindInstance(service.Service):
      suffix = ipautil.dn_attribute_property('_suffix')
  
-     def setup(self, fqdn, ip_address, realm_name, domain_name, forwarders, ntp,
--              reverse_zone, named_user="named", zonemgr=None,
-+              reverse_zone, named_user="bind", zonemgr=None,
-               ca_configured=None):
+     def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders, ntp,
+-              reverse_zones, named_user="named", zonemgr=None,
++              reverse_zones, named_user="bind", zonemgr=None,
+               ca_configured=None, no_dnssec_validation=False):
          self.named_user = named_user
          self.fqdn = fqdn
-@@ -874,7 +874,7 @@ class BindInstance(service.Service):
+@@ -1001,7 +1001,7 @@ class BindInstance(service.Service):
  
      def __generate_rndc_key(self):
          installutils.check_entropy()
 -        ipautil.run(['/usr/libexec/generate-rndc-key.sh'])
 +        ipautil.run(paths.GENERATE_RNDC_KEY)
  
-     def add_master_dns_records(self, fqdn, ip_address, realm_name, domain_name,
-                                reverse_zone, ntp=False, ca_configured=None):
+     def add_master_dns_records(self, fqdn, ip_addresses, realm_name, domain_name,
+                                reverse_zones, ntp=False, ca_configured=None):
 --- a/init/systemd/ipa_memcached.service
 +++ b/init/systemd/ipa_memcached.service
 @@ -4,7 +4,7 @@ After=network.target
