@@ -53,6 +53,7 @@ Build-Depends:
  rhino,
  samba-dev,
  selinux-policy-dev,
+ systemd,
  uuid-dev
 Standards-Version: 3.9.6
 Vcs-Git: git://anonscm.debian.org/pkg-freeipa/freeipa.git
@@ -93,6 +94,7 @@ Depends:
  python-ldap,
  python-pyasn1,
  slapi-nis (>= 0.54),
+ systemd-sysv,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
@@ -176,7 +178,20 @@ Description: FreeIPA centralized identity framework -- admintools
 
 Package: freeipa-tests
 Architecture: any
-Depends: xz-utils, ${misc:Depends}, ${python:Depends}
+Depends:
+ freeipa-client (= ${binary:Version}),
+ libnss3-tools,
+ python-coverage,
+ python-freeipa (= ${binary:Version}),
+ python-nose,
+ python-paramiko,
+ python-paste,
+ python-polib,
+ xz-utils,
+ ${misc:Depends},
+ ${python:Depends}
+Recommends:
+ python-yaml,
 Description: FreeIPA centralized identity framework -- tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
@@ -195,6 +210,7 @@ Depends:
  python-dbus,
  python-dnspython,
  python-kerberos,
+ python-krbv,
  python-ldap,
  python-libipa-hbac,
  python-lxml,
