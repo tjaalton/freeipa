@@ -50,6 +50,185 @@
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #define SSSD_DOMAIN_SEPARATOR '@'
 
+int get_buffer(size_t *_buf_len, char **_buf)
+{
+    long pw_max;
+    long gr_max;
+    size_t buf_len;
+    char *buf;
+
+    pw_max = sysconf(_SC_GETPW_R_SIZE_MAX);
+    gr_max = sysconf(_SC_GETGR_R_SIZE_MAX);
+
+    buf_len = MAX(16384, MAX(pw_max, gr_max));
+
+    buf = malloc(sizeof(char) * buf_len);
+    if (buf == NULL) {
+        return LDAP_OPERATIONS_ERROR;
+    }
+
+    *_buf_len = buf_len;
+    *_buf = buf;
+
+    return LDAP_SUCCESS;
+}
+
+static int inc_buffer(size_t buf_max, size_t *_buf_len, char **_buf)
+{
+    size_t tmp_len;
+    char *tmp_buf;
+
+    tmp_buf = *_buf;
+    tmp_len = *_buf_len;
+
+    tmp_len *= 2;
+    if (tmp_len > buf_max) {
+        return ERANGE;
+    }
+
+    tmp_buf = realloc(tmp_buf, tmp_len);
+    if (tmp_buf == NULL) {
+        return ENOMEM;
+    }
+
+    *_buf_len = tmp_len;
+    *_buf = tmp_buf;
+
+    return 0;
+}
+
+int getpwnam_r_wrapper(size_t buf_max, const char *name,
+                       struct passwd *pwd, char **_buf, size_t *_buf_len)
+{
+    char *buf = NULL;
+    size_t buf_len = 0;
+    int ret;
+    struct passwd *result = NULL;
+
+    buf = *_buf;
+    buf_len = *_buf_len;
+
+    while (buf != NULL
+            && (ret = getpwnam_r(name, pwd, buf, buf_len, &result)) == ERANGE) {
+        ret = inc_buffer(buf_max, &buf_len, &buf);
+        if (ret != 0) {
+            if (ret == ERANGE) {
+                LOG("Buffer too small, increase ipaExtdomMaxNssBufSize.\n");
+            }
+            goto done;
+        }
+    }
+
+    if (ret == 0 && result == NULL) {
+        ret = ENOENT;
+    }
+
+done:
+    *_buf = buf;
+    *_buf_len = buf_len;
+
+    return ret;
+}
+
+int getpwuid_r_wrapper(size_t buf_max, uid_t uid,
+                       struct passwd *pwd, char **_buf, size_t *_buf_len)
+{
+    char *buf = NULL;
+    size_t buf_len = 0;
+    int ret;
+    struct passwd *result = NULL;
+
+    buf = *_buf;
+    buf_len = *_buf_len;
+
+    while (buf != NULL
+            && (ret = getpwuid_r(uid, pwd, buf, buf_len, &result)) == ERANGE) {
+        ret = inc_buffer(buf_max, &buf_len, &buf);
+        if (ret != 0) {
+            if (ret == ERANGE) {
+                LOG("Buffer too small, increase ipaExtdomMaxNssBufSize.\n");
+            }
+            goto done;
+        }
+    }
+
+    if (ret == 0 && result == NULL) {
+        ret = ENOENT;
+    }
+
+done:
+    *_buf = buf;
+    *_buf_len = buf_len;
+
+    return ret;
+}
+
+int getgrnam_r_wrapper(size_t buf_max, const char *name,
+                       struct group *grp, char **_buf, size_t *_buf_len)
+{
+    char *buf = NULL;
+    size_t buf_len = 0;
+    int ret;
+    struct group *result = NULL;
+
+    buf = *_buf;
+    buf_len = *_buf_len;
+
+    while (buf != NULL
+            && (ret = getgrnam_r(name, grp, buf, buf_len, &result)) == ERANGE) {
+        ret = inc_buffer(buf_max, &buf_len, &buf);
+        if (ret != 0) {
+            if (ret == ERANGE) {
+                LOG("Buffer too small, increase ipaExtdomMaxNssBufSize.\n");
+            }
+            goto done;
+        }
+    }
+
+    if (ret == 0 && result == NULL) {
+        ret = ENOENT;
+    }
+
+done:
+    *_buf = buf;
+    *_buf_len = buf_len;
+
+    return ret;
+}
+
+int getgrgid_r_wrapper(size_t buf_max, gid_t gid,
+                       struct group *grp, char **_buf, size_t *_buf_len)
+{
+    char *buf = NULL;
+    size_t buf_len = 0;
+    int ret;
+    struct group *result = NULL;
+
+    buf = *_buf;
+    buf_len = *_buf_len;
+
+    while (buf != NULL
+            && (ret = getgrgid_r(gid, grp, buf, buf_len, &result)) == ERANGE) {
+        ret = inc_buffer(buf_max, &buf_len, &buf);
+        if (ret != 0) {
+            if (ret == ERANGE) {
+                LOG("Buffer too small, increase ipaExtdomMaxNssBufSize.\n");
+            }
+            goto done;
+        }
+    }
+
+    if (ret == 0 && result == NULL) {
+        ret = ENOENT;
+    }
+
+done:
+    *_buf = buf;
+    *_buf_len = buf_len;
+
+    return ret;
+}
+
 int parse_request_data(struct berval *req_val, struct extdom_req **_req)
 {
     BerElement *ber = NULL;
@@ -191,33 +370,6 @@ int check_request(struct extdom_req *req, enum extdom_version version)
     return LDAP_SUCCESS;
 }
 
-static int get_buffer(size_t *_buf_len, char **_buf)
-{
-    long pw_max;
-    long gr_max;
-    size_t buf_len;
-    char *buf;
-
-    pw_max = sysconf(_SC_GETPW_R_SIZE_MAX);
-    gr_max = sysconf(_SC_GETGR_R_SIZE_MAX);
-
-    if (pw_max == -1 && gr_max == -1) {
-        buf_len = 16384;
-    } else {
-        buf_len = MAX(pw_max, gr_max);
-    }
-
-    buf = malloc(sizeof(char) * buf_len);
-    if (buf == NULL) {
-        return LDAP_OPERATIONS_ERROR;
-    }
-
-    *_buf_len = buf_len;
-    *_buf = buf;
-
-    return LDAP_SUCCESS;
-}
-
 static int get_user_grouplist(const char *name, gid_t gid,
                               size_t *_ngroups, gid_t **_groups )
 {
@@ -234,7 +386,7 @@ static int get_user_grouplist(const char *name, gid_t gid,
 
     ret = getgrouplist(name, gid, groups, &ngroups);
     if (ret == -1) {
-        new_groups = realloc(groups, ngroups);
+        new_groups = realloc(groups, ngroups * sizeof(gid_t));
         if (new_groups == NULL) {
             free(groups);
             return LDAP_OPERATIONS_ERROR;
@@ -309,7 +461,8 @@ static int pack_ber_sid(const char *sid, struct berval **berval)
 
 #define SSSD_SYSDB_SID_STR "objectSIDString"
 
-static int pack_ber_user(enum response_types response_type,
+static int pack_ber_user(struct ipa_extdom_ctx *ctx,
+                         enum response_types response_type,
                          const char *domain_name, const char *user_name,
                          uid_t uid, gid_t gid,
                          const char *gecos, const char *homedir,
@@ -323,7 +476,6 @@ static int pack_ber_user(enum response_types response_type,
     size_t buf_len;
     char *buf = NULL;
     struct group grp;
-    struct group *grp_result;
     size_t c;
     char *locat;
     char *short_user_name = NULL;
@@ -375,13 +527,14 @@ static int pack_ber_user(enum response_types response_type,
         }
 
         for (c = 0; c < ngroups; c++) {
-            ret = getgrgid_r(groups[c], &grp, buf, buf_len, &grp_result);
+            ret = getgrgid_r_wrapper(ctx->max_nss_buf_size,
+                                     groups[c], &grp, &buf, &buf_len);
             if (ret != 0) {
-                ret = LDAP_NO_SUCH_OBJECT;
-                goto done;
-            }
-            if (grp_result == NULL) {
-                ret = LDAP_NO_SUCH_OBJECT;
+                if (ret == ENOMEM || ret == ERANGE) {
+                    ret = LDAP_OPERATIONS_ERROR;
+                } else {
+                    ret = LDAP_NO_SUCH_OBJECT;
+                }
                 goto done;
             }
 
@@ -537,12 +690,12 @@ static int pack_ber_name(const char *domain_name, const char *name,
     return LDAP_SUCCESS;
 }
 
-static int handle_uid_request(enum request_types request_type, uid_t uid,
+static int handle_uid_request(struct ipa_extdom_ctx *ctx,
+                              enum request_types request_type, uid_t uid,
                               const char *domain_name, struct berval **berval)
 {
     int ret;
     struct passwd pwd;
-    struct passwd *pwd_result = NULL;
     char *sid_str = NULL;
     enum sss_id_type id_type;
     size_t buf_len;
@@ -568,13 +721,14 @@ static int handle_uid_request(enum request_types request_type, uid_t uid,
 
         ret = pack_ber_sid(sid_str, berval);
     } else {
-        ret = getpwuid_r(uid, &pwd, buf, buf_len, &pwd_result);
+        ret = getpwuid_r_wrapper(ctx->max_nss_buf_size, uid, &pwd, &buf,
+                                 &buf_len);
         if (ret != 0) {
-            ret = LDAP_NO_SUCH_OBJECT;
-            goto done;
-        }
-        if (pwd_result == NULL) {
-            ret = LDAP_NO_SUCH_OBJECT;
+            if (ret == ENOMEM || ret == ERANGE) {
+                ret = LDAP_OPERATIONS_ERROR;
+            } else {
+                ret = LDAP_NO_SUCH_OBJECT;
+            }
             goto done;
         }
 
@@ -591,7 +745,8 @@ static int handle_uid_request(enum request_types request_type, uid_t uid,
             }
         }
 
-        ret = pack_ber_user((request_type == REQ_FULL ? RESP_USER
+        ret = pack_ber_user(ctx,
+                            (request_type == REQ_FULL ? RESP_USER
                                                       : RESP_USER_GROUPLIST),
                             domain_name, pwd.pw_name, pwd.pw_uid,
                             pwd.pw_gid, pwd.pw_gecos, pwd.pw_dir,
@@ -605,12 +760,12 @@ done:
     return ret;
 }
 
-static int handle_gid_request(enum request_types request_type, gid_t gid,
+static int handle_gid_request(struct ipa_extdom_ctx *ctx,
+                              enum request_types request_type, gid_t gid,
                               const char *domain_name, struct berval **berval)
 {
     int ret;
     struct group grp;
-    struct group *grp_result = NULL;
     char *sid_str = NULL;
     enum sss_id_type id_type;
     size_t buf_len;
@@ -635,13 +790,14 @@ static int handle_gid_request(enum request_types request_type, gid_t gid,
 
         ret = pack_ber_sid(sid_str, berval);
     } else {
-        ret = getgrgid_r(gid, &grp, buf, buf_len, &grp_result);
+        ret = getgrgid_r_wrapper(ctx->max_nss_buf_size, gid, &grp, &buf,
+                                 &buf_len);
         if (ret != 0) {
-            ret = LDAP_NO_SUCH_OBJECT;
-            goto done;
-        }
-        if (grp_result == NULL) {
-            ret = LDAP_NO_SUCH_OBJECT;
+            if (ret == ENOMEM || ret == ERANGE) {
+                ret = LDAP_OPERATIONS_ERROR;
+            } else {
+                ret = LDAP_NO_SUCH_OBJECT;
+            }
             goto done;
         }
 
@@ -671,14 +827,13 @@ done:
     return ret;
 }
 
-static int handle_sid_request(enum request_types request_type, const char *sid,
+static int handle_sid_request(struct ipa_extdom_ctx *ctx,
+                              enum request_types request_type, const char *sid,
                               struct berval **berval)
 {
     int ret;
     struct passwd pwd;
-    struct passwd *pwd_result = NULL;
     struct group grp;
-    struct group *grp_result = NULL;
     char *domain_name = NULL;
     char *fq_name = NULL;
     char *object_name = NULL;
@@ -724,14 +879,14 @@ static int handle_sid_request(enum request_types request_type, const char *sid,
     switch(id_type) {
     case SSS_ID_TYPE_UID:
     case SSS_ID_TYPE_BOTH:
-        ret = getpwnam_r(fq_name, &pwd, buf, buf_len, &pwd_result);
+        ret = getpwnam_r_wrapper(ctx->max_nss_buf_size, fq_name, &pwd, &buf,
+                                 &buf_len);
         if (ret != 0) {
-            ret = LDAP_NO_SUCH_OBJECT;
-            goto done;
-        }
-
-        if (pwd_result == NULL) {
-            ret = LDAP_NO_SUCH_OBJECT;
+            if (ret == ENOMEM || ret == ERANGE) {
+                ret = LDAP_OPERATIONS_ERROR;
+            } else {
+                ret = LDAP_NO_SUCH_OBJECT;
+            }
             goto done;
         }
 
@@ -748,21 +903,22 @@ static int handle_sid_request(enum request_types request_type, const char *sid,
             }
         }
 
-        ret = pack_ber_user((request_type == REQ_FULL ? RESP_USER
+        ret = pack_ber_user(ctx,
+                            (request_type == REQ_FULL ? RESP_USER
                                                       : RESP_USER_GROUPLIST),
                             domain_name, pwd.pw_name, pwd.pw_uid,
                             pwd.pw_gid, pwd.pw_gecos, pwd.pw_dir,
                             pwd.pw_shell, kv_list, berval);
         break;
     case SSS_ID_TYPE_GID:
-        ret = getgrnam_r(fq_name, &grp, buf, buf_len, &grp_result);
+        ret = getgrnam_r_wrapper(ctx->max_nss_buf_size, fq_name, &grp, &buf,
+                                 &buf_len);
         if (ret != 0) {
-            ret = LDAP_NO_SUCH_OBJECT;
-            goto done;
-        }
-
-        if (grp_result == NULL) {
-            ret = LDAP_NO_SUCH_OBJECT;
+            if (ret == ENOMEM || ret == ERANGE) {
+                ret = LDAP_OPERATIONS_ERROR;
+            } else {
+                ret = LDAP_NO_SUCH_OBJECT;
+            }
             goto done;
         }
 
@@ -799,16 +955,15 @@ done:
     return ret;
 }
 
-static int handle_name_request(enum request_types request_type,
+static int handle_name_request(struct ipa_extdom_ctx *ctx,
+                               enum request_types request_type,
                                const char *name, const char *domain_name,
                                struct berval **berval)
 {
     int ret;
     char *fq_name = NULL;
     struct passwd pwd;
-    struct passwd *pwd_result = NULL;
     struct group grp;
-    struct group *grp_result = NULL;
     char *sid_str = NULL;
     enum sss_id_type id_type;
     size_t buf_len;
@@ -842,15 +997,9 @@ static int handle_name_request(enum request_types request_type,
             goto done;
         }
 
-        ret = getpwnam_r(fq_name, &pwd, buf, buf_len, &pwd_result);
-        if (ret != 0) {
-            /* according to the man page there are a couple of error codes
-             * which can indicate that the user was not found. To be on the
-             * safe side we fail back to the group lookup on all errors. */
-            pwd_result = NULL;
-        }
-
-        if (pwd_result != NULL) {
+        ret = getpwnam_r_wrapper(ctx->max_nss_buf_size, fq_name, &pwd, &buf,
+                                 &buf_len);
+        if (ret == 0) {
             if (request_type == REQ_FULL_WITH_GROUPS) {
                 ret = sss_nss_getorigbyname(pwd.pw_name, &kv_list, &id_type);
                 if (ret != 0 || !(id_type == SSS_ID_TYPE_UID
@@ -863,20 +1012,28 @@ static int handle_name_request(enum request_types request_type,
                     goto done;
                 }
             }
-            ret = pack_ber_user((request_type == REQ_FULL ? RESP_USER
+            ret = pack_ber_user(ctx,
+                                (request_type == REQ_FULL ? RESP_USER
                                                           : RESP_USER_GROUPLIST),
                                 domain_name, pwd.pw_name, pwd.pw_uid,
                                 pwd.pw_gid, pwd.pw_gecos, pwd.pw_dir,
                                 pwd.pw_shell, kv_list, berval);
+        } else if (ret == ENOMEM || ret == ERANGE) {
+            ret = LDAP_OPERATIONS_ERROR;
+            goto done;
         } else { /* no user entry found */
-            ret = getgrnam_r(fq_name, &grp, buf, buf_len, &grp_result);
+            /* according to the getpwnam() man page there are a couple of
+             * error codes which can indicate that the user was not found. To
+             * be on the safe side we fail back to the group lookup on all
+             * errors. */
+            ret = getgrnam_r_wrapper(ctx->max_nss_buf_size, fq_name, &grp, &buf,
+                                     &buf_len);
             if (ret != 0) {
-                ret = LDAP_NO_SUCH_OBJECT;
-                goto done;
-            }
-
-            if (grp_result == NULL) {
-                ret = LDAP_NO_SUCH_OBJECT;
+                if (ret == ENOMEM || ret == ERANGE) {
+                    ret = LDAP_OPERATIONS_ERROR;
+                } else {
+                    ret = LDAP_NO_SUCH_OBJECT;
+                }
                 goto done;
             }
 
@@ -916,20 +1073,23 @@ int handle_request(struct ipa_extdom_ctx *ctx, struct extdom_req *req,
 
     switch (req->input_type) {
     case INP_POSIX_UID:
-        ret = handle_uid_request(req->request_type, req->data.posix_uid.uid,
+        ret = handle_uid_request(ctx, req->request_type,
+                                 req->data.posix_uid.uid,
                                  req->data.posix_uid.domain_name, berval);
 
         break;
     case INP_POSIX_GID:
-        ret = handle_gid_request(req->request_type, req->data.posix_gid.gid,
+        ret = handle_gid_request(ctx, req->request_type,
+                                 req->data.posix_gid.gid,
                                  req->data.posix_uid.domain_name, berval);
 
         break;
     case INP_SID:
-        ret = handle_sid_request(req->request_type, req->data.sid, berval);
+        ret = handle_sid_request(ctx, req->request_type, req->data.sid, berval);
         break;
     case INP_NAME:
-        ret = handle_name_request(req->request_type, req->data.name.object_name,
+        ret = handle_name_request(ctx, req->request_type,
+                                  req->data.name.object_name,
                                   req->data.name.domain_name, berval);
 
         break;

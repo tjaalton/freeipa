@@ -132,8 +132,8 @@ dnl ---------------------------------------------------------------------------
 dnl This is a very simple check, we should probably check also for MD4_Init and
 dnl probably also the version we are using is recent enough
 SSL_LIBS=
-AC_CHECK_HEADER(openssl/des.h, [], [AC_MSG_ERROR([openssl/des.h not found])])
-AC_CHECK_LIB(crypto, DES_set_key_unchecked, [SSL_LIBS="-lcrypto"])
+AC_CHECK_HEADER(openssl/md4.h, [], [AC_MSG_ERROR([openssl/md4.h not found])])
+AC_CHECK_LIB(crypto, MD4_Init, [SSL_LIBS="-lcrypto"])
 AC_SUBST(SSL_LIBS)
 
 dnl ---------------------------------------------------------------------------
@@ -235,6 +235,30 @@ PKG_CHECK_EXISTS(cmocka,
     [AC_MSG_WARN([No libcmocka library found, cmocka tests will not be built])]
 )
 AM_CONDITIONAL([HAVE_CMOCKA], [test x$have_cmocka = xyes])
+
+dnl A macro to check presence of a cwrap (http://cwrap.org) wrapper on the system
+dnl Usage:
+dnl     AM_CHECK_WRAPPER(name, conditional)
+dnl If the cwrap library is found, sets the HAVE_$name conditional
+AC_DEFUN([AM_CHECK_WRAPPER],
+[
+    FOUND_WRAPPER=0
+
+    AC_MSG_CHECKING([for $1])
+    PKG_CHECK_EXISTS([$1],
+                     [
+                        AC_MSG_RESULT([yes])
+                        FOUND_WRAPPER=1
+                     ],
+                     [
+                        AC_MSG_RESULT([no])
+                        AC_MSG_WARN([cwrap library $1 not found, some tests will not run])
+                     ])
+
+    AM_CONDITIONAL($2, [ test x$FOUND_WRAPPER = x1])
+])
+
+AM_CHECK_WRAPPER(nss_wrapper, HAVE_NSS_WRAPPER)
 
 dnl -- dirsrv is needed for the extdom unit tests --
 PKG_CHECK_MODULES([DIRSRV], [dirsrv  >= 1.3.0])

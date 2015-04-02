@@ -7,7 +7,6 @@ AM_CPPFLAGS =							\
 	-I$(srcdir)						\
 	-I$(PLUGIN_COMMON_DIR)					\
 	-I$(KRB5_UTIL_DIR)					\
-	-I$(COMMON_BER_DIR)					\
 	-DPREFIX=\""$(prefix)"\" 				\
 	-DBINDIR=\""$(bindir)"\"				\
 	-DLIBDIR=\""$(libdir)"\" 				\
@@ -35,9 +34,20 @@ libipa_extdom_extop_la_LIBADD = 	\
 	$(SSSNSSIDMAP_LIBS)	\
 	$(NULL)
 
+TESTS =
+check_PROGRAMS =
+
 if HAVE_CHECK
-TESTS = extdom_tests
-check_PROGRAMS = extdom_tests
+TESTS += extdom_tests
+check_PROGRAMS += extdom_tests
+endif
+
+if HAVE_CMOCKA
+if HAVE_NSS_WRAPPER
+TESTS_ENVIRONMENT = . ./test_data/test_setup.sh;
+TESTS += extdom_cmocka_tests
+check_PROGRAMS += extdom_cmocka_tests
+endif
 endif
 
 extdom_tests_SOURCES = 	\
@@ -54,6 +64,22 @@ extdom_tests_LDADD = 		\
 	$(DIRSRV_LIBS)		\
 	$(SSSNSSIDMAP_LIBS)	\
 	$(NULL)
+
+extdom_cmocka_tests_SOURCES = 		\
+	ipa_extdom_cmocka_tests.c	\
+	ipa_extdom_common.c		\
+	$(NULL)
+extdom_cmocka_tests_CFLAGS = $(CMOCKA_CFLAGS)
+extdom_cmocka_tests_LDFLAGS = 	\
+	-rpath $(shell pkg-config --libs-only-L dirsrv | sed -e 's/-L//') \
+	$(NULL)
+extdom_cmocka_tests_LDADD = 	\
+	$(CMOCKA_LIBS)		\
+	$(LDAP_LIBS)		\
+	$(DIRSRV_LIBS)		\
+	$(SSSNSSIDMAP_LIBS)	\
+	$(NULL)
+
 
 appdir = $(IPA_DATA_DIR)
 app_DATA =				\
