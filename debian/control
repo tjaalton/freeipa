@@ -53,6 +53,7 @@ Build-Depends:
  rhino,
  samba-dev,
  selinux-policy-dev,
+ systemd,
  uuid-dev
 Standards-Version: 3.9.6
 Vcs-Git: git://anonscm.debian.org/pkg-freeipa/freeipa.git
