@@ -7,8 +7,6 @@ if [ "$1" = purge ]; then
     rm -f /etc/pki/nssdb/cert8.db \
           /etc/pki/nssdb/key3.db \
           /etc/pki/nssdb/secmod.db
-    rmdir /etc/pki/nssdb
-    rmdir /etc/pki
 fi
 
 #DEBHELPER#

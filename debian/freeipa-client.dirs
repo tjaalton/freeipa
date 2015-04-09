@@ -1,2 +1,3 @@
 etc/ipa
+etc/pki/nssdb
 var/lib/ipa-client/sysrestore
