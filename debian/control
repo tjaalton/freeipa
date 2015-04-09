@@ -52,7 +52,6 @@ Build-Depends:
  python-yubico,
  rhino,
  samba-dev,
- selinux-policy-dev,
  systemd,
  uuid-dev
 Standards-Version: 3.9.6

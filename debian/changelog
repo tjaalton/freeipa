@@ -1,3 +1,10 @@
+freeipa (4.0.5-5) UNRELEASED; urgency=medium
+
+  * control: Drop selinux-policy-dev from build-depends, not needed
+    anymore.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 09 Apr 2015 14:39:31 +0300
+
 freeipa (4.0.5-4) unstable; urgency=medium
 
   * control: Fix freeipa-tests depends.
