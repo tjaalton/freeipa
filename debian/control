@@ -24,7 +24,7 @@ Build-Depends:
  libsasl2-dev,
  libssl-dev,
  libsss-idmap-dev,
- libsss-nss-idmap-dev,
+ libsss-nss-idmap-dev (>= 1.12.2),
  libsvrcore-dev,
  libtalloc-dev,
  libtevent-dev,
