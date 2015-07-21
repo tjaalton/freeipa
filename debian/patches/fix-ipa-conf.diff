@@ -1,0 +1,49 @@
+Description: Fix paths
+--- a/install/conf/ipa.conf
++++ b/install/conf/ipa.conf
+@@ -38,7 +38,7 @@ FileETag None
+ 
+ # FIXME: WSGISocketPrefix is a server-scope directive.  The mod_wsgi package
+ # should really be fixed by adding this its /etc/httpd/conf.d/wsgi.conf:
+-WSGISocketPrefix /run/httpd/wsgi
++WSGISocketPrefix /run/apache2/wsgi
+ 
+ 
+ # Configure mod_wsgi handler for /ipa
+@@ -71,7 +71,7 @@ KrbConstrainedDelegationLock ipa
+   KrbMethodK5Passwd off
+   KrbServiceName HTTP
+   KrbAuthRealms $REALM
+-  Krb5KeyTab /etc/httpd/conf/ipa.keytab
++  Krb5KeyTab /etc/apache2/ipa.keytab
+   KrbSaveCredentials on
+   KrbConstrainedDelegation on
+   Require valid-user
+@@ -138,8 +138,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+ 
+ 
+ #  List explicitly only the fonts we want to serve
+-Alias /ipa/ui/fonts/open-sans "/usr/share/fonts/open-sans"
+-Alias /ipa/ui/fonts/fontawesome "/usr/share/fonts/fontawesome"
++Alias /ipa/ui/fonts/open-sans "/usr/share/fonts/truetype/open-sans"
++Alias /ipa/ui/fonts/fontawesome "/usr/share/fonts/truetype/font-awesome"
+ <Directory "/usr/share/fonts">
+   SetHandler None
+   AllowOverride None
+@@ -175,14 +175,14 @@ Alias /ipa/wsgi "/usr/share/ipa/wsgi"
+ </Directory>
+ 
+ # Protect our CGIs
+-<Directory /var/www/cgi-bin>
++<Directory /usr/lib/cgi-bin>
+   AuthType Kerberos
+   AuthName "Kerberos Login"
+   KrbMethodNegotiate on
+   KrbMethodK5Passwd off
+   KrbServiceName HTTP
+   KrbAuthRealms $REALM
+-  Krb5KeyTab /etc/httpd/conf/ipa.keytab
++  Krb5KeyTab /etc/apache2/ipa.keytab
+   KrbSaveCredentials on
+   Require valid-user
+   ErrorDocument 401 /ipa/errors/unauthorized.html

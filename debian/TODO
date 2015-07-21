@@ -1,0 +1,5 @@
+4.1 needs
+
+- softhsm 2.x
+- dnssec patch in bind9
+

@@ -1,0 +1,11 @@
+--- a/Makefile
++++ b/Makefile
+@@ -117,7 +117,7 @@ client-dirs:
+ 
+ lint: bootstrap-autogen
+ 	./make-lint $(LINT_OPTIONS)
+-	$(MAKE) -C install/po validate-src-strings
++#	$(MAKE) -C install/po validate-src-strings
+ 
+ 
+ test:
