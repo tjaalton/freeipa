@@ -5,7 +5,7 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
 
 --- a/install/tools/man/ipa-adtrust-install.1
 +++ b/install/tools/man/ipa-adtrust-install.1
-@@ -107,7 +107,7 @@ The name of the user with administrative
+@@ -117,7 +117,7 @@ The name of the user with administrative
  \fB\-a\fR, \fB\-\-admin\-password\fR=\fIpassword\fR
  The password of the user with administrative privileges for this IPA server. Will be asked interactively if \fB\-U\fR is not specified.
  .TP
@@ -35,7 +35,7 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  .SH "EXIT STATUS"
 --- a/install/tools/man/ipa-server-install.1
 +++ b/install/tools/man/ipa-server-install.1
-@@ -49,7 +49,7 @@ Create home directories for users on the
+@@ -46,7 +46,7 @@ Create home directories for users on the
  The fully\-qualified DNS name of this server. If the hostname does not match system hostname, the system hostname will be updated accordingly to prevent service failures.
  .TP
  \fB\-\-ip\-address\fR=\fIIP_ADDRESS\fR

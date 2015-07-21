@@ -367,7 +367,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  
          srv_vals = []
          srv_vals.append("0.%s.pool.ntp.org" % os)
-@@ -105,9 +107,9 @@ class NTPInstance(service.Service):
+@@ -106,9 +108,9 @@ class NTPInstance(service.Service):
          fd.close()
          for line in lines:
              sline = line.strip()
@@ -379,7 +379,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
              for opt in needopts:
                  if sline.find(opt['val']) != -1:
                      opt['need'] = False
-@@ -123,12 +125,12 @@ class NTPInstance(service.Service):
+@@ -124,12 +126,12 @@ class NTPInstance(service.Service):
              for line in lines:
                  if not done:
                      sline = line.strip()
@@ -397,7 +397,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
                      fd.write(line)
 --- a/ipaserver/install/ldapupdate.py
 +++ b/ipaserver/install/ldapupdate.py
-@@ -247,9 +247,9 @@ class LDAPUpdate:
+@@ -328,9 +328,9 @@ class LDAPUpdate:
          bits = platform.architecture()[0]
  
          if bits == "64bit":
@@ -411,15 +411,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          try:
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -136,6 +136,7 @@ class HTTPInstance(service.Service):
-         self.step("creating a keytab for httpd", self.__create_http_keytab)
-         self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
-         self.step("configuring SELinux for httpd", self.configure_selinux_for_httpd)
+@@ -140,6 +140,7 @@ class HTTPInstance(service.Service):
+         if not self.is_kdcproxy_configured():
+             self.step("create KDC proxy config", self.create_kdcproxy_conf)
+             self.step("enable KDC proxy", self.enable_kdcproxy)
 +        ipautil.run(["/usr/sbin/a2enmod", "nss"], capture_output=True)
          self.step("restarting httpd", self.__start)
          self.step("configuring httpd to start on boot", self.__enable)
  
-@@ -166,14 +167,14 @@ class HTTPInstance(service.Service):
+@@ -170,14 +171,14 @@ class HTTPInstance(service.Service):
          self.move_service(self.principal)
          self.add_cert_to_service()
  
@@ -436,7 +436,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  
      def __configure_http(self):
          target_fname = paths.HTTPD_IPA_CONF
-@@ -222,11 +223,11 @@ class HTTPInstance(service.Service):
+@@ -226,11 +227,11 @@ class HTTPInstance(service.Service):
          installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSRequireSafeNegotiation', 'on', False)
  
      def __set_mod_nss_passwordfile(self):
@@ -450,7 +450,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
              print "Adding Include conf.d/ipa-rewrite to %s failed." % paths.HTTPD_NSS_CONF
  
      def configure_certmonger_renewal_guard(self):
-@@ -302,7 +303,7 @@ class HTTPInstance(service.Service):
+@@ -306,7 +307,7 @@ class HTTPInstance(service.Service):
          os.chmod(certs.NSS_DIR + "/secmod.db", 0660)
          os.chmod(certs.NSS_DIR + "/pwdfile.txt", 0660)
  
@@ -459,9 +459,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          os.chown(certs.NSS_DIR + "/cert8.db", 0, pent.pw_gid )
          os.chown(certs.NSS_DIR + "/key3.db", 0, pent.pw_gid )
          os.chown(certs.NSS_DIR + "/secmod.db", 0, pent.pw_gid )
-@@ -392,6 +393,8 @@ class HTTPInstance(service.Service):
-         if not running is None:
-             self.stop()
+@@ -451,6 +452,8 @@ class HTTPInstance(service.Service):
+         enabled = self.restore_state("enabled")
+ 
  
 +        ipautil.run(["/usr/sbin/a2dismod", "nss"], capture_output=True)
 +
@@ -481,7 +481,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          os.chown(os.path.join(dirname, 'secmod.db'), 0, pent.pw_gid)
 --- a/ipaserver/install/cainstance.py
 +++ b/ipaserver/install/cainstance.py
-@@ -1160,7 +1160,7 @@ class CAInstance(service.Service):
+@@ -1094,7 +1094,7 @@ class CAInstance(DogtagInstance):
          os.chmod(self.ra_agent_db + "/key3.db", 0640)
          os.chmod(self.ra_agent_db + "/secmod.db", 0640)
  
@@ -512,7 +512,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  OPTIONS=
 --- a/ipaserver/install/bindinstance.py
 +++ b/ipaserver/install/bindinstance.py
-@@ -562,7 +562,7 @@ class BindInstance(service.Service):
+@@ -572,7 +572,7 @@ class BindInstance(service.Service):
      suffix = ipautil.dn_attribute_property('_suffix')
  
      def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders, ntp,
@@ -521,7 +521,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
                ca_configured=None, no_dnssec_validation=False):
          self.named_user = named_user
          self.fqdn = fqdn
-@@ -1001,7 +1001,7 @@ class BindInstance(service.Service):
+@@ -1013,7 +1013,7 @@ class BindInstance(service.Service):
  
      def __generate_rndc_key(self):
          installutils.check_entropy()

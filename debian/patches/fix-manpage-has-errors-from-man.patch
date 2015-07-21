@@ -26,7 +26,7 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  
 --- a/ipa-client/man/ipa-client-install.1
 +++ b/ipa-client/man/ipa-client-install.1
-@@ -208,36 +208,49 @@ Unattended uninstallation. The user will
+@@ -216,36 +216,49 @@ Unattended uninstallation. The user will
  .TP
  Files that will be replaced if SSSD is configured (default):
  
