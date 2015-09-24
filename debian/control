@@ -192,8 +192,7 @@ Depends:
  xz-utils,
  ${misc:Depends},
  ${python:Depends}
-Recommends:
- python-yaml,
+Recommends: python-yaml
 Description: FreeIPA centralized identity framework -- tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
@@ -206,8 +205,8 @@ Package: python-freeipa
 Architecture: any
 Section: python
 Depends:
- gnupg2,
  gnupg-agent,
+ gnupg2,
  iproute,
  keyutils,
  python-dbus,
