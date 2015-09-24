@@ -8,7 +8,7 @@ freeipa (4.1.4-1) UNRELEASED; urgency=medium
       missing the dependencies for now.
   * control: Add python-usb to build-depends and to python-freeipa
     depends.
-  * control: Bump libsss-nss-idmap-dev build-dep.
+  * control: Bump SSSD dependencies.
   * control: Add gnupg-agent to python-freeipa depends, and change gnupg
     to gnupg2.
   * control: Add libsofthsm2-dev to build-depends and softhsm2 to server
