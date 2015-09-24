@@ -27,6 +27,9 @@ if [ "$1" = configure ]; then
         fi
     fi
     chown root:bind /var/cache/bind/data
+
+    ipa-ldap-updater --upgrade --quiet >/dev/null
+    ipa-upgradeconfig --quiet >/dev/null
 fi
 
 if [ ! -e /run/ipa_memcached ]; then
