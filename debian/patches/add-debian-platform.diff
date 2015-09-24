@@ -105,7 +105,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,184 @@
+@@ -0,0 +1,198 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -247,6 +247,20 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    def get_config_dir(self, instance_name=""):
 +        return '/etc/ssh'
 +
++class DebianNamedService(DebianSysvService):
++    def get_user_name(self):
++        return u'bind'
++
++    def get_group_name(self):
++        return u'bind'
++
++    def get_binary_path(self):
++        return paths.NAMED
++
++    def get_package_name(self):
++        return u'bind9'
++
++
 +# Function that constructs proper Debian-specific server classes for services
 +# of specified name
 +
@@ -266,7 +280,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    if name == 'messagebus':
 +        return DebianSysvService("dbus")
 +    if name == 'named':
-+        return DebianSysvService("bind9")
++        return DebianNamedService("bind9")
 +    if name == 'ntpd':
 +        return DebianSysvService("ntp")
 +    if name == 'sshd':
