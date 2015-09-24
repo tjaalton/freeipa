@@ -69,7 +69,7 @@ Depends:
  apache2,
  bind9,
  bind9-dyndb-ldap (>= 6.0-4~),
- certmonger (>= 0.75.14),
+ certmonger (>= 0.76.8),
  fonts-font-awesome,
  freeipa-admintools (= ${binary:Version}),
  freeipa-client (= ${binary:Version}),
@@ -133,7 +133,7 @@ Package: freeipa-client
 Architecture: any
 Depends:
  bind9utils,
- certmonger,
+ certmonger (>= 0.76.8),
  dnsutils,
  krb5-user,
  libcurl3 (>= 7.22.0),
