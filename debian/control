@@ -94,7 +94,7 @@ Depends:
  python-krbv,
  python-ldap,
  python-pyasn1,
- slapi-nis (>= 0.54),
+ slapi-nis (>= 0.54.2),
  softhsm2,
  systemd-sysv,
  ${misc:Depends},
