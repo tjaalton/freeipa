@@ -204,8 +204,8 @@ Package: python-freeipa
 Architecture: any
 Section: python
 Depends:
- gnupg-agent,
  gnupg2,
+ gnupg-agent,
  iproute,
  keyutils,
  python-dbus,
