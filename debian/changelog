@@ -1,6 +1,6 @@
 freeipa (4.1.4-1) UNRELEASED; urgency=medium
 
-  * New upstream release.
+  * New upstream release. (LP: #1492226)
     - Refresh patches
     - platform-support.diff: Added NAMED_VAR_DIR.
     - fix-bind-conf.diff: Dropped, obsolete with above.
@@ -10,7 +10,7 @@ freeipa (4.1.4-1) UNRELEASED; urgency=medium
     depends.
   * control: Bump SSSD dependencies.
   * control: Add gnupg-agent to python-freeipa depends, and change gnupg
-    to gnupg2.
+    to gnupg2. (LP: #1492184)
   * control: Add libsofthsm2-dev to build-depends and softhsm2 to server
     depends.
   * freeipa-{server,client}.install: Add new files.
