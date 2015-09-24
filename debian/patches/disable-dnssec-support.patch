@@ -19,15 +19,28 @@ Subject: [PATCH] Disable DNSSEC support
 
 --- a/install/share/bind.named.conf.template
 +++ b/install/share/bind.named.conf.template
-@@ -18,7 +18,7 @@ options {
+@@ -18,12 +18,8 @@ options {
  	pid-file "$NAMED_PID";
  
  	dnssec-enable yes;
 -	dnssec-validation yes;
 +	dnssec-validation no;
  
- 	/* Path to ISC DLV key */
- 	bindkeys-file "$BINDKEYS_FILE";
+-	/* Path to ISC DLV key */
+-	bindkeys-file "$BINDKEYS_FILE";
+-
+-	managed-keys-directory "$MANAGED_KEYS_DIR";
+ };
+ 
+ /* If you want to enable debugging, eg. using the 'rndc trace' command,
+@@ -40,7 +36,6 @@ logging {
+ 
+ 
+ include "$RFC1912_ZONES";
+-include "$ROOT_KEY";
+ 
+ dynamic-db "ipa" {
+ 	library "ldap.so";
 --- a/install/tools/ipa-dns-install
 +++ b/install/tools/ipa-dns-install
 @@ -23,8 +23,7 @@ from optparse import OptionGroup, SUPPRE

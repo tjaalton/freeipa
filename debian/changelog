@@ -23,6 +23,7 @@ freeipa (4.1.4-1) UNRELEASED; urgency=medium
   * control: Bump python-nss depends.
   * freeipa-client: Add /etc/ipa/nssdb, rework /etc/pki/nssdb handling.
   * platform: Add DebianNamedService.
+  * platform, disable-dnssec-support.patch: Fix named.conf template.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 02 Apr 2015 13:16:49 +0300
 

@@ -555,3 +555,16 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  PIDFile=/var/run/ipa_memcached/ipa_memcached.pid
  ExecStart=/usr/bin/memcached -d -s $SOCKET_PATH -u $USER -m $CACHESIZE -c $MAXCONN -P /var/run/ipa_memcached/ipa_memcached.pid $OPTIONS
  
+--- a/install/share/bind.named.conf.template
++++ b/install/share/bind.named.conf.template
+@@ -38,10 +38,6 @@ logging {
+ 	};
+ };
+ 
+-zone "." IN {
+-	type hint;
+-	file "named.ca";
+-};
+ 
+ include "$RFC1912_ZONES";
+ include "$ROOT_KEY";
