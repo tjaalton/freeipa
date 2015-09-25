@@ -1,0 +1,98 @@
+commit d37678b62dc588180b7207dd9226f1e328f995eb
+Author: Timo Aaltonen <tjaalton@debian.org>
+Date:   Fri Sep 25 06:28:37 2015 +0300
+
+    Revert "DNSSEC: ACI"
+    
+    This reverts commit 4ddc978cea5229f6429221a37cc657b88a734736.
+
+diff --git a/ACI.txt b/ACI.txt
+index 933b57c..12726ee 100644
+--- a/ACI.txt
++++ b/ACI.txt
+@@ -39,14 +39,8 @@ aci: (targetattr = "idnsallowsyncptr || idnsforwarders || idnsforwardpolicy || i
+ dn: dc=ipa,dc=example
+ aci: (target = "ldap:///idnsname=*,cn=dns,dc=ipa,dc=example")(version 3.0;acl "permission:System: Add DNS Entries";allow (add) groupdn = "ldap:///cn=System: Add DNS Entries,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+ dn: dc=ipa,dc=example
+-aci: (targetattr = "ipaprivatekey || ipapublickey || ipasecretkey || ipasecretkeyref || ipawrappingkey || ipawrappingmech || ipk11allowedmechanisms || ipk11alwaysauthenticate || ipk11alwayssensitive || ipk11checkvalue || ipk11copyable || ipk11decrypt || ipk11derive || ipk11destroyable || ipk11distrusted || ipk11encrypt || ipk11enddate || ipk11extractable || ipk11id || ipk11keygenmechanism || ipk11keytype || ipk11label || ipk11local || ipk11modifiable || ipk11neverextractable || ipk11private || ipk11publickeyinfo || ipk11sensitive || ipk11sign || ipk11signrecover || ipk11startdate || ipk11subject || ipk11trusted || ipk11uniqueid || ipk11unwrap || ipk11unwraptemplate || ipk11verify || ipk11verifyrecover || ipk11wrap || ipk11wraptemplate || ipk11wrapwithtrusted || objectclass")(target = "ldap:///cn=keys,cn=sec,cn=dns,dc=ipa,dc=example")(version 3.0;acl "permission:System: Manage DNSSEC keys";allow (all) groupdn = "ldap:///cn=System: Manage DNSSEC keys,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+-dn: dc=ipa,dc=example
+-aci: (targetattr = "cn || idnssecalgorithm || idnsseckeyactivate || idnsseckeycreated || idnsseckeydelete || idnsseckeyinactive || idnsseckeypublish || idnsseckeyref || idnsseckeyrevoke || idnsseckeysep || idnsseckeyzone || objectclass")(target = "ldap:///cn=dns,dc=ipa,dc=example")(targetfilter = "(objectclass=idnsSecKey)")(version 3.0;acl "permission:System: Manage DNSSEC metadata";allow (all) groupdn = "ldap:///cn=System: Manage DNSSEC metadata,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+-dn: dc=ipa,dc=example
+ aci: (targetattr = "a6record || aaaarecord || afsdbrecord || arecord || certrecord || cn || cnamerecord || createtimestamp || dlvrecord || dnamerecord || dnsclass || dnsttl || dsrecord || entryusn || hinforecord || idnsallowdynupdate || idnsallowquery || idnsallowsyncptr || idnsallowtransfer || idnsforwarders || idnsforwardpolicy || idnsname || idnssecinlinesigning || idnssoaexpire || idnssoaminimum || idnssoamname || idnssoarefresh || idnssoaretry || idnssoarname || idnssoaserial || idnsupdatepolicy || idnszoneactive || keyrecord || kxrecord || locrecord || managedby || mdrecord || minforecord || modifytimestamp || mxrecord || naptrrecord || nsec3paramrecord || nsecrecord || nsrecord || nxtrecord || objectclass || ptrrecord || rrsigrecord || sigrecord || srvrecord || sshfprecord || tlsarecord || txtrecord")(target = "ldap:///idnsname=*,cn=dns,dc=ipa,dc=example")(version 3.0;acl "permission:System: Read DNS Entries";allow (compare,read,search) groupdn = "ldap:///cn=System: Read DNS Entries,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+ dn: dc=ipa,dc=example
+-aci: (targetattr = "cn || createtimestamp || entryusn || idnssecalgorithm || idnsseckeyactivate || idnsseckeycreated || idnsseckeydelete || idnsseckeyinactive || idnsseckeypublish || idnsseckeyref || idnsseckeyrevoke || idnsseckeysep || idnsseckeyzone || modifytimestamp || objectclass")(target = "ldap:///cn=dns,dc=ipa,dc=example")(targetfilter = "(objectclass=idnsSecKey)")(version 3.0;acl "permission:System: Read DNSSEC metadata";allow (compare,read,search) groupdn = "ldap:///cn=System: Read DNSSEC metadata,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+-dn: dc=ipa,dc=example
+ aci: (target = "ldap:///idnsname=*,cn=dns,dc=ipa,dc=example")(version 3.0;acl "permission:System: Remove DNS Entries";allow (delete) groupdn = "ldap:///cn=System: Remove DNS Entries,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+ dn: dc=ipa,dc=example
+ aci: (targetattr = "a6record || aaaarecord || afsdbrecord || arecord || certrecord || cn || cnamerecord || dlvrecord || dnamerecord || dnsclass || dnsttl || dsrecord || hinforecord || idnsallowdynupdate || idnsallowquery || idnsallowsyncptr || idnsallowtransfer || idnsforwarders || idnsforwardpolicy || idnsname || idnssecinlinesigning || idnssoaexpire || idnssoaminimum || idnssoamname || idnssoarefresh || idnssoaretry || idnssoarname || idnssoaserial || idnsupdatepolicy || idnszoneactive || keyrecord || kxrecord || locrecord || managedby || mdrecord || minforecord || mxrecord || naptrrecord || nsec3paramrecord || nsecrecord || nsrecord || nxtrecord || ptrrecord || rrsigrecord || sigrecord || srvrecord || sshfprecord || tlsarecord || txtrecord")(target = "ldap:///idnsname=*,cn=dns,dc=ipa,dc=example")(version 3.0;acl "permission:System: Update DNS Entries";allow (write) groupdn = "ldap:///cn=System: Update DNS Entries,cn=permissions,cn=pbac,dc=ipa,dc=example";)
+diff --git a/ipalib/plugins/dns.py b/ipalib/plugins/dns.py
+index f589ab5..ccca6d1 100644
+--- a/ipalib/plugins/dns.py
++++ b/ipalib/plugins/dns.py
+@@ -2471,7 +2471,6 @@ class dnszone(DNSZoneBase):
+         ),
+     )
+     # Permissions will be apllied for forwardzones too
+-    # Store permissions into api.env.basedn, dns container could not exists
+     managed_permissions = {
+         'System: Add DNS Entries': {
+             'non_object': True,
+@@ -2546,58 +2545,6 @@ class dnszone(DNSZoneBase):
+             ],
+             'default_privileges': {'DNS Administrators', 'DNS Servers'},
+         },
+-        'System: Read DNSSEC metadata': {
+-            'non_object': True,
+-            'ipapermright': {'read', 'search', 'compare'},
+-            'ipapermlocation': api.env.basedn,
+-            'ipapermtarget': DN('cn=dns', api.env.basedn),
+-            'ipapermtargetfilter': ['(objectclass=idnsSecKey)'],
+-            'ipapermdefaultattr': {
+-                'idnsSecAlgorithm', 'idnsSecKeyCreated', 'idnsSecKeyPublish',
+-                'idnsSecKeyActivate', 'idnsSecKeyInactive', 'idnsSecKeyDelete',
+-                'idnsSecKeyZone', 'idnsSecKeyRevoke', 'idnsSecKeySep',
+-                'idnsSecKeyRef', 'cn', 'objectclass',
+-            },
+-            'default_privileges': {'DNS Administrators'},
+-        },
+-        'System: Manage DNSSEC metadata': {
+-            'non_object': True,
+-            'ipapermright': {'all'},
+-            'ipapermlocation': api.env.basedn,
+-            'ipapermtarget': DN('cn=dns', api.env.basedn),
+-            'ipapermtargetfilter': ['(objectclass=idnsSecKey)'],
+-            'ipapermdefaultattr': {
+-                'idnsSecAlgorithm', 'idnsSecKeyCreated', 'idnsSecKeyPublish',
+-                'idnsSecKeyActivate', 'idnsSecKeyInactive', 'idnsSecKeyDelete',
+-                'idnsSecKeyZone', 'idnsSecKeyRevoke', 'idnsSecKeySep',
+-                'idnsSecKeyRef', 'cn', 'objectclass',
+-            },
+-            'default_privileges': {'DNS Servers'},
+-        },
+-        'System: Manage DNSSEC keys': {
+-            'non_object': True,
+-            'ipapermright': {'all'},
+-            'ipapermlocation': api.env.basedn,
+-            'ipapermtarget': DN('cn=keys', 'cn=sec', 'cn=dns', api.env.basedn),
+-            'ipapermdefaultattr': {
+-                'ipaPublicKey', 'ipaPrivateKey', 'ipaSecretKey',
+-                'ipaWrappingMech','ipaWrappingKey',
+-                'ipaSecretKeyRef', 'ipk11Private', 'ipk11Modifiable', 'ipk11Label',
+-                'ipk11Copyable', 'ipk11Destroyable', 'ipk11Trusted',
+-                'ipk11CheckValue', 'ipk11StartDate', 'ipk11EndDate',
+-                'ipk11UniqueId', 'ipk11PublicKeyInfo', 'ipk11Distrusted',
+-                'ipk11Subject', 'ipk11Id', 'ipk11Local', 'ipk11KeyType',
+-                'ipk11Derive', 'ipk11KeyGenMechanism', 'ipk11AllowedMechanisms',
+-                'ipk11Encrypt', 'ipk11Verify', 'ipk11VerifyRecover', 'ipk11Wrap',
+-                'ipk11WrapTemplate', 'ipk11Sensitive', 'ipk11Decrypt',
+-                'ipk11Sign', 'ipk11SignRecover', 'ipk11Unwrap',
+-                'ipk11Extractable', 'ipk11AlwaysSensitive',
+-                'ipk11NeverExtractable', 'ipk11WrapWithTrusted',
+-                'ipk11UnwrapTemplate', 'ipk11AlwaysAuthenticate',
+-                'objectclass',
+-            },
+-            'default_privileges': {'DNS Servers'},
+-        },
+     }
+ 
+     def _rr_zone_postprocess(self, record, **options):

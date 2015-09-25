@@ -15,3 +15,6 @@ fix-pykerberos-api.diff
 revert-pykerberos-api-change.diff
 
 disable-dnssec-support.patch
+revert-revert-removal-of-cn-attribute.diff
+revert-dnssec-schema.diff
+revert-dnssec-aci.diff
