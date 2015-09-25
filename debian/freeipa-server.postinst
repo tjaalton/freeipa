@@ -28,7 +28,9 @@ if [ "$1" = configure ]; then
     fi
     chown root:bind /var/cache/bind/data
 
+    echo "Running ipa-ldap-updater..."
     ipa-ldap-updater --upgrade --quiet >/dev/null
+    echo "Running ipa-upgradeconfig..."
     ipa-upgradeconfig --quiet >/dev/null
 fi
 
