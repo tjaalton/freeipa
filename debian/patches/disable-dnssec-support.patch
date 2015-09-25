@@ -383,15 +383,15 @@ Subject: [PATCH] Disable DNSSEC support
      cleanup_kdc(fstore)
      cleanup_adtrust(fstore)
      setup_firefox_extension(fstore)
-@@ -1457,13 +1448,9 @@ def main():
+@@ -1457,13 +1448,6 @@ def main():
                            named_enable_serial_autoincrement(),
                            named_update_gssapi_configuration(),
                            named_update_pid_file(),
 -                          named_enable_dnssec(),
 -                          named_validate_dnssec(),
-                           named_bindkey_file_option(),
-                           named_managed_keys_dir_option(),
-                           named_root_key_include(),
+-                          named_bindkey_file_option(),
+-                          named_managed_keys_dir_option(),
+-                          named_root_key_include(),
 -                          mask_named_regular(),
 -                          fix_dyndb_ldap_workdir_permissions(),
                           )
