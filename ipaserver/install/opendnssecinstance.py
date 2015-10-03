@@ -55,14 +55,6 @@ def get_dnssec_key_masters(conn):
     return keymasters_list
 
 
-def check_inst():
-    if not os.path.exists(paths.ODS_KSMUTIL):
-        print ("Please install the 'opendnssec' package and start "
-               "the installation again")
-        return False
-    return True
-
-
 class OpenDNSSECInstance(service.Service):
     def __init__(self, fstore=None, dm_password=None, ldapi=False,
                  start_tls=False, autobind=ipaldap.AUTOBIND_ENABLED):
@@ -178,6 +170,9 @@ class OpenDNSSECInstance(service.Service):
 
         if not self.fstore.has_file(paths.OPENDNSSEC_KASP_FILE):
             self.fstore.backup_file(paths.OPENDNSSEC_KASP_FILE)
+
+        if not self.fstore.has_file(paths.OPENDNSSEC_ZONELIST_FILE):
+            self.fstore.backup_file(paths.OPENDNSSEC_ZONELIST_FILE)
 
         pin_fd = open(paths.DNSSEC_SOFTHSM_PIN, "r")
         pin = pin_fd.read()
@@ -365,7 +360,8 @@ class OpenDNSSECInstance(service.Service):
                                  paths.IPA_KASP_DB_BACKUP)
 
         for f in [paths.OPENDNSSEC_CONF_FILE, paths.OPENDNSSEC_KASP_FILE,
-                  paths.OPENDNSSEC_KASP_DB, paths.SYSCONFIG_ODS]:
+                  paths.OPENDNSSEC_KASP_DB, paths.SYSCONFIG_ODS,
+                  paths.OPENDNSSEC_ZONELIST_FILE]:
             try:
                 self.fstore.restore_file(f)
             except ValueError, error:

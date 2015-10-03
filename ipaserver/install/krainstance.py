@@ -25,17 +25,21 @@ import sys
 import tempfile
 
 from ipalib import api
+from ipalib import x509
 from ipaplatform import services
 from ipaplatform.paths import paths
+from ipapython import certdb
 from ipapython import dogtag
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipaserver.install import certs
 from ipaserver.install import cainstance
+from ipaserver.install import installutils
 from ipaserver.install import ldapupdate
 from ipaserver.install import service
 from ipaserver.install.dogtaginstance import DogtagInstance
 from ipaserver.install.dogtaginstance import DEFAULT_DSPORT, PKI_USER
+from ipaserver.plugins import ldap2
 from ipapython.ipa_log_manager import log_mgr
 
 # When IPA is installed with DNS support, this CNAME should hold all IPA
@@ -111,8 +115,8 @@ class KRAInstance(DogtagInstance):
 
         self.step("configuring KRA instance", self.__spawn_instance)
         if not self.clone:
-            self.step("add RA user to KRA agent group",
-                      self.__add_ra_user_to_agent_group)
+            self.step("create KRA agent",
+                      self.__create_kra_agent)
         self.step("restarting KRA", self.restart_instance)
         self.step("configure certmonger for renewals",
                   self.configure_certmonger_renewal)
@@ -256,79 +260,6 @@ class KRAInstance(DogtagInstance):
             os.remove(cfg_file)
 
         shutil.move(paths.KRA_BACKUP_KEYS_P12, paths.KRACERT_P12)
-        self.log.debug("completed creating KRA instance")
-
-    def __add_ra_user_to_agent_group(self):
-        """
-        Add RA agent created for CA to KRA agent group.
-        """
-
-        # import CA certificate into temporary security database
-        args = ["/usr/bin/pki",
-            "-d", self.agent_db,
-            "-c", self.admin_password,
-            "client-cert-import",
-            "--pkcs12", paths.KRACERT_P12,
-            "--pkcs12-password", self.admin_password]
-        ipautil.run(args)
-
-        # trust CA certificate
-        args = ["/usr/bin/pki",
-            "-d", self.agent_db,
-            "-c", self.admin_password,
-            "client-cert-mod", "Certificate Authority - %s" % api.env.realm,
-            "--trust", "CT,c,"]
-        ipautil.run(args)
-
-        # import Dogtag admin certificate into temporary security database
-        args = ["/usr/bin/pki",
-            "-d", self.agent_db,
-            "-c", self.admin_password,
-            "client-cert-import",
-            "--pkcs12", paths.DOGTAG_ADMIN_P12,
-            "--pkcs12-password", self.admin_password]
-        ipautil.run(args)
-
-        # as Dogtag admin, create ipakra user in KRA
-        args = ["/usr/bin/pki",
-            "-d", self.agent_db,
-            "-c", self.admin_password,
-            "-n", "ipa-ca-agent",
-            "kra-user-add", "ipakra",
-            "--fullName", "IPA KRA User"]
-        ipautil.run(args)
-
-        # as Dogtag admin, add ipakra into KRA agents group
-        args = ["/usr/bin/pki",
-            "-d", self.agent_db,
-            "-c", self.admin_password,
-            "-n", "ipa-ca-agent",
-            "kra-user-membership-add", "ipakra", "Data Recovery Manager Agents"]
-        ipautil.run(args)
-
-        # assign ipaCert to ipakra
-        (file, filename) = tempfile.mkstemp()
-        os.close(file)
-        try:
-            # export ipaCert without private key
-            args = ["/usr/bin/pki",
-                "-d", paths.HTTPD_ALIAS_DIR,
-                "-C", paths.ALIAS_PWDFILE_TXT,
-                "client-cert-show", "ipaCert",
-                "--cert", filename]
-            ipautil.run(args)
-
-            # as Dogtag admin, upload and assign ipaCert to ipakra
-            args = ["/usr/bin/pki",
-                "-d", self.agent_db,
-                "-c", self.admin_password,
-                "-n", "ipa-ca-agent",
-                "kra-user-cert-add", "ipakra",
-                "--input", filename]
-            ipautil.run(args)
-
-        finally:
-            os.remove(filename)
 
         # export ipaCert with private key for client authentication
         args = ["/usr/bin/pki",
@@ -337,6 +268,49 @@ class KRAInstance(DogtagInstance):
             "client-cert-show", "ipaCert",
             "--client-cert", paths.KRA_AGENT_PEM]
         ipautil.run(args)
+
+        self.log.debug("completed creating KRA instance")
+
+    def __create_kra_agent(self):
+        """
+        Create KRA agent, assign a certificate, and add the user to
+        the appropriate groups for accessing KRA services.
+        """
+
+        # get ipaCert certificate
+        with certdb.NSSDatabase(paths.HTTPD_ALIAS_DIR) as ipa_nssdb:
+           cert_data = ipa_nssdb.get_cert("ipaCert")
+        cert = x509.load_certificate(cert_data, x509.DER)
+
+        # connect to KRA database
+        server_id = installutils.realm_to_serverid(api.env.realm)
+        dogtag_uri = 'ldapi://%%2fvar%%2frun%%2fslapd-%s.socket' % server_id
+        conn = ldap2.ldap2(api, ldap_uri=dogtag_uri)
+        conn.connect(autobind=True)
+
+        # create ipakra user with ipaCert certificate
+        user_dn = DN(('uid', "ipakra"), ('ou', 'people'), self.basedn)
+        entry = conn.make_entry(
+            user_dn,
+            objectClass=['top', 'person', 'organizationalPerson',
+                         'inetOrgPerson', 'cmsuser'],
+            uid=["ipakra"],
+            sn=["IPA KRA User"],
+            cn=["IPA KRA User"],
+            usertype=["undefined"],
+            userCertificate=[cert_data],
+            description=['2;%s;%s;%s' % (
+                cert.serial_number,
+                DN(('CN', 'Certificate Authority'), self.subject_base),
+                DN(('CN', 'IPA RA'), self.subject_base))])
+        conn.add_entry(entry)
+
+        # add ipakra user to Data Recovery Manager Agents group
+        group_dn = DN(('cn', 'Data Recovery Manager Agents'), ('ou', 'groups'),
+                self.basedn)
+        conn.add_entry_to_group(user_dn, group_dn, 'uniqueMember')
+
+        conn.disconnect()
 
     def __add_vault_container(self):
         sub_dict = {

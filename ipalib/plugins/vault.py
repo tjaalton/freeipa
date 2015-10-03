@@ -19,6 +19,7 @@
 
 import base64
 import getpass
+import io
 import json
 import os
 import sys
@@ -37,15 +38,16 @@ import krbV
 
 from ipalib.frontend import Command, Object, Local
 from ipalib import api, errors
-from ipalib import Bytes, Str, Flag
+from ipalib import Bytes, Flag, Str, StrEnum
 from ipalib import output
 from ipalib.crud import PKQuery, Retrieve, Update
 from ipalib.plugable import Registry
 from ipalib.plugins.baseldap import LDAPObject, LDAPCreate, LDAPDelete,\
     LDAPSearch, LDAPUpdate, LDAPRetrieve, LDAPAddMember, LDAPRemoveMember,\
-    pkey_to_value
+    LDAPModMember, pkey_to_value
 from ipalib.request import context
 from ipalib.plugins.user import split_principal
+from ipalib.plugins.service import normalize_principal
 from ipalib import _, ngettext
 from ipaplatform.paths import paths
 from ipapython.dn import DN
@@ -92,131 +94,156 @@ The secret can only be retrieved using the private key.
 """) + _("""
 EXAMPLES:
 """) + _("""
- List private vaults:
+ List vaults:
    ipa vault-find
+       [--user <user>|--service <service>|--shared]
 """) + _("""
- List service vaults:
-   ipa vault-find --service <service name>
-""") + _("""
- List shared vaults:
-   ipa vault-find --shared
-""") + _("""
- List user vaults:
-   ipa vault-find --user <username>
-""") + _("""
- Add a private vault:
+ Add a standard vault:
    ipa vault-add <name>
-""") + _("""
- Add a service vault:
-   ipa vault-add <name> --service <service name>
-""") + _("""
- Add a shared vault:
-   ipa vault-add <ame> --shared
-""") + _("""
- Add a user vault:
-   ipa vault-add <name> --user <username>
+       [--user <user>|--service <service>|--shared]
+       --type standard
 """) + _("""
  Add a symmetric vault:
-   ipa vault-add <name> --type symmetric --password-file password.txt
+   ipa vault-add <name>
+       [--user <user>|--service <service>|--shared]
+       --type symmetric --password-file password.txt
 """) + _("""
  Add an asymmetric vault:
-   ipa vault-add <name> --type asymmetric --public-key-file public.pem
+   ipa vault-add <name>
+       [--user <user>|--service <service>|--shared]
+       --type asymmetric --public-key-file public.pem
 """) + _("""
- Show a private vault:
+ Show a vault:
    ipa vault-show <name>
+       [--user <user>|--service <service>|--shared]
 """) + _("""
- Show a service vault:
-   ipa vault-show <name> --service <service name>
+ Modify vault description:
+   ipa vault-mod <name>
+       [--user <user>|--service <service>|--shared]
+       --desc <description>
 """) + _("""
- Show a shared vault:
-   ipa vault-show <name> --shared
+ Modify vault type:
+   ipa vault-mod <name>
+       [--user <user>|--service <service>|--shared]
+       --type <type>
+       [old password/private key]
+       [new password/public key]
 """) + _("""
- Show a user vault:
-   ipa vault-show <name> --user <username>
+ Modify symmetric vault password:
+   ipa vault-mod <name>
+       [--user <user>|--service <service>|--shared]
+       --change-password
+   ipa vault-mod <name>
+       [--user <user>|--service <service>|--shared]
+       --old-password <old password>
+       --new-password <new password>
+   ipa vault-mod <name>
+       [--user <user>|--service <service>|--shared]
+       --old-password-file <old password file>
+       --new-password-file <new password file>
 """) + _("""
- Modify a private vault:
-   ipa vault-mod <name> --desc <description>
+ Modify asymmetric vault keys:
+   ipa vault-mod <name>
+       [--user <user>|--service <service>|--shared]
+       --private-key-file <old private key file>
+       --public-key-file <new public key file>
 """) + _("""
- Modify a service vault:
-   ipa vault-mod <name> --service <service name> --desc <description>
-""") + _("""
- Modify a shared vault:
-   ipa vault-mod <name> --shared --desc <description>
-""") + _("""
- Modify a user vault:
-   ipa vault-mod <name> --user <username> --desc <description>
-""") + _("""
- Delete a private vault:
+ Delete a vault:
    ipa vault-del <name>
-""") + _("""
- Delete a service vault:
-   ipa vault-del <name> --service <service name>
-""") + _("""
- Delete a shared vault:
-   ipa vault-del <name> --shared
-""") + _("""
- Delete a user vault:
-   ipa vault-del <name> --user <username>
+       [--user <user>|--service <service>|--shared]
 """) + _("""
  Display vault configuration:
    ipa vaultconfig-show
 """) + _("""
- Archive data into private vault:
-   ipa vault-archive <name> --in <input file>
-""") + _("""
- Archive data into service vault:
-   ipa vault-archive <name> --service <service name> --in <input file>
-""") + _("""
- Archive data into shared vault:
-   ipa vault-archive <name> --shared --in <input file>
-""") + _("""
- Archive data into user vault:
-   ipa vault-archive <name> --user <username> --in <input file>
+ Archive data into standard vault:
+   ipa vault-archive <name>
+       [--user <user>|--service <service>|--shared]
+       --in <input file>
 """) + _("""
  Archive data into symmetric vault:
-   ipa vault-archive <name> --in <input file>
+   ipa vault-archive <name>
+       [--user <user>|--service <service>|--shared]
+       --in <input file>
+       --password-file password.txt
 """) + _("""
  Archive data into asymmetric vault:
-   ipa vault-archive <name> --in <input file>
+   ipa vault-archive <name>
+       [--user <user>|--service <service>|--shared]
+       --in <input file>
 """) + _("""
- Retrieve data from private vault:
-   ipa vault-retrieve <name> --out <output file>
-""") + _("""
- Retrieve data from service vault:
-   ipa vault-retrieve <name> --service <service name> --out <output file>
-""") + _("""
- Retrieve data from shared vault:
-   ipa vault-retrieve <name> --shared --out <output file>
-""") + _("""
- Retrieve data from user vault:
-   ipa vault-retrieve <name> --user <username> --out <output file>
+ Retrieve data from standard vault:
+   ipa vault-retrieve <name>
+       [--user <user>|--service <service>|--shared]
+       --out <output file>
 """) + _("""
  Retrieve data from symmetric vault:
-   ipa vault-retrieve <name> --out data.bin
+   ipa vault-retrieve <name>
+       [--user <user>|--service <service>|--shared]
+       --out <output file>
+       --password-file password.txt
 """) + _("""
  Retrieve data from asymmetric vault:
-   ipa vault-retrieve <name> --out data.bin --private-key-file private.pem
+   ipa vault-retrieve <name>
+       [--user <user>|--service <service>|--shared]
+       --out <output file> --private-key-file private.pem
 """) + _("""
- Add a vault owner:
-   ipa vault-add-owner <name> --users <usernames>
+ Add vault owners:
+   ipa vault-add-owner <name>
+       [--user <user>|--service <service>|--shared]
+       [--users <users>]  [--groups <groups>] [--services <services>]
 """) + _("""
- Delete a vault owner:
-   ipa vault-remove-owner <name> --users <usernames>
+ Delete vault owners:
+   ipa vault-remove-owner <name>
+       [--user <user>|--service <service>|--shared]
+       [--users <users>] [--groups <groups>] [--services <services>]
 """) + _("""
- Add a vault member:
-   ipa vault-add-member <name> --users <usernames>
+ Add vault members:
+   ipa vault-add-member <name>
+       [--user <user>|--service <service>|--shared]
+       [--users <users>] [--groups <groups>] [--services <services>]
 """) + _("""
- Delete a vault member:
-   ipa vault-remove-member <name> --users <usernames>
+ Delete vault members:
+   ipa vault-remove-member <name>
+       [--user <user>|--service <service>|--shared]
+       [--users <users>] [--groups <groups>] [--services <services>]
 """)
+
+
+def validated_read(argname, filename, mode='r', encoding=None):
+    """Read file and catch errors
+
+    IOError and UnicodeError (for text files) are turned into a
+    ValidationError
+    """
+    try:
+        with io.open(filename, mode=mode, encoding=encoding) as f:
+            data = f.read()
+    except IOError as exc:
+        raise errors.ValidationError(
+            name=argname,
+            error=_("Cannot read file '%(filename)s': %(exc)s") % {
+                'filename': filename, 'exc': exc[1]
+                }
+        )
+    except UnicodeError as exc:
+        raise errors.ValidationError(
+            name=argname,
+            error=_("Cannot decode file '%(filename)s': %(exc)s") % {
+                'filename': filename, 'exc': exc
+                }
+        )
+    return data
+
 
 register = Registry()
 
+MAX_VAULT_DATA_SIZE = 2**20  # = 1 MB
 
 vault_options = (
     Str(
         'service?',
         doc=_('Service name of the service vault'),
+        normalizer=normalize_principal,
     ),
     Flag(
         'shared?',
@@ -257,8 +284,8 @@ class vault(LDAPObject):
         'ipavaulttype',
     ]
     attribute_members = {
-        'owner': ['user', 'group'],
-        'member': ['user', 'group'],
+        'owner': ['user', 'group', 'service'],
+        'member': ['user', 'group', 'service'],
     }
 
     label = _('Vaults')
@@ -280,12 +307,13 @@ class vault(LDAPObject):
             label=_('Description'),
             doc=_('Vault description'),
         ),
-        Str(
+        StrEnum(
             'ipavaulttype?',
             cli_name='type',
             label=_('Type'),
             doc=_('Vault type'),
-            default=u'standard',
+            values=(u'standard', u'symmetric', u'asymmetric', ),
+            default=u'symmetric',
             autofill=True,
         ),
         Bytes(
@@ -312,27 +340,42 @@ class vault(LDAPObject):
             label=_('Owner groups'),
             flags=['no_create', 'no_update', 'no_search'],
         ),
+        Str(
+            'owner_service?',
+            label=_('Owner services'),
+            flags=['no_create', 'no_update', 'no_search'],
+        ),
+        Str(
+            'owner?',
+            label=_('Failed owners'),
+            flags=['no_create', 'no_update', 'no_search'],
+        ),
+        Str(
+            'service?',
+            label=_('Vault service'),
+            flags={'virtual_attribute', 'no_create', 'no_update', 'no_search'},
+        ),
+        Flag(
+            'shared?',
+            label=_('Shared vault'),
+            flags={'virtual_attribute', 'no_create', 'no_update', 'no_search'},
+        ),
+        Str(
+            'username?',
+            label=_('Vault user'),
+            flags={'virtual_attribute', 'no_create', 'no_update', 'no_search'},
+        ),
     )
 
     def get_dn(self, *keys, **options):
         """
         Generates vault DN from parameters.
         """
-
         service = options.get('service')
         shared = options.get('shared')
         user = options.get('username')
 
-        count = 0
-        if service:
-            count += 1
-
-        if shared:
-            count += 1
-
-        if user:
-            count += 1
-
+        count = (bool(service) + bool(shared) + bool(user))
         if count > 1:
             raise errors.MutuallyExclusiveError(
                 reason=_('Service, shared, and user options ' +
@@ -362,8 +405,10 @@ class vault(LDAPObject):
             parent_dn = DN(('cn', service), ('cn', 'services'), container_dn)
         elif shared:
             parent_dn = DN(('cn', 'shared'), container_dn)
-        else:
+        elif user:
             parent_dn = DN(('cn', user), ('cn', 'users'), container_dn)
+        else:
+            raise RuntimeError
 
         return DN(rdns, parent_dn)
 
@@ -440,7 +485,7 @@ class vault(LDAPObject):
 
             print '  ** Passwords do not match! **'
 
-    def get_existing_password(self, new=False):
+    def get_existing_password(self):
         """
         Gets existing password from user.
         """
@@ -469,11 +514,11 @@ class vault(LDAPObject):
             return fernet.encrypt(data)
 
         elif public_key:
-            rsa_public_key = load_pem_public_key(
+            public_key_obj = load_pem_public_key(
                 data=public_key,
                 backend=default_backend()
             )
-            return rsa_public_key.encrypt(
+            return public_key_obj.encrypt(
                 data,
                 padding.OAEP(
                     mgf=padding.MGF1(algorithm=hashes.SHA1()),
@@ -496,12 +541,12 @@ class vault(LDAPObject):
 
         elif private_key:
             try:
-                rsa_private_key = load_pem_private_key(
+                private_key_obj = load_pem_private_key(
                     data=private_key,
                     password=None,
                     backend=default_backend()
                 )
-                return rsa_private_key.decrypt(
+                return private_key_obj.decrypt(
                     data,
                     padding.OAEP(
                         mgf=padding.MGF1(algorithm=hashes.SHA1()),
@@ -512,6 +557,17 @@ class vault(LDAPObject):
             except AssertionError:
                 raise errors.AuthenticationError(
                     message=_('Invalid credentials'))
+
+    def get_container_attribute(self, entry, options):
+        if options.get('raw', False):
+            return
+        container_dn = DN(self.container_dn, self.api.env.basedn)
+        if entry.dn.endswith(DN(('cn', 'services'), container_dn)):
+            entry['service'] = entry.dn[1]['cn']
+        elif entry.dn.endswith(DN(('cn', 'shared'), container_dn)):
+            entry['shared'] = True
+        elif entry.dn.endswith(DN(('cn', 'users'), container_dn)):
+            entry['username'] = entry.dn[1]['cn']
 
 
 @register()
@@ -524,10 +580,14 @@ class vault_add(PKQuery, Local):
             cli_name='desc',
             doc=_('Vault description'),
         ),
-        Str(
+        StrEnum(
             'ipavaulttype?',
             cli_name='type',
+            label=_('Type'),
             doc=_('Vault type'),
+            values=(u'standard', u'symmetric', u'asymmetric', ),
+            default=u'symmetric',
+            autofill=True,
         ),
         Str(
             'password?',
@@ -555,7 +615,7 @@ class vault_add(PKQuery, Local):
 
     def forward(self, *args, **options):
 
-        vault_type = options.get('ipavaulttype', u'standard')
+        vault_type = options.get('ipavaulttype')
         password = options.get('password')
         password_file = options.get('password_file')
         public_key = options.get('ipavaultpublickey')
@@ -568,6 +628,18 @@ class vault_add(PKQuery, Local):
             del options['password_file']
         if 'public_key_file' in options:
             del options['public_key_file']
+
+        if vault_type != u'symmetric' and (password or password_file):
+            raise errors.MutuallyExclusiveError(
+                reason=_('Password can be specified only for '
+                         'symmetric vault')
+            )
+
+        if vault_type != u'asymmetric' and (public_key or public_key_file):
+            raise errors.MutuallyExclusiveError(
+                reason=_('Public key can be specified only for '
+                         'asymmetric vault')
+            )
 
         if self.api.env.in_server:
             backend = self.api.Backend.ldap2
@@ -591,8 +663,10 @@ class vault_add(PKQuery, Local):
                 pass
 
             elif password_file:
-                with open(password_file, 'rb') as f:
-                    password = f.read().rstrip('\n').decode('utf-8')
+                password = validated_read('password-file',
+                                          password_file,
+                                          encoding='utf-8')
+                password = password.rstrip('\n')
 
             else:
                 password = self.obj.get_new_password()
@@ -611,8 +685,9 @@ class vault_add(PKQuery, Local):
                 pass
 
             elif public_key_file:
-                with open(public_key_file, 'rb') as f:
-                    public_key = f.read()
+                public_key = validated_read('public-key-file',
+                                            public_key_file,
+                                            mode='rb')
 
                 # store vault public key
                 options['ipavaultpublickey'] = public_key
@@ -621,6 +696,19 @@ class vault_add(PKQuery, Local):
                 raise errors.ValidationError(
                     name='ipavaultpublickey',
                     error=_('Missing vault public key'))
+
+            # validate public key and prevent users from accidentally
+            # sending a private key to the server.
+            try:
+                load_pem_public_key(
+                    data=public_key,
+                    backend=default_backend()
+                )
+            except ValueError as e:
+                raise errors.ValidationError(
+                    name='ipavaultpublickey',
+                    error=_('Invalid or unsupported vault public key: %s') % e,
+                )
 
         # create vault
         response = self.api.Command.vault_add_internal(*args, **options)
@@ -669,14 +757,39 @@ class vault_add_internal(LDAPCreate):
         else:
             owner_dn = self.api.Object.user.get_dn(name)
 
+        parent_dn = DN(*dn[1:])
+
+        container_dn = DN(self.api.Object.vault.container_dn,
+                          self.api.env.basedn)
+
+        services_dn = DN(('cn', 'services'), container_dn)
+        users_dn = DN(('cn', 'users'), container_dn)
+
+        if dn.endswith(services_dn):
+            # service container should be owned by the service
+            service = parent_dn[0]['cn']
+            parent_owner_dn = self.api.Object.service.get_dn(service)
+
+        elif dn.endswith(users_dn):
+            # user container should be owned by the user
+            user = parent_dn[0]['cn']
+            parent_owner_dn = self.api.Object.user.get_dn(user)
+
+        else:
+            parent_owner_dn = owner_dn
+
         try:
-            parent_dn = DN(*dn[1:])
-            self.obj.create_container(parent_dn, owner_dn)
-        except errors.DuplicateEntry, e:
+            self.obj.create_container(parent_dn, parent_owner_dn)
+        except errors.DuplicateEntry as e:
             pass
 
+        # vault should be owned by the creator
         entry_attrs['owner'] = owner_dn
 
+        return dn
+
+    def post_callback(self, ldap, dn, entry, *keys, **options):
+        self.obj.get_container_attribute(entry, options)
         return dn
 
 
@@ -725,7 +838,16 @@ class vault_del(LDAPDelete):
 class vault_find(LDAPSearch):
     __doc__ = _('Search for vaults.')
 
-    takes_options = LDAPSearch.takes_options + vault_options
+    takes_options = LDAPSearch.takes_options + vault_options + (
+        Flag(
+            'services?',
+            doc=_('List all service vaults'),
+        ),
+        Flag(
+            'users?',
+            doc=_('List all user vaults'),
+        ),
+    )
 
     has_output_params = LDAPSearch.has_output_params
 
@@ -743,9 +865,31 @@ class vault_find(LDAPSearch):
             raise errors.InvocationError(
                 format=_('KRA service is not enabled'))
 
-        base_dn = self.obj.get_dn(*args, **options)
+        if options.get('users') or options.get('services'):
+            mutex = ['service', 'services', 'shared', 'username', 'users']
+            count = sum(bool(options.get(option)) for option in mutex)
+            if count > 1:
+                raise errors.MutuallyExclusiveError(
+                    reason=_('Service(s), shared, and user(s) options ' +
+                             'cannot be specified simultaneously'))
 
-        return (filter, base_dn, scope)
+            scope = ldap.SCOPE_SUBTREE
+            container_dn = DN(self.obj.container_dn,
+                              self.api.env.basedn)
+
+            if options.get('services'):
+                base_dn = DN(('cn', 'services'), container_dn)
+            else:
+                base_dn = DN(('cn', 'users'), container_dn)
+        else:
+            base_dn = self.obj.get_dn(None, **options)
+
+        return filter, base_dn, scope
+
+    def post_callback(self, ldap, entries, truncated, *args, **options):
+        for entry in entries:
+            self.obj.get_container_attribute(entry, options)
+        return truncated
 
     def exc_callback(self, args, options, exc, call_func, *call_args,
                      **call_kwargs):
@@ -759,8 +903,181 @@ class vault_find(LDAPSearch):
 
 
 @register()
-class vault_mod(LDAPUpdate):
+class vault_mod(PKQuery, Local):
     __doc__ = _('Modify a vault.')
+
+    takes_options = vault_options + (
+        Str(
+            'description?',
+            cli_name='desc',
+            doc=_('Vault description'),
+        ),
+        Str(
+            'ipavaulttype?',
+            cli_name='type',
+            doc=_('Vault type'),
+        ),
+        Bytes(
+            'ipavaultsalt?',
+            cli_name='salt',
+            doc=_('Vault salt'),
+        ),
+        Flag(
+            'change_password?',
+            doc=_('Change password'),
+        ),
+        Str(
+            'old_password?',
+            cli_name='old_password',
+            doc=_('Old vault password'),
+        ),
+        Str(  # TODO: use File parameter
+            'old_password_file?',
+            cli_name='old_password_file',
+            doc=_('File containing the old vault password'),
+        ),
+        Str(
+            'new_password?',
+            cli_name='new_password',
+            doc=_('New vault password'),
+        ),
+        Str(  # TODO: use File parameter
+            'new_password_file?',
+            cli_name='new_password_file',
+            doc=_('File containing the new vault password'),
+        ),
+        Bytes(
+            'private_key?',
+            cli_name='private_key',
+            doc=_('Old vault private key'),
+        ),
+        Str(  # TODO: use File parameter
+            'private_key_file?',
+            cli_name='private_key_file',
+            doc=_('File containing the old vault private key'),
+        ),
+        Bytes(
+            'ipavaultpublickey?',
+            cli_name='public_key',
+            doc=_('New vault public key'),
+        ),
+        Str(  # TODO: use File parameter
+            'public_key_file?',
+            cli_name='public_key_file',
+            doc=_('File containing the new vault public key'),
+        ),
+    )
+
+    has_output = output.standard_entry
+
+    def forward(self, *args, **options):
+
+        vault_type = options.pop('ipavaulttype', False)
+        salt = options.pop('ipavaultsalt', False)
+        change_password = options.pop('change_password', False)
+
+        old_password = options.pop('old_password', None)
+        old_password_file = options.pop('old_password_file', None)
+        new_password = options.pop('new_password', None)
+        new_password_file = options.pop('new_password_file', None)
+
+        old_private_key = options.pop('private_key', None)
+        old_private_key_file = options.pop('private_key_file', None)
+        new_public_key = options.pop('ipavaultpublickey', None)
+        new_public_key_file = options.pop('public_key_file', None)
+
+        if self.api.env.in_server:
+            backend = self.api.Backend.ldap2
+        else:
+            backend = self.api.Backend.rpcclient
+        if not backend.isconnected():
+            backend.connect(ccache=krbV.default_context().default_ccache())
+
+        # determine the vault type based on parameters specified
+        if vault_type:
+            pass
+
+        elif change_password or new_password or new_password_file or salt:
+            vault_type = u'symmetric'
+
+        elif new_public_key or new_public_key_file:
+            vault_type = u'asymmetric'
+
+        # if vault type is specified, retrieve existing secret
+        if vault_type:
+            opts = options.copy()
+            opts.pop('description', None)
+
+            opts['password'] = old_password
+            opts['password_file'] = old_password_file
+            opts['private_key'] = old_private_key
+            opts['private_key_file'] = old_private_key_file
+
+            response = self.api.Command.vault_retrieve(*args, **opts)
+            data = response['result']['data']
+
+        opts = options.copy()
+
+        # if vault type is specified, update crypto attributes
+        if vault_type:
+            opts['ipavaulttype'] = vault_type
+
+            if vault_type == u'standard':
+                opts['ipavaultsalt'] = None
+                opts['ipavaultpublickey'] = None
+
+            elif vault_type == u'symmetric':
+                if salt:
+                    opts['ipavaultsalt'] = salt
+                else:
+                    opts['ipavaultsalt'] = os.urandom(16)
+
+                opts['ipavaultpublickey'] = None
+
+            elif vault_type == u'asymmetric':
+
+                # get new vault public key
+                if new_public_key and new_public_key_file:
+                    raise errors.MutuallyExclusiveError(
+                        reason=_('New public key specified multiple times'))
+
+                elif new_public_key:
+                    pass
+
+                elif new_public_key_file:
+                    new_public_key = validated_read('public_key_file',
+                                                    new_public_key_file,
+                                                    mode='rb')
+
+                else:
+                    raise errors.ValidationError(
+                        name='ipavaultpublickey',
+                        error=_('Missing new vault public key'))
+
+                opts['ipavaultsalt'] = None
+                opts['ipavaultpublickey'] = new_public_key
+
+        response = self.api.Command.vault_mod_internal(*args, **opts)
+
+        # if vault type is specified, rearchive existing secret
+        if vault_type:
+            opts = options.copy()
+            opts.pop('description', None)
+
+            opts['data'] = data
+            opts['password'] = new_password
+            opts['password_file'] = new_password_file
+            opts['override_password'] = True
+
+            self.api.Command.vault_archive(*args, **opts)
+
+        return response
+
+
+@register()
+class vault_mod_internal(LDAPUpdate):
+
+    NO_CLI = True
 
     takes_options = LDAPUpdate.takes_options + vault_options
 
@@ -775,6 +1092,10 @@ class vault_mod(LDAPUpdate):
             raise errors.InvocationError(
                 format=_('KRA service is not enabled'))
 
+        return dn
+
+    def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
+        self.obj.get_container_attribute(entry_attrs, options)
         return dn
 
 
@@ -793,6 +1114,10 @@ class vault_show(LDAPRetrieve):
             raise errors.InvocationError(
                 format=_('KRA service is not enabled'))
 
+        return dn
+
+    def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
+        self.obj.get_container_attribute(entry_attrs, options)
         return dn
 
 
@@ -874,6 +1199,10 @@ class vault_archive(PKQuery, Local):
             cli_name='password_file',
             doc=_('File containing the vault password'),
         ),
+        Flag(
+            'override_password?',
+            doc=_('Override existing password'),
+        ),
     )
 
     has_output = output.standard_entry
@@ -887,6 +1216,8 @@ class vault_archive(PKQuery, Local):
 
         password = options.get('password')
         password_file = options.get('password_file')
+
+        override_password = options.pop('override_password', False)
 
         # don't send these parameters to server
         if 'data' in options:
@@ -903,11 +1234,28 @@ class vault_archive(PKQuery, Local):
             raise errors.MutuallyExclusiveError(
                 reason=_('Input data specified multiple times'))
 
-        elif input_file:
-            with open(input_file, 'rb') as f:
-                data = f.read()
+        elif data:
+            if len(data) > MAX_VAULT_DATA_SIZE:
+                raise errors.ValidationError(name="data", error=_(
+                    "Size of data exceeds the limit. Current vault data size "
+                    "limit is %(limit)d B")
+                    % {'limit': MAX_VAULT_DATA_SIZE})
 
-        elif not data:
+        elif input_file:
+            try:
+                stat = os.stat(input_file)
+            except OSError as exc:
+                raise errors.ValidationError(name="in", error=_(
+                    "Cannot read file '%(filename)s': %(exc)s")
+                    % {'filename': input_file, 'exc': exc[1]})
+            if stat.st_size > MAX_VAULT_DATA_SIZE:
+                raise errors.ValidationError(name="in", error=_(
+                    "Size of data exceeds the limit. Current vault data size "
+                    "limit is %(limit)d B")
+                    % {'limit': MAX_VAULT_DATA_SIZE})
+            data = validated_read('in', input_file, mode='rb')
+
+        else:
             data = ''
 
         if self.api.env.in_server:
@@ -937,19 +1285,25 @@ class vault_archive(PKQuery, Local):
                 pass
 
             elif password_file:
-                with open(password_file) as f:
-                    password = f.read().rstrip('\n').decode('utf-8')
+                password = validated_read('password-file',
+                                          password_file,
+                                          encoding='utf-8')
+                password = password.rstrip('\n')
 
             else:
-                password = self.obj.get_existing_password()
+                if override_password:
+                    password = self.obj.get_new_password()
+                else:
+                    password = self.obj.get_existing_password()
 
-            # verify password by retrieving existing data
-            opts = options.copy()
-            opts['password'] = password
-            try:
-                self.api.Command.vault_retrieve(*args, **opts)
-            except errors.NotFound:
-                pass
+            if not override_password:
+                # verify password by retrieving existing data
+                opts = options.copy()
+                opts['password'] = password
+                try:
+                    self.api.Command.vault_retrieve(*args, **opts)
+                except errors.NotFound:
+                    pass
 
             salt = vault['ipavaultsalt'][0]
 
@@ -1254,8 +1608,10 @@ class vault_retrieve(PKQuery, Local):
                 pass
 
             elif password_file:
-                with open(password_file) as f:
-                    password = f.read().rstrip('\n').decode('utf-8')
+                password = validated_read('password-file',
+                                          password_file,
+                                          encoding='utf-8')
+                password = password.rstrip('\n')
 
             else:
                 password = self.obj.get_existing_password()
@@ -1277,8 +1633,9 @@ class vault_retrieve(PKQuery, Local):
                 pass
 
             elif private_key_file:
-                with open(private_key_file, 'rb') as f:
-                    private_key = f.read()
+                private_key = validated_read('private-key-file',
+                                             private_key_file,
+                                             mode='rb')
 
             else:
                 raise errors.ValidationError(
@@ -1372,13 +1729,35 @@ class vault_retrieve_internal(PKQuery):
         return response
 
 
+class VaultModMember(LDAPModMember):
+    def get_options(self):
+        for param in super(VaultModMember, self).get_options():
+            if param.name == 'service' and param not in vault_options:
+                param = param.clone_rename('services')
+            yield param
+
+    def get_member_dns(self, **options):
+        if 'services' in options:
+            options['service'] = options.pop('services')
+        else:
+            options.pop('service', None)
+        return super(VaultModMember, self).get_member_dns(**options)
+
+    def post_callback(self, ldap, completed, failed, dn, entry_attrs, *keys, **options):
+        for fail in failed.itervalues():
+            fail['services'] = fail.pop('service', [])
+        self.obj.get_container_attribute(entry_attrs, options)
+        return completed, dn
+
+
 @register()
-class vault_add_owner(LDAPAddMember):
+class vault_add_owner(VaultModMember, LDAPAddMember):
     __doc__ = _('Add owners to a vault.')
 
     takes_options = LDAPAddMember.takes_options + vault_options
 
     member_attributes = ['owner']
+    member_param_label = _('owner %s')
     member_count_out = ('%i owner added.', '%i owners added.')
 
     has_output = (
@@ -1397,12 +1776,13 @@ class vault_add_owner(LDAPAddMember):
 
 
 @register()
-class vault_remove_owner(LDAPRemoveMember):
+class vault_remove_owner(VaultModMember, LDAPRemoveMember):
     __doc__ = _('Remove owners from a vault.')
 
     takes_options = LDAPRemoveMember.takes_options + vault_options
 
     member_attributes = ['owner']
+    member_param_label = _('owner %s')
     member_count_out = ('%i owner removed.', '%i owners removed.')
 
     has_output = (
@@ -1421,14 +1801,14 @@ class vault_remove_owner(LDAPRemoveMember):
 
 
 @register()
-class vault_add_member(LDAPAddMember):
+class vault_add_member(VaultModMember, LDAPAddMember):
     __doc__ = _('Add members to a vault.')
 
     takes_options = LDAPAddMember.takes_options + vault_options
 
 
 @register()
-class vault_remove_member(LDAPRemoveMember):
+class vault_remove_member(VaultModMember, LDAPRemoveMember):
     __doc__ = _('Remove members from a vault.')
 
     takes_options = LDAPRemoveMember.takes_options + vault_options

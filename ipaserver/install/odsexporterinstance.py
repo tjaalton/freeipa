@@ -86,13 +86,20 @@ class ODSExporterInstance(service.Service):
             root_logger.error("DNSKeyExporter service already exists")
 
     def __setup_key_exporter(self):
-        installutils.set_directive(paths.SYSOCNFIG_IPA_ODS_EXPORTER,
+        installutils.set_directive(paths.SYSCONFIG_IPA_ODS_EXPORTER,
                                    'SOFTHSM2_CONF',
                                    paths.DNSSEC_SOFTHSM2_CONF,
                                    quotes=False, separator='=')
 
     def __setup_principal(self):
         assert self.ods_uid is not None
+
+        for f in [paths.IPA_ODS_EXPORTER_CCACHE, paths.IPA_ODS_EXPORTER_KEYTAB]:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
         dns_exporter_principal = "ipa-ods-exporter/" + self.fqdn + "@" + self.realm
         installutils.kadmin_addprinc(dns_exporter_principal)
 

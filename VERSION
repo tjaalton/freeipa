@@ -21,7 +21,7 @@
 ########################################################
 IPA_VERSION_MAJOR=4
 IPA_VERSION_MINOR=2
-IPA_VERSION_RELEASE=0
+IPA_VERSION_RELEASE=1
 
 ########################################################
 # For 'alpha' releases the version will be             #
@@ -90,5 +90,5 @@ IPA_DATA_VERSION=20100614120000
 #                                                      #
 ########################################################
 IPA_API_VERSION_MAJOR=2
-IPA_API_VERSION_MINOR=146
-# Last change: pvoborni - move session_logout to ipalib/plugins
+IPA_API_VERSION_MINOR=155
+# Last change: ftweedal - remove certprofile 'rename' option

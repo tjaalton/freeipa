@@ -386,6 +386,10 @@ class Restore(admintool.AdminTool):
                     self.log.info('Starting Directory Server')
                     dirsrv.start(capture_output=False)
             else:
+                # restore access controll configuration
+                auth_backup_path = os.path.join(paths.VAR_LIB_IPA, 'auth_backup')
+                if os.path.exists(auth_backup_path):
+                    tasks.restore_auth_configuration(auth_backup_path)
                 # explicitly enable then disable the pki tomcatd service to
                 # re-register its instance. FIXME, this is really wierd.
                 services.knownservices.pki_tomcatd.enable()
@@ -410,6 +414,13 @@ class Restore(admintool.AdminTool):
         '''
         Create an ldapi connection and bind to it using autobind as root.
         '''
+        instance_name = installutils.realm_to_serverid(api.env.realm)
+
+        if not services.knownservices.dirsrv.is_running(instance_name):
+            raise admintool.ScriptError(
+                "directory server instance is not running/configured"
+            )
+
         if self._conn is not None:
             return self._conn
 

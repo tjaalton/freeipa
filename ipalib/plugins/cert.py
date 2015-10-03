@@ -306,14 +306,6 @@ class cert_request(VirtualCommand):
         ),
     )
 
-    _allowed_extensions = {
-        '2.5.29.14': None,      # Subject Key Identifier
-        '2.5.29.15': None,      # Key Usage
-        '2.5.29.17': 'request certificate with subjectaltname',
-        '2.5.29.19': None,      # Basic Constraints
-        '2.5.29.37': None,      # Extended Key Usage
-    }
-
     def execute(self, csr, **kw):
         ca_enabled_check()
 
@@ -344,8 +336,6 @@ class cert_request(VirtualCommand):
         else:
             principal_type = SERVICE
 
-        caacl_check(principal_type, principal_string, ca, profile_id)
-
         bind_principal = split_any_principal(getattr(context, 'principal'))
         bind_service, bind_name, bind_realm = bind_principal
 
@@ -361,6 +351,15 @@ class cert_request(VirtualCommand):
             self.check_access()
 
         try:
+            self.check_access("request certificate ignore caacl")
+            bypass_caacl = True
+        except errors.ACIError:
+            bypass_caacl = False
+
+        if not bypass_caacl:
+            caacl_check(principal_type, principal_string, ca, profile_id)
+
+        try:
             subject = pkcs10.get_subject(csr)
             extensions = pkcs10.get_extensions(csr)
             subjectaltname = pkcs10.get_subjectaltname(csr) or ()
@@ -368,12 +367,10 @@ class cert_request(VirtualCommand):
             raise errors.CertificateOperationError(
                 error=_("Failure decoding Certificate Signing Request: %s") % e)
 
-        # host principals may bypass allowed ext check
-        if bind_principal_type != HOST:
-            for ext in extensions:
-                operation = self._allowed_extensions.get(ext)
-                if operation:
-                    self.check_access(operation)
+        # self-service and host principals may bypass SAN permission check
+        if bind_principal != principal and bind_principal_type != HOST:
+            if '2.5.29.17' in extensions:
+                self.check_access('request certificate with subjectaltname')
 
         dn = None
         principal_obj = None
@@ -425,11 +422,6 @@ class cert_request(VirtualCommand):
                         "any of user's email addresses")
                 )
 
-        for ext in extensions:
-            if ext not in self._allowed_extensions:
-                raise errors.ValidationError(
-                    name='csr', error=_("extension %s is forbidden") % ext)
-
         # We got this far so the principal entry exists, can we write it?
         if not ldap.can_write(dn, "usercertificate"):
             raise errors.ACIError(info=_("Insufficient 'write' privilege "
@@ -468,12 +460,12 @@ class cert_request(VirtualCommand):
                         raise errors.ACIError(info=_(
                             "Insufficient privilege to create a certificate "
                             "with subject alt name '%s'.") % name)
-                if alt_principal_string is not None:
+                if alt_principal_string is not None and not bypass_caacl:
                     caacl_check(
                         principal_type, alt_principal_string, ca, profile_id)
             elif name_type in (pkcs10.SAN_OTHERNAME_KRB5PRINCIPALNAME,
                                pkcs10.SAN_OTHERNAME_UPN):
-                if name != principal_string:
+                if split_any_principal(name) != principal:
                     raise errors.ACIError(
                         info=_("Principal '%s' in subject alt name does not "
                                "match requested principal") % name)

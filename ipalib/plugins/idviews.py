@@ -256,16 +256,18 @@ class baseidview_apply(LDAPQuery):
         if not options.get('clear_view', False):
             view_dn = self.api.Object['idview'].get_dn_if_exists(view)
             assert isinstance(view_dn, DN)
+
+            # Check that we're not applying the Default Trust View
+            if view.lower() == DEFAULT_TRUST_VIEW_NAME:
+                raise errors.ValidationError(
+                    name=_('ID View'),
+                    error=_('Default Trust View cannot be applied on hosts')
+                )
+
         else:
             # In case we are removing assigned view, we modify the host setting
             # the ipaAssignedIDView to None
             view_dn = None
-
-        if view.lower() == DEFAULT_TRUST_VIEW_NAME:
-            raise errors.ValidationError(
-                name=_('ID View'),
-                error=_('Default Trust View cannot be applied on hosts')
-            )
 
         completed = 0
         succeeded = {'host': []}
@@ -339,7 +341,7 @@ class baseidview_apply(LDAPQuery):
 class idview_apply(baseidview_apply):
     __doc__ = _('Applies ID View to specified hosts or current members of '
                 'specified hostgroups. If any other ID View is applied to '
-                'the host, it is overriden.')
+                'the host, it is overridden.')
 
     member_count_out = (_('ID View applied to %i host.'),
                         _('ID View applied to %i hosts.'))
@@ -432,6 +434,36 @@ class idview_unapply(baseidview_apply):
 
 
 # ID overrides helper methods
+def verify_trusted_domain_object_type(validator, desired_type, name_or_sid):
+
+    object_type = validator.get_trusted_domain_object_type(name_or_sid)
+
+    if object_type == desired_type:
+        # In case SSSD returns the same type as the type being
+        # searched, no problems here.
+        return True
+
+    elif desired_type == 'user' and object_type == 'both':
+        # Type both denotes users with magic private groups.
+        # Overriding attributes for such users is OK.
+        return True
+
+    elif desired_type == 'group' and object_type == 'both':
+        # However, overriding attributes for magic private groups
+        # does not make sense. One should override the GID of
+        # the user itself.
+
+        raise errors.ConversionError(
+            name='identifier',
+            error=_('You are trying to reference a magic private group '
+                    'which is not allowed to be overriden. '
+                    'Try overriding the GID attribute of the '
+                    'corresponding user instead.')
+            )
+
+    return False
+
+
 def resolve_object_to_anchor(ldap, obj_type, obj, fallback_to_ldap):
     """
     Resolves the user/group name to the anchor uuid:
@@ -462,7 +494,7 @@ def resolve_object_to_anchor(ldap, obj_type, obj, fallback_to_ldap):
             raise errors.ValidationError(
                     name=_('IPA object'),
                     error=_('system IPA objects (e.g system groups, user '
-                            'private groups) cannot be overriden')
+                            'private groups) cannot be overridden')
                 )
 
         # The domain prefix, this will need to be reworked once we
@@ -482,9 +514,15 @@ def resolve_object_to_anchor(ldap, obj_type, obj, fallback_to_ldap):
                 sid = domain_validator.get_trusted_domain_object_sid(obj,
                         fallback_to_ldap=fallback_to_ldap)
 
-                # There is no domain prefix since SID contains information
-                # about the domain
-                return SID_ANCHOR_PREFIX + sid
+                # We need to verify that the object type is correct
+                type_correct = verify_trusted_domain_object_type(
+                        domain_validator, obj_type, sid)
+
+                if type_correct:
+                    # There is no domain prefix since SID contains information
+                    # about the domain
+                    return SID_ANCHOR_PREFIX + sid
+
     except errors.ValidationError:
         # Domain validator raises Validation Error if object name does not
         # contain domain part (either NETBIOS\ prefix or @domain.name suffix)
@@ -539,7 +577,13 @@ def resolve_anchor_to_object_name(ldap, obj_type, anchor):
             domain_validator = ipaserver.dcerpc.DomainValidator(api)
             if domain_validator.is_configured():
                 name = domain_validator.get_trusted_domain_object_from_sid(sid)
-                return name
+
+                # We need to verify that the object type is correct
+                type_correct = verify_trusted_domain_object_type(
+                        domain_validator, obj_type, name)
+
+                if type_correct:
+                    return name
 
     # No acceptable object was found
     raise errors.NotFound(
@@ -673,6 +717,25 @@ class baseidoverride_del(LDAPDelete):
     msg_summary = _('Deleted ID override "%(value)s"')
 
     takes_options = LDAPDelete.takes_options + (fallback_to_ldap_option,)
+
+    def pre_callback(self, ldap, dn, *keys, **options):
+        assert isinstance(dn, DN)
+
+        # Make sure the entry we're deleting has all the objectclasses
+        # this object requires
+        try:
+            entry = ldap.get_entry(dn, ['objectclass'])
+        except errors.NotFound:
+            self.obj.handle_not_found(*keys)
+
+        required_object_classes = set(self.obj.object_class)
+        actual_object_classes = set(entry['objectclass'])
+
+        # If not, treat it as a failed search
+        if not required_object_classes.issubset(actual_object_classes):
+            self.obj.handle_not_found(*keys)
+
+        return dn
 
 
 class baseidoverride_mod(LDAPUpdate):

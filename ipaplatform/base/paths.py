@@ -119,7 +119,7 @@ class BasePathNamespace(object):
     SYSCONFIG_DIRSRV_PKI_IPA_DIR = "/etc/sysconfig/dirsrv-PKI-IPA"
     SYSCONFIG_DIRSRV_SYSTEMD = "/etc/sysconfig/dirsrv.systemd"
     SYSCONFIG_IPA_DNSKEYSYNCD = "/etc/sysconfig/ipa-dnskeysyncd"
-    SYSOCNFIG_IPA_ODS_EXPORTER = "/etc/sysconfig/ipa-ods-exporter"
+    SYSCONFIG_IPA_ODS_EXPORTER = "/etc/sysconfig/ipa-ods-exporter"
     SYSCONFIG_HTTPD = "/etc/sysconfig/httpd"
     SYSCONFIG_KRB5KDC_DIR = "/etc/sysconfig/krb5kdc"
     SYSCONFIG_NAMED = "/etc/sysconfig/named"
@@ -218,6 +218,7 @@ class BasePathNamespace(object):
     GROUPADD = "/usr/sbin/groupadd"
     HTTPD = "/usr/sbin/httpd"
     IPA_CLIENT_INSTALL = "/usr/sbin/ipa-client-install"
+    IPA_DNS_INSTALL = "/usr/sbin/ipa-dns-install"
     SBIN_IPA_JOIN = "/usr/sbin/ipa-join"
     IPA_REPLICA_CONNCHECK = "/usr/sbin/ipa-replica-conncheck"
     IPA_RMKEYTAB = "/usr/sbin/ipa-rmkeytab"
@@ -332,6 +333,7 @@ class BasePathNamespace(object):
     NAMED_RUN = "/var/named/data/named.run"
     VAR_OPENDNSSEC_DIR = "/var/opendnssec"
     OPENDNSSEC_KASP_DB = "/var/opendnssec/kasp.db"
+    IPA_ODS_EXPORTER_CCACHE = "/var/opendnssec/tmp/ipa-ods-exporter.ccache"
     VAR_RUN_DIRSRV_DIR = "/var/run/dirsrv"
     KRB5CC_HTTPD = "/var/run/httpd/ipa/krbcache/krb5ccache"
     IPA_RENEWAL_LOCK = "/var/run/ipa/renewal.lock"
@@ -348,3 +350,7 @@ class BasePathNamespace(object):
     BAK2DB = '/usr/sbin/bak2db'
     DB2BAK = '/usr/sbin/db2bak'
     KDCPROXY_CONFIG = '/etc/ipa/kdcproxy/kdcproxy.conf'
+    CERTMONGER = '/usr/sbin/certmonger'
+
+
+path_namespace = BasePathNamespace

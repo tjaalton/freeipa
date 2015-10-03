@@ -199,6 +199,73 @@ def make_trust_dn(env, trust_type, dn):
         return DN(dn, container_dn)
     return dn
 
+def find_adtrust_masters(ldap, api):
+    """
+    Returns a list of names of IPA servers with ADTRUST component configured.
+    """
+
+    try:
+        entries, truncated = ldap.find_entries(
+                "cn=ADTRUST",
+                base_dn=api.env.container_masters + api.env.basedn
+        )
+    except errors.NotFound:
+        entries = []
+
+    return [entry.dn[1].value for entry in entries]
+
+def verify_samba_component_presence(ldap, api):
+    """
+    Verifies that Samba is installed and configured on this particular master.
+    If Samba is not available, provide a heplful hint with the list of masters
+    capable of running the commands.
+    """
+
+    adtrust_present = api.Command['adtrust_is_enabled']()['result']
+
+    hint = _(
+        ' Alternatively, following servers are capable of running this '
+        'command: %(masters)s'
+        )
+
+    def raise_missing_component_error(message):
+        masters_with_adtrust = find_adtrust_masters(ldap, api)
+
+        # If there are any masters capable of running Samba requiring commands
+        # let's advertise them directly
+        if masters_with_adtrust:
+            message += hint % dict(masters=', '.join(masters_with_adtrust))
+
+        raise errors.NotFound(
+            name=_('AD Trust setup'),
+            reason=message,
+        )
+
+    # We're ok in this case, bail out
+    if adtrust_present and _bindings_installed:
+        return
+
+    # First check for packages missing
+    elif not _bindings_installed:
+        error_message=_(
+            'Cannot perform the selected command without Samba 4 support '
+            'installed. Make sure you have installed server-trust-ad '
+            'sub-package of IPA.'
+        )
+
+        raise_missing_component_error(error_message)
+
+    # Packages present, but ADTRUST instance is not configured
+    elif not adtrust_present:
+        error_message=_(
+            'Cannot perform the selected command without Samba 4 instance '
+            'configured on this machine. Make sure you have run '
+            'ipa-adtrust-install on this server.'
+        )
+
+        raise_missing_component_error(error_message)
+
+
 def generate_creds(trustinstance, style, **options):
     """
     Generate string representing credentials using trust instance
@@ -244,7 +311,7 @@ def add_range(myapi, trustinstance, range_name, dom_sid, *keys, **options):
     If that was not successful, we go for our usual defaults (random base,
     range size 200 000, ipa-ad-trust range type).
 
-    Any of these can be overriden by passing appropriate CLI options
+    Any of these can be overridden by passing appropriate CLI options
     to the trust-add command.
     """
 
@@ -554,6 +621,10 @@ sides.
     has_output_params = LDAPCreate.has_output_params + trust_output_params
 
     def execute(self, *keys, **options):
+        ldap = self.obj.backend
+
+        verify_samba_component_presence(ldap, self.api)
+
         full_join = self.validate_options(*keys, **options)
         old_range, range_name, dom_sid = self.validate_range(*keys, **options)
         result = self.execute_ad(full_join, *keys, **options)
@@ -569,7 +640,6 @@ sides.
             created_range_type = old_range['result']['iparangetype'][0]
 
         trust_filter = "cn=%s" % result['value']
-        ldap = self.obj.backend
         (trusts, truncated) = ldap.find_entries(
                          base_dn=DN(self.api.env.container_trusts, self.api.env.basedn),
                          filter=trust_filter)
@@ -640,15 +710,7 @@ sides.
                            self.params['realm_passwd'].label, confirm=False)
 
     def validate_options(self, *keys, **options):
-        if not _bindings_installed:
-            raise errors.NotFound(
-                name=_('AD Trust setup'),
-                reason=_(
-                    'Cannot perform join operation without Samba 4 support '
-                    'installed. Make sure you have installed server-trust-ad '
-                    'sub-package of IPA'
-                )
-            )
+        trusted_realm_domain = keys[-1]
 
         if not _murmur_installed and 'base_id' not in options:
             raise errors.ValidationError(
@@ -667,6 +729,14 @@ sides.
                 name=_('trust type'),
                 error=_('only "ad" is supported')
             )
+
+        # Detect IPA-AD domain clash
+        if self.api.env.domain.lower() == trusted_realm_domain.lower():
+            raise errors.ValidationError(
+                name=_('domain'),
+                error=_('Cannot establish a trust to AD deployed in the same '
+                        'domain as IPA. Such setup is not supported.')
+                )
 
         # If domain name and realm does not match, IPA server is not be able
         # to establish trust with Active Directory.
@@ -692,6 +762,23 @@ sides.
                 )
             )
 
+        # Obtain a list of IPA realm domains
+        result = self.api.Command.realmdomains_show()['result']
+        realm_domains = result['associateddomain']
+
+        # Do not allow the AD's trusted realm domain in the list
+        # of our realm domains
+        if trusted_realm_domain.lower() in realm_domains:
+            raise errors.ValidationError(
+                name=_('AD Trust setup'),
+                error=_(
+                    'Trusted domain %(domain)s is included among '
+                    'IPA realm domains. It needs to be removed '
+                    'prior to establishing the trust. See the '
+                    '"ipa realmdomains-mod --del-domain" command.'
+                ) % dict(domain=trusted_realm_domain)
+            )
+
         self.realm_server = options.get('realm_server')
         self.realm_admin = options.get('realm_admin')
         self.realm_passwd = options.get('realm_passwd')
@@ -702,7 +789,7 @@ sides.
             if len(names) > 1:
                 # realm admin name is in UPN format, user@realm, check that
                 # realm is the same as the one that we are attempting to trust
-                if keys[-1].lower() != names[-1].lower():
+                if trusted_realm_domain.lower() != names[-1].lower():
                     raise errors.ValidationError(
                         name=_('AD Trust setup'),
                         error=_(
@@ -1379,6 +1466,9 @@ class trustdomain_del(LDAPDelete):
     msg_summary = _('Removed information about the trusted domain "%(value)s"')
 
     def execute(self, *keys, **options):
+        ldap = self.api.Backend.ldap2
+        verify_samba_component_presence(ldap, self.api)
+
         # Note that pre-/post- callback handling for LDAPDelete is causing pre_callback
         # to always receive empty keys. We need to catch the case when root domain is being deleted
 
@@ -1397,7 +1487,12 @@ class trustdomain_del(LDAPDelete):
 
 def fetch_domains_from_trust(myapi, trustinstance, trust_entry, **options):
     trust_name = trust_entry['cn'][0]
-    creds = generate_creds(trustinstance, style=CRED_STYLE_SAMBA, **options)
+    # We want to use Kerberos if we have admin credentials even with SMB calls
+    # as eventually use of NTLMSSP will be deprecated for trusted domain operations
+    # If admin credentials are missing, 'creds' will be None and fetch_domains
+    # will use HTTP/ipa.master@IPA.REALM principal, e.g. Kerberos authentication
+    # as well.
+    creds = generate_creds(trustinstance, style=CRED_STYLE_KERBEROS, **options)
     server = options.get('realm_server', None)
     domains = ipaserver.dcerpc.fetch_domains(myapi,
                                              trustinstance.local_flatname,
@@ -1451,15 +1546,9 @@ class trust_fetch_domains(LDAPRetrieve):
     )
 
     def execute(self, *keys, **options):
-        if not _bindings_installed:
-            raise errors.NotFound(
-                name=_('AD Trust setup'),
-                reason=_(
-                    'Cannot perform join operation without Samba 4 support '
-                    'installed. Make sure you have installed server-trust-ad '
-                    'sub-package of IPA'
-                )
-            )
+        ldap = self.api.Backend.ldap2
+        verify_samba_component_presence(ldap, self.api)
+
         trust = self.api.Command.trust_show(keys[0], raw=True)['result']
 
         result = dict()
@@ -1468,7 +1557,7 @@ class trust_fetch_domains(LDAPRetrieve):
         result['truncated'] = False
 
         # For one-way trust fetch over DBus. we don't get the list in this case.
-        if trust['ipanttrustdirection'] & TRUST_BIDIRECTIONAL != TRUST_BIDIRECTIONAL:
+        if int(trust['ipanttrustdirection'][0]) != TRUST_BIDIRECTIONAL:
             fetch_trusted_domains_over_dbus(self.api, self.log, keys[0])
             result['summary'] = unicode(_('List of trust domains successfully refreshed. Use trustdomain-find command to list them.'))
             return result
@@ -1505,6 +1594,7 @@ class trustdomain_enable(LDAPQuery):
 
     def execute(self, *keys, **options):
         ldap = self.api.Backend.ldap2
+        verify_samba_component_presence(ldap, self.api)
 
         if keys[0].lower() == keys[1].lower():
             raise errors.ValidationError(name='domain',
@@ -1545,6 +1635,7 @@ class trustdomain_disable(LDAPQuery):
 
     def execute(self, *keys, **options):
         ldap = self.api.Backend.ldap2
+        verify_samba_component_presence(ldap, self.api)
 
         if keys[0].lower() == keys[1].lower():
             raise errors.ValidationError(name='domain',

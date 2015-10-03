@@ -502,10 +502,16 @@ def install_check(installer):
 
     if options.setup_dns:
         dns.install_check(False, True, options, config.host_name)
+        config.ips = dns.ip_addresses
     else:
-        installutils.get_server_ip_address(config.host_name, fstore,
-                                           not installer.interactive, False,
-                                           options.ip_addresses)
+        config.ips = installutils.get_server_ip_address(
+            config.host_name, not installer.interactive, False,
+            options.ip_addresses)
+
+    # installer needs to update hosts file when DNS subsystem will be
+    # installed or custom addresses are used
+    if options.setup_dns or options.ip_addresses:
+        installer._update_hosts_file = True
 
     # check connection
     if not options.skip_conncheck:
@@ -527,6 +533,9 @@ def install(installer):
     config = installer._config
 
     dogtag_constants = dogtag.install_constants
+
+    if installer._update_hosts_file:
+        installutils.update_hosts_file(config.ips, config.host_name, fstore)
 
     # Create DS user/group if it doesn't exist yet
     dsinstance.create_ds_user()
@@ -573,14 +582,15 @@ def install(installer):
     otpd.create_instance('OTPD', config.host_name, config.dirman_password,
                          ipautil.realm_to_suffix(config.realm_name))
 
-    CA = cainstance.CAInstance(
-        config.realm_name, certs.NSS_DIR,
-        dogtag_constants=dogtag_constants)
-    CA.dm_password = config.dirman_password
+    if ipautil.file_exists(config.dir + "/cacert.p12"):
+        CA = cainstance.CAInstance(
+            config.realm_name, certs.NSS_DIR,
+            dogtag_constants=dogtag_constants)
+        CA.dm_password = config.dirman_password
 
-    CA.configure_certmonger_renewal()
-    CA.import_ra_cert(config.dir + "/ra.p12")
-    CA.fix_ra_perms()
+        CA.configure_certmonger_renewal()
+        CA.import_ra_cert(config.dir + "/ra.p12")
+        CA.fix_ra_perms()
 
     # The DS instance is created before the keytab, add the SSL cert we
     # generated
@@ -679,6 +689,7 @@ class ReplicaDNS(common.Installable, core.Group, core.Composite):
         description=("The reverse DNS zone to use. This option can be used "
                      "multiple times"),
         cli_name='reverse-zone',
+        cli_metavar='REVERSE_ZONE',
     )
 
     no_reverse = Knob(
@@ -689,31 +700,6 @@ class ReplicaDNS(common.Installable, core.Group, core.Composite):
     no_dnssec_validation = Knob(
         bool, False,
         description="Disable DNSSEC validation",
-    )
-
-    dnssec_master = Knob(
-        bool, False,
-        initializable=False,
-        description="Setup server to be DNSSEC key master",
-    )
-
-    disable_dnssec_master = Knob(
-        bool, False,
-        initializable=False,
-        description="Disable the DNSSEC master on this server",
-    )
-
-    force = Knob(
-        bool, False,
-        initializable=False,
-        description="Force install",
-    )
-
-    kasp_db_file = Knob(
-        str, None,
-        initializable=False,
-        description="Copy OpenDNSSEC metadata from the specified file (will "
-                    "not create a new kasp.db file)",
     )
 
     no_host_dns = Knob(
@@ -750,6 +736,7 @@ class Replica(common.Installable, common.Interactive, core.Composite):
         description=("Replica server IP Address. This option can be used "
                      "multiple times"),
         cli_name='ip-address',
+        cli_metavar='IP_ADDRESS',
     )
 
     password = Knob(
@@ -774,6 +761,7 @@ class Replica(common.Installable, common.Interactive, core.Composite):
     no_ntp = Knob(
         bool, False,
         description="do not configure ntp",
+        cli_short_name='N',
     )
 
     no_ui_redirect = Knob(
@@ -806,6 +794,7 @@ class Replica(common.Installable, common.Interactive, core.Composite):
 
         self._top_dir = None
         self._config = None
+        self._update_hosts_file = False
 
         #pylint: disable=no-member
 
@@ -864,10 +853,10 @@ class Replica(common.Installable, common.Interactive, core.Composite):
         self.reverse_zones = self.dns.reverse_zones
         self.no_reverse = self.dns.no_reverse
         self.no_dnssec_validation = self.dns.no_dnssec_validation
-        self.dnssec_master = self.dns.dnssec_master
-        self.disable_dnssec_master = self.dns.disable_dnssec_master
-        self.kasp_db_file = self.dns.kasp_db_file
-        self.force = self.dns.force
+        self.dnssec_master = False
+        self.disable_dnssec_master = False
+        self.kasp_db_file = None
+        self.force = False
         self.zonemgr = None
         self.no_host_dns = self.dns.no_host_dns
         self.no_dns_sshfp = self.dns.no_dns_sshfp

@@ -3,6 +3,7 @@
 #
 
 import re
+from operator import attrgetter
 
 from ipalib import api, Bool, File, Str
 from ipalib import output, util
@@ -11,8 +12,10 @@ from ipalib.plugins.virtual import VirtualCommand
 from ipalib.plugins.baseldap import (
     LDAPObject, LDAPSearch, LDAPCreate,
     LDAPDelete, LDAPUpdate, LDAPRetrieve)
+from ipalib.request import context
 from ipalib import ngettext
 from ipalib.text import _
+from ipapython.dogtag import INCLUDED_PROFILES
 from ipapython.version import API_VERSION
 
 from ipalib import errors
@@ -46,8 +49,28 @@ EXAMPLES:
   Show information about a profile:
     ipa certprofile-show ShortLivedUserCert
 
+  Save profile configuration to a file:
+    ipa certprofile-show caIPAserviceCert --out caIPAserviceCert.cfg
+
   Search for profiles that do not store certificates:
     ipa certprofile-find --store=false
+
+PROFILE CONFIGURATION FORMAT:
+
+The profile configuration format is the raw property-list format
+used by Dogtag Certificate System.  The XML format is not supported.
+
+The following restrictions apply to profiles managed by FreeIPA:
+
+- When importing a profile the "profileId" field, if present, must
+  match the ID given on the command line.
+
+- The "classId" field must be set to "caEnrollImpl"
+
+- The "auth.instance_id" field must be set to "raCertAuth"
+
+- The "certReqInputImpl" input class and "certOutputImpl" output
+  class must be used.
 
 """)
 
@@ -92,7 +115,6 @@ class certprofile(LDAPObject):
     search_attributes = [
         'cn', 'description', 'ipacertprofilestoreissued'
     ]
-    rdn_is_primary_key = True
     label = _('Certificate Profiles')
     label_singular = _('Certificate Profile')
 
@@ -220,7 +242,7 @@ class certprofile_import(LDAPCreate):
     msg_summary = _('Imported profile "%(value)s"')
     takes_options = (
         File('file',
-            label=_('Filename'),
+            label=_('Filename of a raw profile. The XML format is not supported.'),
             cli_name='file',
             flags=('virtual_attribute',),
         ),
@@ -230,11 +252,12 @@ class certprofile_import(LDAPCreate):
 
     def pre_callback(self, ldap, dn, entry, entry_attrs, *keys, **options):
         ca_enabled_check()
+        context.profile = options['file']
 
         match = self.PROFILE_ID_PATTERN.search(options['file'])
         if match is None:
-            raise errors.ValidationError(name='file',
-                error=_("Profile ID is not present in profile data"))
+            # no profileId found, use CLI value as profileId.
+            context.profile = u'profileId=%s\n%s' % (keys[0], context.profile)
         elif keys[0] != match.group(1):
             raise errors.ValidationError(name='file',
                 error=_("Profile ID '%(cli_value)s' does not match profile data '%(file_value)s'")
@@ -250,7 +273,7 @@ class certprofile_import(LDAPCreate):
         """
         try:
             with self.api.Backend.ra_certprofile as profile_api:
-                profile_api.create_profile(options['file'])
+                profile_api.create_profile(context.profile)
                 profile_api.enable_profile(keys[0])
         except:
             # something went wrong ; delete entry
@@ -265,9 +288,16 @@ class certprofile_del(LDAPDelete):
     __doc__ = _("Delete a Certificate Profile.")
     msg_summary = _('Deleted profile "%(value)s"')
 
-    def execute(self, *args, **kwargs):
+    def pre_callback(self, ldap, dn, *keys, **options):
         ca_enabled_check()
-        return super(certprofile_del, self).execute(*args, **kwargs)
+
+        if keys[0] in map(attrgetter('profile_id'), INCLUDED_PROFILES):
+            raise errors.ValidationError(name='profile_id',
+                error=_("Predefined profile '%(profile_id)s' cannot be deleted")
+                    % {'profile_id': keys[0]}
+            )
+
+        return dn
 
     def post_callback(self, ldap, dn, *keys, **options):
         with self.api.Backend.ra_certprofile as profile_api:
@@ -291,6 +321,10 @@ class certprofile_mod(LDAPUpdate):
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
         ca_enabled_check()
+        # Once a profile id is set it cannot be changed
+        if 'cn' in entry_attrs:
+            raise errors.ProtectedEntryError(label='certprofile', key=keys[0],
+                reason=_('Certificate profiles cannot be renamed'))
         if 'file' in options:
             with self.api.Backend.ra_certprofile as profile_api:
                 profile_api.disable_profile(keys[0])

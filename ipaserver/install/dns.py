@@ -9,6 +9,7 @@ from subprocess import CalledProcessError
 from ipalib import api
 from ipalib import errors
 from ipaplatform.paths import paths
+from ipaplatform.constants import constants
 from ipaplatform import services
 from ipapython import ipautil
 from ipapython import sysrestore
@@ -18,6 +19,7 @@ from ipapython.ipaldap import AUTOBIND_ENABLED
 from ipapython.ipautil import user_input
 from ipaserver.install.installutils import get_server_ip_address
 from ipaserver.install.installutils import read_dns_forwarders
+from ipaserver.install.installutils import update_hosts_file
 from ipaserver.install import bindinstance
 from ipaserver.install import dnskeysyncinstance
 from ipaserver.install import ntpinstance
@@ -96,6 +98,10 @@ def install_check(standalone, replica, options, hostname):
     global reverse_zones
     fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
+    if not ipautil.file_exists(paths.IPA_DNS_INSTALL):
+        raise RuntimeError("Integrated DNS requires '%s' package" %
+                           constants.IPA_DNS_PACKAGE_NAME)
+
     if standalone:
         print "=============================================================================="
         print "This program will setup DNS for the FreeIPA Server."
@@ -121,8 +127,6 @@ def install_check(standalone, replica, options, hostname):
         print "NOTE: DNSSEC zone signing is not enabled by default"
         print ""
         if options.dnssec_master:
-            print "DNSSEC support is experimental!"
-            print ""
             print "Plan carefully, replacing DNSSEC key master is not recommended"
             print ""
         print ""
@@ -141,8 +145,7 @@ def install_check(standalone, replica, options, hostname):
         sys.exit("Aborted")
 
     # Check bind packages are installed
-    if not (bindinstance.check_inst(options.unattended) and
-            dnskeysyncinstance.check_inst()):
+    if not bindinstance.check_inst(options.unattended):
         sys.exit("Aborting installation.")
 
     if options.disable_dnssec_master:
@@ -177,9 +180,6 @@ def install_check(standalone, replica, options, hostname):
             sys.exit("Only one DNSSEC key master is supported in current "
                      "version.")
 
-        # check opendnssec packages are installed
-        if not opendnssecinstance.check_inst():
-            sys.exit("Aborting installation")
         if options.kasp_db_file:
             dnskeysyncd = services.service('ipa-dnskeysyncd')
 
@@ -226,8 +226,8 @@ def install_check(standalone, replica, options, hostname):
                 "the original kasp.db file." %
                 ", ".join([str(zone) for zone in dnssec_zones]))
 
-    ip_addresses = get_server_ip_address(
-        hostname, fstore, options.unattended, True, options.ip_addresses)
+    ip_addresses = get_server_ip_address(hostname, options.unattended,
+                                         True, options.ip_addresses)
 
     if options.no_forwarders:
         dns_forwarders = ()
@@ -277,6 +277,10 @@ def install(standalone, replica, options):
     fstore = sysrestore.FileStore(paths.SYSRESTORE)
 
     conf_ntp = ntpinstance.NTPInstance(fstore).is_enabled()
+
+    if standalone:
+        # otherwise this is done by server/replica installer
+        update_hosts_file(ip_addresses, api.env.host, fstore)
 
     bind = bindinstance.BindInstance(fstore, ldapi=True,
                                      autobind=AUTOBIND_ENABLED)

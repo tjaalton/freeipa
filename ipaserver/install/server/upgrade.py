@@ -1261,11 +1261,11 @@ def ds_enable_sidgen_extdom_plugins(ds):
     root_logger.info('[Enable sidgen and extdom plugins by default]')
 
     if sysupgrade.get_upgrade_state('ds', 'enable_ds_sidgen_extdom_plugins'):
-        root_logger.info('sidgen and extdom plugins are enabled already')
+        root_logger.debug('sidgen and extdom plugins are enabled already')
         return
 
-    ds._add_sidgen_plugin()
-    ds._add_extdom_plugin()
+    ds.add_sidgen_plugin()
+    ds.add_extdom_plugin()
     sysupgrade.set_upgrade_state('ds', 'enable_ds_sidgen_extdom_plugins', True)
 
 def ca_upgrade_schema(ca):
@@ -1306,7 +1306,7 @@ def add_default_caacl(ca):
 
         if not api.Command.caacl_find()['result']:
             api.Command.caacl_add(u'hosts_services_caIPAserviceCert',
-                hostcategory=u'all', usercategory=u'all')
+                hostcategory=u'all', servicecategory=u'all')
             api.Command.caacl_add_profile(u'hosts_services_caIPAserviceCert',
                 certprofile=(u'caIPAserviceCert',))
 
@@ -1328,6 +1328,13 @@ def upgrade_configuration():
         raise RuntimeError("ipa-rewrite.conf doesn't exists (is this server?)")
 
     # Ok, we are an IPA server, do the additional tests
+    ds_serverid = installutils.realm_to_serverid(api.env.realm)
+    ds = dsinstance.DsInstance()
+
+    # start DS, CA will not start without running DS, and cause error
+    ds_running = ds.is_running()
+    if not ds_running:
+        ds.start(ds_serverid)
 
     check_certs()
 
@@ -1359,7 +1366,6 @@ def upgrade_configuration():
                     'ca.crl.MasterCRL.enableCRLUpdates', '=')
             sub_dict['CLONE']='#' if crl.lower() == 'true' else ''
 
-        ds_serverid = installutils.realm_to_serverid(api.env.realm)
         ds_dirname = dsinstance.config_dirname(ds_serverid)
 
         upgrade_file(sub_dict, paths.HTTPD_IPA_CONF,
@@ -1396,23 +1402,6 @@ def upgrade_configuration():
     http.change_mod_nss_port_from_http()
     http.configure_certmonger_renewal_guard()
 
-    if not http.is_kdcproxy_configured():
-        root_logger.info('[Enabling KDC Proxy]')
-        if http.admin_conn is None:
-            http.ldapi = True
-            http.fqdn = fqdn
-            http.realm = api.env.realm
-            http.suffix = ipautil.realm_to_suffix(api.env.realm)
-            http.ldap_connect()
-        http.create_kdcproxy_conf()
-        http.enable_kdcproxy()
-
-    http.stop()
-    update_mod_nss_protocol(http)
-    fix_trust_flags()
-    http.start()
-
-    ds = dsinstance.DsInstance()
     ds.configure_dirsrv_ccache()
 
     # ldap2 connection is not valid after DS restart, close connection otherwise
@@ -1431,7 +1420,29 @@ def upgrade_configuration():
     ds.fqdn = fqdn
     ds.realm = api.env.realm
     ds.suffix = ipautil.realm_to_suffix(api.env.realm)
+
+    ds.ldap_connect()
     ds_enable_sidgen_extdom_plugins(ds)
+    ds.ldap_disconnect()
+
+    # Now 389-ds is available, run the remaining http tasks
+    if not http.is_kdcproxy_configured():
+        root_logger.info('[Enabling KDC Proxy]')
+        if http.admin_conn is None:
+             # 389-ds needs to be running
+            ds.start()
+            http.ldapi = True
+            http.fqdn = fqdn
+            http.realm = api.env.realm
+            http.suffix = ipautil.realm_to_suffix(api.env.realm)
+            http.ldap_connect()
+        http.create_kdcproxy_conf()
+        http.enable_kdcproxy()
+
+    http.stop()
+    update_mod_nss_protocol(http)
+    fix_trust_flags()
+    http.start()
 
     uninstall_selfsign(ds, http)
 
@@ -1519,6 +1530,11 @@ def upgrade_configuration():
     add_default_caacl(ca)
 
     set_sssd_domain_option('ipa_server_mode', 'True')
+
+    if ds_running and not ds.is_running():
+        ds.start(ds_serverid)
+    elif not ds_running and ds.is_running():
+        ds.stop(ds_serverid)
 
 
 def upgrade_check(options):

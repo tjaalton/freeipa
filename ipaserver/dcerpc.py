@@ -107,6 +107,14 @@ dcerpc_error_messages = {
          errors.RequirementError(name=_('At least the domain or IP address should be specified')),
 }
 
+pysss_type_key_translation_dict = {
+    pysss_nss_idmap.ID_USER: 'user',
+    pysss_nss_idmap.ID_GROUP: 'group',
+    # Used for users with magic private groups
+    pysss_nss_idmap.ID_BOTH: 'both',
+}
+
+
 def assess_dcerpc_exception(num=None,message=None):
     """
     Takes error returned by Samba bindings and converts it into
@@ -367,6 +375,27 @@ class DomainValidator(object):
         except TypeError, e:
             raise errors.ValidationError(name=_('trusted domain object'),
                error= _('Trusted domain did not return a valid SID for the object'))
+
+    def get_trusted_domain_object_type(self, name_or_sid):
+        """
+        Return the type of the object corresponding to the given name in
+        the trusted domain, which is either 'user', 'group' or 'both'.
+        The 'both' types is used for users with magic private groups.
+        """
+
+        object_type = None
+
+        if is_sid_valid(name_or_sid):
+            result = pysss_nss_idmap.getnamebysid(name_or_sid)
+        else:
+            result = pysss_nss_idmap.getsidbyname(name_or_sid)
+
+        if name_or_sid in result:
+            object_type = result[name_or_sid].get(pysss_nss_idmap.TYPE_KEY)
+
+        # Do the translation to hide pysss_nss_idmap constants
+        # from higher-level code
+        return pysss_type_key_translation_dict.get(object_type)
 
     def get_trusted_domain_object_from_sid(self, sid):
         root_logger.debug("Converting SID to object name: %s" % sid)
@@ -644,6 +673,8 @@ class DomainValidator(object):
         Returns LDAP result or None.
         """
 
+        ccache_name = None
+
         if self._admin_creds:
             (ccache_name, principal) = self.kinit_as_administrator(info['dns_domain'])
 
@@ -823,9 +854,8 @@ class TrustDomainInstance(object):
         We try NCACN_NP before NCACN_IP_TCP and use SMB2 before SMB1 or defaults.
         """
         transports = (u'ncacn_np', u'ncacn_ip_tcp')
-        options = ( u'smb2', u'smb1', u'')
-        binding_template=lambda x,y,z: u'%s:%s[%s,print]' % (x, y, z)
-        return [binding_template(t, remote_host, o) for t in transports for o in options]
+        options = ( u'smb2,print', u'print')
+        return [u'%s:%s[%s]' % (t, remote_host, o) for t in transports for o in options]
 
     def retrieve_anonymously(self, remote_host, discover_srv=False, search_pdc=False):
         """
@@ -1084,22 +1114,44 @@ class TrustDomainInstance(object):
         result = retrieve_netlogon_info_2(None, self,
                                           netlogon.NETLOGON_CONTROL_TC_VERIFY,
                                           another_domain.info['dns_domain'])
-        if (result and (result.flags and netlogon.NETLOGON_VERIFY_STATUS_RETURNED)):
-            if (result.pdc_connection_status[0] != 0) and (result.tc_connection_status[0] != 0):
+
+        if result and result.flags and netlogon.NETLOGON_VERIFY_STATUS_RETURNED:
+            if result.pdc_connection_status[0] != 0 and result.tc_connection_status[0] != 0:
                 if result.pdc_connection_status[1] == "WERR_ACCESS_DENIED":
                     # Most likely AD DC hit another IPA replica which yet has no trust secret replicated
+
                     # Sleep and repeat again
                     self.validation_attempts += 1
                     if self.validation_attempts < 10:
                         sleep(5)
                         return self.verify_trust(another_domain)
-                    raise errors.ACIError(
-                            info=_('IPA master denied trust validation requests from AD DC '
-                                   '%(count)d times. Most likely AD DC contacted a replica '
-                                   'that has no trust information replicated yet.')
-                                   % dict(count=self.validation_attempts))
+
+                    # If we get here, we already failed 10 times
+                    srv_record_templates = (
+                        '_ldap._tcp.%s',
+                        '_ldap._tcp.Default-First-Site-Name._sites.dc._msdcs.%s'
+                    )
+
+                    srv_records = ', '.join(
+                        [srv_record % api.env.domain
+                         for srv_record in srv_record_templates]
+                    )
+
+                    error_message = _(
+                        'IPA master denied trust validation requests from AD '
+                        'DC %(count)d times. Most likely AD DC contacted a '
+                        'replica that has no trust information replicated '
+                        'yet. Additionally, please check that AD DNS is able '
+                        'to resolve %(records)s SRV records to the correct '
+                        'IPA server.') % dict(count=self.validation_attempts,
+                                              records=srv_records)
+
+                    raise errors.ACIError(info=error_message)
+
                 raise assess_dcerpc_exception(*result.pdc_connection_status)
+
             return True
+
         return False
 
 
@@ -1270,7 +1322,7 @@ class TrustDomainJoins(object):
         if self.local_domain.read_only:
             return
 
-	self.local_domain.ftinfo_records = []
+        self.local_domain.ftinfo_records = []
 
         realm_domains = self.api.Command.realmdomains_show()['result']
         # Use realmdomains' modification timestamp to judge records last update time

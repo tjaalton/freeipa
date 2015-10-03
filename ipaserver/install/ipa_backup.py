@@ -41,6 +41,7 @@ from ipapython import ipaldap
 from ipalib.session import ISO8601_DATETIME_FMT
 from ipalib.constants import CACERT
 from ConfigParser import SafeConfigParser
+from ipaplatform.tasks import tasks
 
 """
 A test gpg can be generated like this:
@@ -132,7 +133,7 @@ class Backup(admintool.AdminTool):
         paths.SYSCONFIG_KRB5KDC_DIR,
         paths.SYSCONFIG_PKI_CA_PKI_CA_DIR,
         paths.SYSCONFIG_IPA_DNSKEYSYNCD,
-        paths.SYSOCNFIG_IPA_ODS_EXPORTER,
+        paths.SYSCONFIG_IPA_ODS_EXPORTER,
         paths.SYSCONFIG_NAMED,
         paths.SYSCONFIG_ODS,
         paths.ETC_SYSCONFIG_AUTHCONFIG,
@@ -171,10 +172,13 @@ class Backup(admintool.AdminTool):
         paths.SVC_LIST_FILE,
         paths.OPENDNSSEC_CONF_FILE,
         paths.OPENDNSSEC_KASP_FILE,
+        paths.OPENDNSSEC_ZONELIST_FILE,
+        paths.OPENDNSSEC_KASP_DB,
         paths.DNSSEC_SOFTHSM2_CONF,
         paths.DNSSEC_SOFTHSM_PIN_SO,
         paths.IPA_ODS_EXPORTER_KEYTAB,
         paths.IPA_DNSKEYSYNCD_KEYTAB,
+        paths.HOSTS,
     ) + tuple(
         os.path.join(base, file)
         for base in (paths.NSS_DB_DIR, paths.IPA_NSSDB_DIR)
@@ -300,6 +304,9 @@ class Backup(admintool.AdminTool):
                     self.db2ldif(instance, 'userRoot', online=options.online)
                     self.db2bak(instance, online=options.online)
             if not options.data_only:
+                # create backup of auth configuration
+                auth_backup_path = os.path.join(paths.VAR_LIB_IPA, 'auth_backup')
+                tasks.backup_auth_configuration(auth_backup_path)
                 self.file_backup(options)
             self.finalize_backup(options.data_only, options.gpg, options.gpg_keyring)
 

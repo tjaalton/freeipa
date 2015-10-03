@@ -23,7 +23,7 @@ import string
 import posixpath
 import os
 
-from ipalib import api, errors
+from ipalib import api, errors, util
 from ipalib import Flag, Int, Password, Str, Bool, StrEnum, DateTime
 from ipalib.plugins.baseuser import baseuser, baseuser_add, baseuser_del, \
     baseuser_mod, baseuser_find, baseuser_show, \
@@ -38,6 +38,7 @@ from ipalib.plugins import baseldap
 from ipalib.request import context
 from ipalib import _, ngettext
 from ipalib import output
+from ipalib import x509
 from ipaplatform.paths import paths
 from ipapython.ipautil import ipa_generate_password
 from ipapython.ipavalidate import Email
@@ -258,6 +259,14 @@ class user(baseuser):
             ],
             'default_privileges': {'User Administrators'},
         },
+        'System: Manage User Certificates': {
+            'ipapermright': {'write'},
+            'ipapermdefaultattr': {'usercertificate'},
+            'default_privileges': {
+                'User Administrators',
+                'Modify Users and Reset passwords',
+            },
+        },
         'System: Modify Users': {
             'ipapermright': {'write'},
             'ipapermdefaultattr': {
@@ -268,7 +277,7 @@ class user(baseuser):
                 'mepmanagedentry', 'mobile', 'objectclass', 'ou', 'pager',
                 'postalcode', 'roomnumber', 'secretary', 'seealso', 'sn', 'st',
                 'street', 'telephonenumber', 'title', 'userclass',
-                'preferredlanguage', 'usercertificate',
+                'preferredlanguage',
             },
             'replaces': [
                 '(targetattr = "givenname || sn || cn || displayname || title || initials || loginshell || gecos || homephone || mobile || pager || facsimiletelephonenumber || telephonenumber || street || roomnumber || l || st || postalcode || manager || secretary || description || carlicense || labeleduri || inetuserhttpurl || seealso || employeetype || businesscategory || ou || mepmanagedentry || objectclass")(target = "ldap:///uid=*,cn=users,cn=accounts,$SUFFIX")(version 3.0;acl "permission:Modify Users";allow (write) groupdn = "ldap:///cn=Modify Users,cn=permissions,cn=pbac,$SUFFIX";)',
@@ -341,7 +350,7 @@ class user(baseuser):
         ),
     )
 
-    def get_dn(self, *keys, **options):
+    def get_either_dn(self, *keys, **options):
         '''
         Returns the DN of a user
         The user can be active (active container) or delete (delete container)
@@ -350,7 +359,7 @@ class user(baseuser):
         ldap = self.backend
         # Check that this value is a Active user
         try:
-            active_dn = super(user, self).get_dn(*keys, **options)
+            active_dn = self.get_dn(*keys, **options)
             ldap.get_entry(active_dn, ['dn'])
 
             # The Active user exists
@@ -401,7 +410,7 @@ class user_add(baseuser_add):
     )
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
-        assert isinstance(dn, DN)
+        dn = self.obj.get_either_dn(*keys, **options)
         if not options.get('noprivate', False):
             try:
                 # The Managed Entries plugin will allow a user to be created
@@ -509,6 +518,8 @@ class user_add(baseuser_add):
             answer = self.api.Object['radiusproxy'].get_dn_if_exists(rcl)
             entry_attrs['ipatokenradiusconfiglink'] = answer
 
+        self.pre_common_callback(ldap, dn, entry_attrs, **options)
+
         return dn
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
@@ -556,6 +567,9 @@ class user_add(baseuser_add):
         convert_sshpubkey_post(ldap, dn, entry_attrs)
         radius_dn2pk(self.api, entry_attrs)
         self.obj.get_preserved_attribute(entry_attrs, options)
+
+        self.post_common_callback(ldap, dn, entry_attrs, **options)
+
         return dn
 
 
@@ -579,6 +593,60 @@ class user_del(baseuser_del):
         ),
     )
 
+    def _preserve_user(self, pkey, delete_container, **options):
+        assert isinstance(delete_container, DN)
+
+        dn = self.obj.get_either_dn(pkey, **options)
+        delete_dn = DN(dn[0], delete_container)
+        ldap = self.obj.backend
+        self.log.debug("preserve move %s -> %s" % (dn, delete_dn))
+
+        if dn.endswith(delete_container):
+            raise errors.ExecutionError(
+                _('%s: user is already preserved' % pkey)
+            )
+        # Check that this value is a Active user
+        try:
+            original_entry_attrs = self._exc_wrapper(
+                pkey, options, ldap.get_entry)(dn, ['dn'])
+        except errors.NotFound:
+            self.obj.handle_not_found(pkey)
+
+        # start to move the entry to Delete container
+        self._exc_wrapper(pkey, options, ldap.move_entry)(dn, delete_dn,
+                                                          del_old=True)
+
+        # Then clear the credential attributes
+        attrs_to_clear = ['krbPrincipalKey', 'krbLastPwdChange',
+                          'krbPasswordExpiration', 'userPassword']
+
+        entry_attrs = self._exc_wrapper(pkey, options, ldap.get_entry)(
+            delete_dn, attrs_to_clear)
+
+        clearedCredential = False
+        for attr in attrs_to_clear:
+            if attr.lower() in entry_attrs:
+                del entry_attrs[attr]
+                clearedCredential = True
+        if clearedCredential:
+            self._exc_wrapper(pkey, options, ldap.update_entry)(entry_attrs)
+
+        # Then restore some original entry attributes
+        attrs_to_restore = ['secretary', 'managedby', 'manager', 'ipauniqueid',
+                            'uidnumber', 'gidnumber', 'passwordHistory']
+
+        entry_attrs = self._exc_wrapper(
+            pkey, options, ldap.get_entry)(delete_dn, attrs_to_restore)
+
+        restoreAttr = False
+        for attr in attrs_to_restore:
+            if ((attr.lower() in original_entry_attrs) and
+                    not (attr.lower() in entry_attrs)):
+                restoreAttr = True
+                entry_attrs[attr.lower()] = original_entry_attrs[attr.lower()]
+        if restoreAttr:
+            self._exc_wrapper(pkey, options, ldap.update_entry)(entry_attrs)
+
     def forward(self, *keys, **options):
         if self.api.env.context == 'cli':
             if options['no_preserve'] and options['preserve']:
@@ -593,7 +661,7 @@ class user_del(baseuser_del):
         return super(user_del, self).forward(*keys, **options)
 
     def pre_callback(self, ldap, dn, *keys, **options):
-        assert isinstance(dn, DN)
+        dn = self.obj.get_either_dn(*keys, **options)
 
         # For User life Cycle: user-del is a common plugin
         # command to delete active user (active container) and
@@ -619,68 +687,23 @@ class user_del(baseuser_del):
 
     def execute(self, *keys, **options):
 
-        dn = self.obj.get_dn(*keys, **options)
-
         # We are going to permanent delete or the user is already in the delete container.
         delete_container = DN(self.obj.delete_container_dn, self.api.env.basedn)
-        user_from_delete_container = dn.endswith(delete_container)
-
-        if not options.get('preserve', True) or user_from_delete_container:
-            # Remove any ID overrides tied with this user
-            remove_ipaobject_overrides(self.obj.backend, self.obj.api, dn)
-
-            # Issue a true DEL on that entry
-            return super(user_del, self).execute(*keys, **options)
 
         # The user to delete is active and there is no 'no_preserve' option
         if options.get('preserve', False):
+            failed = []
+            preserved = []
+            for pkey in keys[-1]:
+                try:
+                    self._preserve_user(pkey, delete_container, **options)
+                    preserved.append(pkey_to_value(pkey, options))
+                except:
+                    if not options.get('continue', False):
+                        raise
+                    failed.append(pkey_to_value(pkey, options))
 
-            ldap = self.obj.backend
-
-            # need to handle multiple keys (e.g. keys[-1]=(u'tb8', u'tb9')..
-            active_dn = self.obj.get_dn(*keys, **options)
-            superior_dn = DN(self.obj.delete_container_dn, api.env.basedn)
-            delete_dn = DN(active_dn[0], self.obj.delete_container_dn, api.env.basedn)
-            self.log.debug("preserve move %s -> %s" % (active_dn, delete_dn))
-
-            # Check that this value is a Active user
-            try:
-                original_entry_attrs = self._exc_wrapper(keys, options, ldap.get_entry)(active_dn, ['dn'])
-            except errors.NotFound:
-                raise
-
-            # start to move the entry to Delete container
-            self._exc_wrapper(keys, options, ldap.move_entry)(active_dn, delete_dn, del_old=True)
-
-            # Then clear the credential attributes
-            attrs_to_clear = ['krbPrincipalKey', 'krbLastPwdChange', 'krbPasswordExpiration', 'userPassword']
-            try:
-                entry_attrs = self._exc_wrapper(keys, options, ldap.get_entry)(delete_dn, attrs_to_clear)
-            except errors.NotFound:
-                raise
-            clearedCredential = False
-            for attr in attrs_to_clear:
-                if attr.lower() in entry_attrs:
-                    del entry_attrs[attr]
-                    clearedCredential = True
-            if clearedCredential:
-                self._exc_wrapper(keys, options, ldap.update_entry)(entry_attrs)
-
-            # Then restore some original entry attributes
-            attrs_to_restore = [ 'secretary', 'managedby', 'manager', 'ipauniqueid', 'uidnumber', 'gidnumber', 'passwordHistory']
-            try:
-                entry_attrs = self._exc_wrapper(keys, options, ldap.get_entry)(delete_dn, attrs_to_restore)
-            except errors.NotFound:
-                raise
-            restoreAttr = False
-            for attr in attrs_to_restore:
-                if (attr.lower() in original_entry_attrs) and not (attr.lower() in entry_attrs):
-                    restoreAttr = True
-                    entry_attrs[attr.lower()] = original_entry_attrs[attr.lower()]
-            if restoreAttr:
-                self._exc_wrapper(keys, options, ldap.update_entry)(entry_attrs)
-
-            val = dict(result=dict(failed=[]), value=[keys[-1][0]])
+            val = dict(result=dict(failed=failed), value=preserved)
             return val
         else:
             return super(user_del, self).execute(*keys, **options)
@@ -695,6 +718,7 @@ class user_mod(baseuser_mod):
     has_output_params = baseuser_mod.has_output_params + user_output_params
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
+        dn = self.obj.get_either_dn(*keys, **options)
         self.pre_common_callback(ldap, dn, entry_attrs, **options)
         validate_nsaccountlock(entry_attrs)
         return dn
@@ -729,10 +753,6 @@ class user_find(baseuser_find):
         if options.get('whoami'):
             return ("(&(objectclass=posixaccount)(krbprincipalname=%s))"%\
                         getattr(context, 'principal'), base_dn, scope)
-
-        newoptions = {}
-        self.common_enhance_options(newoptions, **options)
-        options.update(newoptions)
 
         preserved = options.get('preserved', False)
         if preserved is None:
@@ -769,12 +789,40 @@ class user_show(baseuser_show):
     __doc__ = _('Display information about a user.')
 
     has_output_params = baseuser_show.has_output_params + user_output_params
+    takes_options = baseuser_show.takes_options + (
+        Str('out?',
+            doc=_('file to store certificate in'),
+        ),
+    )
+
+    def pre_callback(self, ldap, dn, attrs_list, *keys, **options):
+        dn = self.obj.get_either_dn(*keys, **options)
+        return dn
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         convert_nsaccountlock(entry_attrs)
         self.post_common_callback(ldap, dn, entry_attrs, **options)
         self.obj.get_preserved_attribute(entry_attrs, options)
         return dn
+
+    def forward(self, *keys, **options):
+        if 'out' in options:
+            util.check_writable_file(options['out'])
+            result = super(user_show, self).forward(*keys, **options)
+            if 'usercertificate' in result['result']:
+                x509.write_certificate_list(
+                    result['result']['usercertificate'],
+                    options['out']
+                )
+                result['summary'] = (
+                    _('Certificate(s) stored in file \'%(file)s\'')
+                    % dict(file=options['out'])
+                )
+                return result
+            else:
+                raise errors.NoCertificateError(entry=keys[-1])
+        else:
+            return super(user_show, self).forward(*keys, **options)
 
 @register()
 class user_undel(LDAPQuery):
@@ -787,17 +835,15 @@ class user_undel(LDAPQuery):
         ldap = self.obj.backend
 
         # First check that the user exists and is a delete one
-        delete_dn = self.obj.get_dn(*keys, **options)
-        if delete_dn.endswith(DN(self.obj.active_container_dn, api.env.basedn)):
-            raise errors.ValidationError(
-                        name=self.obj.primary_key.cli_name,
-                        error=_('User %r is already active') % keys[-1][0])
+        delete_dn = self.obj.get_either_dn(*keys, **options)
         try:
             entry_attrs = self._exc_wrapper(keys, options, ldap.get_entry)(delete_dn)
         except errors.NotFound:
-            raise errors.ValidationError(
-                        name=self.obj.primary_key.cli_name,
-                        error=_('User %r not found') % keys[-1][0])
+            self.obj.handle_not_found(*keys)
+        if delete_dn.endswith(DN(self.obj.active_container_dn,
+                                 api.env.basedn)):
+            raise errors.InvocationError(
+                message=_('user "%s" is already active') % keys[-1])
 
         active_dn = DN(delete_dn[0], self.obj.active_container_dn, api.env.basedn)
 
@@ -822,6 +868,57 @@ class user_undel(LDAPQuery):
             value=pkey_to_value(keys[0], options),
         )
 
+
+@register()
+class user_stage(LDAPMultiQuery):
+    __doc__ = _('Move deleted user into staged area')
+
+    has_output = output.standard_multi_delete
+    msg_summary = _('Staged user account "%(value)s"')
+
+    def execute(self, *keys, **options):
+        staged = []
+        failed = []
+
+        for key in keys[-1]:
+            single_keys = keys[:-1] + (key,)
+            multi_keys = keys[:-1] + ((key,),)
+
+            user = self.api.Command.user_show(*single_keys, all=True)['result']
+            new_options = {}
+            for param in self.api.Command.stageuser_add.options():
+                try:
+                    value = user[param.name]
+                except KeyError:
+                    continue
+                if param.multivalue and not isinstance(value, (list, tuple)):
+                    value = [value]
+                elif not param.multivalue and isinstance(value, (list, tuple)):
+                    value = value[0]
+                new_options[param.name] = value
+
+            try:
+                self.api.Command.stageuser_add(*single_keys, **new_options)
+                try:
+                    self.api.Command.user_del(*multi_keys, preserve=False)
+                except errors.ExecutionError:
+                    self.api.Command.stageuser_del(*multi_keys)
+                    raise
+            except errors.ExecutionError:
+                if not options['continue']:
+                    raise
+                failed.append(key)
+            else:
+                staged.append(key)
+
+        return dict(
+            result=dict(
+                failed=pkey_to_value(failed, options),
+            ),
+            value=pkey_to_value(staged, options),
+        )
+
+
 @register()
 class user_disable(LDAPQuery):
     __doc__ = _('Disable a user account.')
@@ -834,7 +931,7 @@ class user_disable(LDAPQuery):
 
         check_protected_member(keys[-1])
 
-        dn = self.obj.get_dn(*keys, **options)
+        dn = self.obj.get_either_dn(*keys, **options)
         ldap.deactivate_entry(dn)
 
         return dict(
@@ -854,7 +951,7 @@ class user_enable(LDAPQuery):
     def execute(self, *keys, **options):
         ldap = self.obj.backend
 
-        dn = self.obj.get_dn(*keys, **options)
+        dn = self.obj.get_either_dn(*keys, **options)
 
         ldap.activate_entry(dn)
 
@@ -878,7 +975,7 @@ class user_unlock(LDAPQuery):
     msg_summary = _('Unlocked account "%(value)s"')
 
     def execute(self, *keys, **options):
-        dn = self.obj.get_dn(*keys, **options)
+        dn = self.obj.get_either_dn(*keys, **options)
         entry = self.obj.backend.get_entry(
             dn, ['krbLastAdminUnlock', 'krbLoginFailedCount'])
 
@@ -922,7 +1019,7 @@ class user_status(LDAPQuery):
 
     def execute(self, *keys, **options):
         ldap = self.obj.backend
-        dn = self.obj.get_dn(*keys, **options)
+        dn = self.obj.get_either_dn(*keys, **options)
         attr_list = ['krbloginfailedcount', 'krblastsuccessfulauth', 'krblastfailedauth', 'nsaccountlock']
 
         disabled = False
@@ -1011,20 +1108,16 @@ class user_add_cert(LDAPAddAttribute):
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys,
                      **options):
-        assert isinstance(dn, DN)
+        dn = self.obj.get_either_dn(*keys, **options)
 
-        new_attr_name = '%s;binary' % self.attribute
-        if self.attribute in entry_attrs:
-            entry_attrs[new_attr_name] = entry_attrs.pop(self.attribute)
+        self.obj.convert_usercertificate_pre(entry_attrs)
 
         return dn
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
 
-        old_attr_name = '%s;binary' % self.attribute
-        if old_attr_name in entry_attrs:
-            entry_attrs[self.attribute] = entry_attrs.pop(old_attr_name)
+        self.obj.convert_usercertificate_post(entry_attrs, **options)
 
         return dn
 
@@ -1037,19 +1130,15 @@ class user_remove_cert(LDAPRemoveAttribute):
 
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys,
                      **options):
-        assert isinstance(dn, DN)
+        dn = self.obj.get_either_dn(*keys, **options)
 
-        new_attr_name = '%s;binary' % self.attribute
-        if self.attribute in entry_attrs:
-            entry_attrs[new_attr_name] = entry_attrs.pop(self.attribute)
+        self.obj.convert_usercertificate_pre(entry_attrs)
 
         return dn
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
         assert isinstance(dn, DN)
 
-        old_attr_name = '%s;binary' % self.attribute
-        if old_attr_name in entry_attrs:
-            entry_attrs[self.attribute] = entry_attrs.pop(old_attr_name)
+        self.obj.convert_usercertificate_post(entry_attrs, **options)
 
         return dn
