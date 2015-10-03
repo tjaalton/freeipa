@@ -19,15 +19,28 @@ Subject: [PATCH] Disable DNSSEC support
 
 --- a/install/share/bind.named.conf.template
 +++ b/install/share/bind.named.conf.template
-@@ -18,7 +18,7 @@ options {
+@@ -18,12 +18,8 @@ options {
  	pid-file "$NAMED_PID";
  
  	dnssec-enable yes;
 -	dnssec-validation yes;
 +	dnssec-validation no;
  
- 	/* Path to ISC DLV key */
- 	bindkeys-file "$BINDKEYS_FILE";
+-	/* Path to ISC DLV key */
+-	bindkeys-file "$BINDKEYS_FILE";
+-
+-	managed-keys-directory "$MANAGED_KEYS_DIR";
+ };
+ 
+ /* If you want to enable debugging, eg. using the 'rndc trace' command,
+@@ -40,7 +36,6 @@ logging {
+ 
+ 
+ include "$RFC1912_ZONES";
+-include "$ROOT_KEY";
+ 
+ dynamic-db "ipa" {
+ 	library "ldap.so";
 --- a/install/tools/ipa-dns-install
 +++ b/install/tools/ipa-dns-install
 @@ -23,8 +23,7 @@ from optparse import OptionGroup, SUPPRE
@@ -370,14 +383,20 @@ Subject: [PATCH] Disable DNSSEC support
      cleanup_kdc(fstore)
      cleanup_adtrust(fstore)
      setup_firefox_extension(fstore)
-@@ -1462,7 +1453,6 @@ def main():
-                           named_bindkey_file_option(),
-                           named_managed_keys_dir_option(),
-                           named_root_key_include(),
+@@ -1457,13 +1448,6 @@ def main():
+                           named_enable_serial_autoincrement(),
+                           named_update_gssapi_configuration(),
+                           named_update_pid_file(),
+-                          named_enable_dnssec(),
+-                          named_validate_dnssec(),
+-                          named_bindkey_file_option(),
+-                          named_managed_keys_dir_option(),
+-                          named_root_key_include(),
 -                          mask_named_regular(),
-                           fix_dyndb_ldap_workdir_permissions(),
+-                          fix_dyndb_ldap_workdir_permissions(),
                           )
  
+     if any(named_conf_changes):
 --- a/ipalib/plugins/dns.py
 +++ b/ipalib/plugins/dns.py
 @@ -2617,7 +2617,9 @@ class dnszone(DNSZoneBase):

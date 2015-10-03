@@ -1,6 +1,6 @@
-freeipa (4.1.4-1) UNRELEASED; urgency=medium
+freeipa (4.1.4-1) experimental; urgency=medium
 
-  * New upstream release.
+  * New upstream release. (LP: #1492226)
     - Refresh patches
     - platform-support.diff: Added NAMED_VAR_DIR.
     - fix-bind-conf.diff: Dropped, obsolete with above.
@@ -8,9 +8,36 @@ freeipa (4.1.4-1) UNRELEASED; urgency=medium
       missing the dependencies for now.
   * control: Add python-usb to build-depends and to python-freeipa
     depends.
-  * control: Bump libsss-nss-idmap-dev build-dep.
+  * control: Bump SSSD dependencies.
+  * control: Add libsofthsm2-dev to build-depends and softhsm2 to server
+    depends.
+  * freeipa-{server,client}.install: Add new files.
+  * control: Bump Depends on slapi-nis for CVE fixes.
+  * control: Bump 389-ds-base, pki-ca depends.
+  * control: Drop dogtag-pki-server-theme from server depends, it's not
+    needed.
+  * control: Server needs newer python-ldap, bump build-dep too.
+  * control: Bump certmonger depends.
+  * control: Bump python-nss depends.
+  * freeipa-client: Add /etc/ipa/nssdb, rework /etc/pki/nssdb handling.
+  * platform: Add DebianNamedService.
+  * platform, disable-dnssec-support.patch: Fix named.conf template.
+  * server.postinst: Run ipa-ldap-updater and ipa-upgradeconfig on
+    postinst.
+  * Revert DNSSEC changes to schema and ACI, makes upgrade tools fail.
+  * server.postrm: Clean logs on purge and disable apache modules on
+    remove/purge.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Thu, 02 Apr 2015 13:16:49 +0300
+ -- Timo Aaltonen <tjaalton@debian.org>  Fri, 25 Sep 2015 14:07:40 +0300
+
+freeipa (4.0.5-6) unstable; urgency=medium
+
+  * control Add gnupg-agent to python-freeipa depends, and change gnupg
+    to gnupg2. (LP: #1492184)
+  * Rebuild against current krb5, there was an abi break which broke at
+    least the setup phase.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 24 Sep 2015 23:22:24 +0300
 
 freeipa (4.0.5-5) unstable; urgency=medium
 

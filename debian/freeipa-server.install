@@ -2,11 +2,13 @@ etc/default/ipa_memcached
 etc/ipa/html/*
 lib/systemd/system/*
 usr/lib/*/certmonger/dogtag-ipa-ca-renew-agent-submit
+usr/lib/*/certmonger/ipa-server-guard
 usr/lib/*/dirsrv/plugins/libipa_cldap.so
 usr/lib/*/dirsrv/plugins/libipa_dns.so
 usr/lib/*/dirsrv/plugins/libipa_enrollment_extop.so
 usr/lib/*/dirsrv/plugins/libipa_lockout.so
 usr/lib/*/dirsrv/plugins/libipa_modrdn.so
+usr/lib/*/dirsrv/plugins/libipa_otp_counter.so
 usr/lib/*/dirsrv/plugins/libipa_otp_lasttoken.so
 usr/lib/*/dirsrv/plugins/libipa_pwd_extop.so
 usr/lib/*/dirsrv/plugins/libipa_range_check.so
@@ -22,6 +24,7 @@ usr/lib/python*/dist-packages/ipaserver/install/__init__.py
 usr/lib/python*/dist-packages/ipaserver/install/bindinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/cainstance.py
 usr/lib/python*/dist-packages/ipaserver/install/certs.py
+usr/lib/python*/dist-packages/ipaserver/install/dnskeysyncinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/dsinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/httpinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/installutils.py
@@ -30,6 +33,8 @@ usr/lib/python*/dist-packages/ipaserver/install/krbinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/ldapupdate.py
 usr/lib/python*/dist-packages/ipaserver/install/memcacheinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/ntpinstance.py
+usr/lib/python*/dist-packages/ipaserver/install/odsexporterinstance.py
+usr/lib/python*/dist-packages/ipaserver/install/opendnssecinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/otpdinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/plugins
 usr/lib/python*/dist-packages/ipaserver/install/replication.py
@@ -42,6 +47,7 @@ usr/lib/python*/dist-packages/ipaserver/rpcserver*
 usr/sbin/ipa-advise
 usr/sbin/ipa-backup
 usr/sbin/ipa-ca-install
+usr/sbin/ipa-cacert-manage
 usr/sbin/ipa-compat-manage
 usr/sbin/ipa-csreplica-manage
 usr/sbin/ipa-dns-install
@@ -77,6 +83,7 @@ usr/share/ipa/wsgi/*
 usr/share/man/man1/ipa-advise.1*
 usr/share/man/man1/ipa-backup.1*
 usr/share/man/man1/ipa-ca-install.1*
+usr/share/man/man1/ipa-cacert-manage.1*
 usr/share/man/man1/ipa-compat-manage.1*
 usr/share/man/man1/ipa-csreplica-manage.1*
 usr/share/man/man1/ipa-dns-install.1*
