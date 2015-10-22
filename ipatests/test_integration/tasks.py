@@ -26,6 +26,7 @@ import collections
 import itertools
 import time
 import StringIO
+import dns
 
 from ldif import LDIFWriter
 
@@ -36,10 +37,18 @@ from ipapython.ipa_log_manager import log_mgr
 from ipatests.test_integration import util
 from ipatests.test_integration.env_config import env_to_script
 from ipatests.test_integration.host import Host
+from ipalib.util import get_reverse_zone_default
 
 log = log_mgr.get_logger(__name__)
 
+IPATEST_NM_CONFIG = '20-ipatest-unmanaged-resolv.conf'
 
+
+def prepare_reverse_zone(host, ip):
+    zone = get_reverse_zone_default(ip)
+    host.run_command(["ipa",
+                      "dnszone-add",
+                      zone], raiseonerr=False)
 def prepare_host(host):
     if isinstance(host, Host):
         env_filename = os.path.join(host.config.test_dir, 'env.sh')
@@ -55,6 +64,7 @@ def prepare_host(host):
 def apply_common_fixes(host):
     fix_etc_hosts(host)
     fix_hostname(host)
+    modify_nm_resolv_conf_settings(host)
     fix_resolv_conf(host)
 
 
@@ -100,6 +110,38 @@ def fix_hostname(host):
     host.run_command('hostname > %s' % ipautil.shell_quote(backupname))
 
 
+def host_service_active(host, service):
+    res = host.run_command(['systemctl', 'is-active', '--quiet', service],
+                           raiseonerr=False)
+
+    if res.returncode == 0:
+        return True
+    else:
+        return False
+
+
+def modify_nm_resolv_conf_settings(host):
+    if not host_service_active(host, 'NetworkManager'):
+        return
+
+    config = "[main]\ndns=none\n"
+    path = os.path.join(paths.NETWORK_MANAGER_CONFIG_DIR, IPATEST_NM_CONFIG)
+
+    host.put_file_contents(path, config)
+    host.run_command(['systemctl', 'restart', 'NetworkManager'],
+                     raiseonerr=False)
+
+
+def undo_nm_resolv_conf_settings(host):
+    if not host_service_active(host, 'NetworkManager'):
+        return
+
+    path = os.path.join(paths.NETWORK_MANAGER_CONFIG_DIR, IPATEST_NM_CONFIG)
+    host.run_command(['rm', '-f', path], raiseonerr=False)
+    host.run_command(['systemctl', 'restart', 'NetworkManager'],
+                     raiseonerr=False)
+
+
 def fix_resolv_conf(host):
     backup_file(host, paths.RESOLV_CONF)
     lines = host.get_file_contents(paths.RESOLV_CONF).splitlines()
@@ -127,6 +169,7 @@ def fix_apache_semaphores(master):
 def unapply_fixes(host):
     restore_files(host)
     restore_hostname(host)
+    undo_nm_resolv_conf_settings(host)
 
     # Clean up the test directory
     host.run_command(['rm', '-rvf', host.config.test_dir])
@@ -220,17 +263,17 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False):
 
     apply_common_fixes(replica)
     fix_apache_semaphores(replica)
-
+    prepare_reverse_zone(master, replica.ip)
     master.run_command(['ipa-replica-prepare',
                         '-p', replica.config.dirman_password,
-                        '--ip-address', replica.ip, '--no-reverse',
+                        '--ip-address', replica.ip,
                         replica.hostname])
     replica_bundle = master.get_file_contents(
         paths.REPLICA_INFO_GPG_TEMPLATE % replica.hostname)
     replica_filename = os.path.join(replica.config.test_dir,
                                     'replica-info.gpg')
     replica.put_file_contents(replica_filename, replica_bundle)
-    args = ['ipa-replica-install', '-U', '--no-host-dns',
+    args = ['ipa-replica-install', '-U',
             '-p', replica.config.dirman_password,
             '-w', replica.config.admin_password,
             '--ip-address', replica.ip,
@@ -733,3 +776,25 @@ def add_a_record(master, host):
                             master.domain.name,
                             host.hostname,
                             '--a-rec', host.ip])
+
+
+def resolve_record(nameserver, query, rtype="SOA", retry=True, timeout=100):
+    """Resolve DNS record
+    :retry: if resolution failed try again until timeout is reached
+    :timeout: max period of time while method will try to resolve query
+     (requires retry=True)
+    """
+    res = dns.resolver.Resolver()
+    res.nameservers = [nameserver]
+    res.lifetime = 10  # wait max 10 seconds for reply
+
+    wait_until = time.time() + timeout
+
+    while time.time() < wait_until:
+        try:
+            ans = res.query(query, rtype)
+            return ans
+        except dns.exception.DNSException:
+            if not retry:
+                raise
+        time.sleep(1)

@@ -37,8 +37,8 @@ from ipaserver.install import cainstance
 from ipaserver.install import installutils
 from ipaserver.install import ldapupdate
 from ipaserver.install import service
-from ipaserver.install.dogtaginstance import DogtagInstance
-from ipaserver.install.dogtaginstance import DEFAULT_DSPORT, PKI_USER
+from ipaserver.install.dogtaginstance import (
+    DEFAULT_DSPORT, PKI_USER, export_kra_agent_pem, DogtagInstance)
 from ipaserver.plugins import ldap2
 from ipapython.ipa_log_manager import log_mgr
 
@@ -124,6 +124,7 @@ class KRAInstance(DogtagInstance):
         self.step("configure HTTP to proxy connections",
                   self.http_proxy)
         self.step("add vault container", self.__add_vault_container)
+        self.step("apply LDAP updates", self.__apply_updates)
 
         self.start_creation(runtime=126)
 
@@ -261,14 +262,6 @@ class KRAInstance(DogtagInstance):
 
         shutil.move(paths.KRA_BACKUP_KEYS_P12, paths.KRACERT_P12)
 
-        # export ipaCert with private key for client authentication
-        args = ["/usr/bin/pki",
-            "-d", paths.HTTPD_ALIAS_DIR,
-            "-C", paths.ALIAS_PWDFILE_TXT,
-            "client-cert-show", "ipaCert",
-            "--client-cert", paths.KRA_AGENT_PEM]
-        ipautil.run(args)
-
         self.log.debug("completed creating KRA instance")
 
     def __create_kra_agent(self):
@@ -313,13 +306,17 @@ class KRAInstance(DogtagInstance):
         conn.disconnect()
 
     def __add_vault_container(self):
+        self._ldap_mod('vault.ldif', {'SUFFIX': self.suffix})
+        self.ldap_disconnect()
+
+    def __apply_updates(self):
         sub_dict = {
             'SUFFIX': self.suffix,
         }
 
         ld = ldapupdate.LDAPUpdate(dm_password=self.dm_password,
                                    sub_dict=sub_dict)
-        ld.update([paths.VAULT_UPDATE])
+        ld.update([os.path.join(paths.UPDATES_DIR, '40-vault.update')])
 
     @staticmethod
     def update_cert_config(nickname, cert, dogtag_constants=None):

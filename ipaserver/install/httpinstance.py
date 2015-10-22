@@ -49,6 +49,8 @@ SELINUX_BOOLEAN_SETTINGS = dict(
     httpd_run_ipa='on',
 )
 
+KDCPROXY_USER = 'kdcproxy'
+
 
 def httpd_443_configured():
     """
@@ -74,6 +76,19 @@ def httpd_443_configured():
             return True
 
     return False
+
+
+def create_kdcproxy_user():
+    """Create KDC proxy user/group if it doesn't exist yet."""
+    tasks.create_system_user(
+        name=KDCPROXY_USER,
+        group=KDCPROXY_USER,
+        homedir=paths.VAR_LIB_KDCPROXY,
+        shell=paths.NOLOGIN,
+        comment="IPA KDC Proxy User",
+        create_homedir=True,
+    )
+
 
 class WebGuiInstance(service.SimpleServiceInstance):
     def __init__(self):
@@ -139,6 +154,7 @@ class HTTPInstance(service.Service):
         self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
         self.step("configuring SELinux for httpd", self.configure_selinux_for_httpd)
         if not self.is_kdcproxy_configured():
+            self.step("create KDC proxy user", create_kdcproxy_user)
             self.step("create KDC proxy config", self.create_kdcproxy_conf)
             self.step("enable KDC proxy", self.enable_kdcproxy)
         self.step("restarting httpd", self.__start)
@@ -226,7 +242,7 @@ class HTTPInstance(service.Service):
         installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSRequireSafeNegotiation', 'on', False)
 
     def __set_mod_nss_passwordfile(self):
-        installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSPassPhraseDialog', 'file:/etc/httpd/conf/password.conf')
+        installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSPassPhraseDialog', 'file:' + paths.HTTPD_PASSWORD_CONF)
 
     def __add_include(self):
         """This should run after __set_mod_nss_port so is already backed up"""

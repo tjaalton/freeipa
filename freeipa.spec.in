@@ -24,10 +24,6 @@
 
 %define _hardened_build 1
 
-%define kdcproxy_user kdcproxy
-%define kdcproxy_group kdcproxy
-%define kdcproxy_home %{_sharedstatedir}/kdcproxy
-
 Name:           freeipa
 Version:        __VERSION__
 Release:        __RELEASE__%{?dist}
@@ -104,10 +100,11 @@ BuildRequires:  python-pytest-sourceorder
 BuildRequires:  python-kdcproxy >= 0.3
 
 %description
-IPA is an integrated solution to provide centrally managed Identity (machine,
-user, virtual machines, groups, authentication credentials), Policy
-(configuration settings, access control information) and Audit (events,
-logs, analysis thereof).
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
 
 %if ! %{ONLY_CLIENT}
 %package server
@@ -161,6 +158,7 @@ Requires: softhsm >= 2.0.0rc1-1
 Requires: p11-kit
 Requires: systemd-python
 Requires: %{etc_systemd_dir}
+Requires: gzip
 
 Conflicts: %{alt_name}-server
 Obsoletes: %{alt_name}-server < %{version}
@@ -177,12 +175,12 @@ Obsoletes: %{name}-server <= 4.2.0.0
 Conflicts: nss-pam-ldapd < 0.8.4
 
 %description server
-IPA is an integrated solution to provide centrally managed Identity (machine,
-user, virtual machines, groups, authentication credentials), Policy
-(configuration settings, access control information) and Audit (events,
-logs, analysis thereof). If you are installing an IPA server you need
-to install this package (in other words, most people should NOT install
-this package).
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
+If you are installing an IPA server, you need to install this package.
 
 
 %package server-dns
@@ -277,11 +275,13 @@ Conflicts: %{alt_name}-client
 Obsoletes: %{alt_name}-client < %{version}
 
 %description client
-IPA is an integrated solution to provide centrally managed Identity (machine,
-user, virtual machines, groups, authentication credentials), Policy
-(configuration settings, access control information) and Audit (events,
-logs, analysis thereof). If your network uses IPA for authentication,
-this package should be installed on every client machine.
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
+If your network uses IPA for authentication, this package should be
+installed on every client machine.
 
 
 %package admintools
@@ -296,11 +296,12 @@ Conflicts: %{alt_name}-admintools
 Obsoletes: %{alt_name}-admintools < %{version}
 
 %description admintools
-IPA is an integrated solution to provide centrally managed Identity (machine,
-user, virtual machines, groups, authentication credentials), Policy
-(configuration settings, access control information) and Audit (events,
-logs, analysis thereof). This package provides command-line tools for
-IPA administrators.
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
+This package provides command-line tools for IPA administrators.
 
 %package python
 Summary: Python libraries used by IPA
@@ -328,11 +329,12 @@ Conflicts: %{alt_name}-python
 Obsoletes: %{alt_name}-python < %{version}
 
 %description python
-IPA is an integrated solution to provide centrally managed Identity (machine,
-user, virtual machines, groups, authentication credentials), Policy
-(configuration settings, access control information) and Audit (events,
-logs, analysis thereof). If you are using IPA you need to install this
-package.
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
+If you are using IPA, you need to install this package.
 
 %if ! %{ONLY_CLIENT}
 %package tests
@@ -353,10 +355,11 @@ Conflicts: %{alt_name}-tests
 Obsoletes: %{alt_name}-tests < %{version}
 
 %description tests
-IPA is an integrated solution to provide centrally managed Identity (machine,
-user, virtual machines, groups, authentication credentials), Policy
-(configuration settings, access control information) and Audit (events,
-logs, analysis thereof).
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
 This package contains tests that verify IPA functionality.
 
 %endif # ONLY_CLIENT
@@ -487,7 +490,6 @@ install daemons/dnssec/ipa-ods-exporter %{buildroot}%{_libexecdir}/ipa/ipa-ods-e
 mkdir -p %{buildroot}%{_usr}/share/ipa/ui/js/plugins
 
 # KDC proxy config (Apache config sets KDCPROXY_CONFIG to load this file)
-mkdir -p %{buildroot}%{kdcproxy_home}
 mkdir -p %{buildroot}%{_sysconfdir}/ipa/kdcproxy/
 install -m 644 install/share/kdcproxy.conf %{buildroot}%{_sysconfdir}/ipa/kdcproxy/kdcproxy.conf
 
@@ -583,13 +585,6 @@ if [ -e /usr/sbin/ipa_kpasswd ]; then
     /bin/systemctl stop ipa_kpasswd.service >/dev/null 2>&1 || :
 # END
 fi
-
-# create kdcproxy user
-getent group %{kdcproxy_group} >/dev/null || groupadd -r %{kdcproxy_group}
-getent passwd %{kdcproxy_user} >/dev/null || \
-    /usr/sbin/useradd -r -c "IPA KDC Proxy User" -s /sbin/nologin \
-    -g %{kdcproxy_group} -d %{kdcproxy_home} %{kdcproxy_user}
-exit 0
 
 %postun server-trust-ad
 if [ "$1" -ge "1" ]; then
@@ -726,8 +721,8 @@ fi
 %{_libexecdir}/ipa/ipa-dnskeysync-replica
 %{_libexecdir}/ipa/ipa-ods-exporter
 %{_libexecdir}/ipa/ipa-httpd-kdcproxy
+%ghost %verify(not owner group) %dir %{_sharedstatedir}/kdcproxy
 %dir %attr(0755,root,root) %{_sysconfdir}/ipa/kdcproxy
-%dir %attr(0700,%{kdcproxy_user},%{kdcproxy_group}) %{kdcproxy_home}
 %config(noreplace) %{_sysconfdir}/sysconfig/ipa_memcached
 %config(noreplace) %{_sysconfdir}/sysconfig/ipa-dnskeysyncd
 %config(noreplace) %{_sysconfdir}/sysconfig/ipa-ods-exporter
@@ -762,7 +757,6 @@ fi
 %{_usr}/share/ipa/copy-schema-to-ca.py*
 %{_usr}/share/ipa/*.ldif
 %{_usr}/share/ipa/*.uldif
-%{_usr}/share/ipa/*.update
 %{_usr}/share/ipa/*.template
 %dir %{_usr}/share/ipa/advise
 %dir %{_usr}/share/ipa/advise/legacy

@@ -35,6 +35,7 @@ from ipaserver.install import otpdinstance
 from ipaserver.install import schemaupdate
 from ipaserver.install import sysupgrade
 from ipaserver.install import dnskeysyncinstance
+from ipaserver.install import krainstance
 from ipaserver.install.upgradeinstance import IPAUpgrade
 from ipaserver.install.ldapupdate import BadSyntax
 
@@ -1244,6 +1245,22 @@ def fix_trust_flags():
     sysupgrade.set_upgrade_state('http', 'fix_trust_flags', True)
 
 
+def export_kra_agent_pem():
+    root_logger.info('[Exporting KRA agent PEM file]')
+
+    if sysupgrade.get_upgrade_state('http', 'export_kra_agent_pem'):
+        root_logger.info("KRA agent PEM file already exported")
+        return
+
+    if not api.Command.kra_is_enabled()['result']:
+        root_logger.info("KRA is not enabled")
+        return
+
+    krainstance.export_kra_agent_pem()
+
+    sysupgrade.set_upgrade_state('http', 'export_kra_agent_pem', True)
+
+
 def update_mod_nss_protocol(http):
     root_logger.info('[Updating mod_nss protocol versions]')
 
@@ -1354,10 +1371,13 @@ def upgrade_configuration():
         sub_dict['SUBJECT_BASE'] = subject_base
 
     ca = cainstance.CAInstance(api.env.realm, certs.NSS_DIR)
-    ca.backup_config()
 
     with installutils.stopped_service(configured_constants.SERVICE_NAME,
             configured_constants.PKI_INSTANCE_NAME):
+
+        # Dogtag must be stopped to be able to backup CS.cfg config
+        ca.backup_config()
+
         # migrate CRL publish dir before the location in ipa.conf is updated
         ca_restart = migrate_crl_publish_dir(ca)
 
@@ -1436,12 +1456,14 @@ def upgrade_configuration():
             http.realm = api.env.realm
             http.suffix = ipautil.realm_to_suffix(api.env.realm)
             http.ldap_connect()
+        httpinstance.create_kdcproxy_user()
         http.create_kdcproxy_conf()
         http.enable_kdcproxy()
 
     http.stop()
     update_mod_nss_protocol(http)
     fix_trust_flags()
+    export_kra_agent_pem()
     http.start()
 
     uninstall_selfsign(ds, http)

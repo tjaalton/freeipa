@@ -34,6 +34,7 @@ app_DATA =				\
 	40-automember.update		\
 	40-certprofile.update		\
 	40-otp.update			\
+	40-vault.update			\
 	41-caacl.update			\
 	45-roles.update			\
 	50-7_bit_check.update	        \
@@ -51,6 +52,7 @@ app_DATA =				\
 	62-ranges.update		\
 	71-idviews.update		\
 	72-domainlevels.update		\
+	73-winsync.update		\
 	90-post_upgrade_plugins.update	\
 	$(NULL)
 

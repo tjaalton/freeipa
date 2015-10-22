@@ -466,6 +466,7 @@ class ReplicationManager(object):
                 'objectclass': ["top", "extensibleobject"],
                 'cn': ["changelog5"],
                 'nsslapd-changelogdir': [os.path.join(dbdir, "cldb")],
+                'nsslapd-changelogmaxage': ['7d'],
             }
         )
         try:
@@ -565,7 +566,7 @@ class ReplicationManager(object):
             print "Adding Windows PassSync system account"
             entry = conn.make_entry(
                 pass_dn,
-                objectclass=["account", "simplesecurityobject"],
+                objectclass=["account", "simplesecurityobject", "inetUser"],
                 uid=["passsync"],
                 userPassword=[password],
             )

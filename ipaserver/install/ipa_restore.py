@@ -128,6 +128,14 @@ class Restore(admintool.AdminTool):
 
     description = "Restore IPA files and databases."
 
+    # directories and files listed here will be removed from filesystem before
+    # files from backup are copied
+    DIRS_TO_BE_REMOVED = [
+        paths.DNSSEC_TOKENS_DIR,
+    ]
+
+    FILES_TO_BE_REMOVED = []
+
     def __init__(self, options, args):
         super(Restore, self).__init__(options, args)
         self._conn = None
@@ -362,9 +370,11 @@ class Restore(admintool.AdminTool):
 
                 self.restore_selinux_booleans()
 
+            http = httpinstance.HTTPInstance()
 
             # We do either a full file restore or we restore data.
             if restore_type == 'FULL':
+                self.remove_old_files()
                 if 'CA' in self.backup_services:
                     create_ca_user()
                 self.cert_restore_prepare()
@@ -372,6 +382,8 @@ class Restore(admintool.AdminTool):
                 self.cert_restore()
                 if 'CA' in self.backup_services:
                     self.__create_dogtag_log_dirs()
+                if http.is_kdcproxy_configured():
+                    httpinstance.create_kdcproxy_user()
 
             # Always restore the data from ldif
             # If we are restoring PKI-IPA then we need to restore the
@@ -400,7 +412,6 @@ class Restore(admintool.AdminTool):
                 self.log.info('Restarting SSSD')
                 sssd = services.service('sssd')
                 sssd.restart()
-                http = httpinstance.HTTPInstance()
                 http.remove_httpd_ccache()
         finally:
             try:
@@ -647,6 +658,25 @@ class Restore(admintool.AdminTool):
                               (paths.IPA_DEFAULT_CONF, stderr))
         os.chdir(cwd)
 
+    def remove_old_files(self):
+        """
+        Removes all directories, files or temporal files that should be
+        removed before backup files are copied, to prevent errors.
+        """
+        for d in self.DIRS_TO_BE_REMOVED:
+            try:
+                shutil.rmtree(d)
+            except OSError as e:
+                if e.errno != 2:  # 2: dir does not exist
+                    self.log.warning("Could not remove directory: %s (%s)",
+                                     d, e)
+
+        for f in self.FILES_TO_BE_REMOVED:
+            try:
+                os.remove(f)
+            except OSError as e:
+                if e.errno != 2:  # 2: file does not exist
+                    self.log.warning("Could not remove file: %s (%s)", f, e)
 
     def file_restore(self, nologs=False):
         '''

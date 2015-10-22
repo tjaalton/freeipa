@@ -210,6 +210,7 @@ class BasePathNamespace(object):
     DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT = "/usr/libexec/certmonger/dogtag-ipa-ca-renew-agent-submit"
     DOGTAG_IPA_RENEW_AGENT_SUBMIT = "/usr/libexec/certmonger/dogtag-ipa-renew-agent-submit"
     IPA_SERVER_GUARD = "/usr/libexec/certmonger/ipa-server-guard"
+    GENERATE_RNDC_KEY = "/usr/libexec/generate-rndc-key.sh"
     IPA_DNSKEYSYNCD_REPLICA = "/usr/libexec/ipa/ipa-dnskeysync-replica"
     IPA_DNSKEYSYNCD = "/usr/libexec/ipa/ipa-dnskeysyncd"
     IPA_ODS_EXPORTER = "/usr/libexec/ipa/ipa-ods-exporter"
@@ -251,7 +252,6 @@ class BasePathNamespace(object):
     SCHEMA_COMPAT_ULDIF = "/usr/share/ipa/schema_compat.uldif"
     IPA_JS_PLUGINS_DIR = "/usr/share/ipa/ui/js/plugins"
     UPDATES_DIR = "/usr/share/ipa/updates/"
-    VAULT_UPDATE = "/usr/share/ipa/vault.update"
     PKI_CONF_SERVER_XML_TEMPLATE = "/usr/share/pki/%s/conf/server.xml"
     CACHE_IPA_SESSIONS = "/var/cache/ipa/sessions"
     VAR_KERBEROS_KRB5KDC_DIR = "/var/kerberos/krb5kdc/"
@@ -287,6 +287,7 @@ class BasePathNamespace(object):
     REPLICA_INFO_GPG_TEMPLATE = "/var/lib/ipa/replica-info-%s.gpg"
     SYSRESTORE = "/var/lib/ipa/sysrestore"
     STATEFILE_DIR = "/var/lib/ipa/sysupgrade"
+    VAR_LIB_KDCPROXY = "/var/lib/kdcproxy"
     VAR_LIB_PKI_DIR = "/var/lib/pki"
     VAR_LIB_PKI_CA_DIR = "/var/lib/pki-ca"
     PKI_ALIAS_CA_P12 = "/var/lib/pki-ca/alias/ca.p12"
@@ -329,6 +330,9 @@ class BasePathNamespace(object):
     TOMCAT_CA_DIR = "/var/log/pki/pki-tomcat/ca"
     TOMCAT_CA_ARCHIVE_DIR = "/var/log/pki/pki-tomcat/ca/archive"
     TOMCAT_SIGNEDAUDIT_DIR = "/var/log/pki/pki-tomcat/ca/signedAudit"
+    TOMCAT_KRA_DIR = "/var/log/pki/pki-tomcat/kra"
+    TOMCAT_KRA_ARCHIVE_DIR = "/var/log/pki/pki-tomcat/kra/archive"
+    TOMCAT_KRA_SIGNEDAUDIT_DIR = "/var/log/pki/pki-tomcat/kra/signedAudit"
     LOG_SECURE = "/var/log/secure"
     NAMED_RUN = "/var/named/data/named.run"
     VAR_OPENDNSSEC_DIR = "/var/opendnssec"
@@ -351,6 +355,6 @@ class BasePathNamespace(object):
     DB2BAK = '/usr/sbin/db2bak'
     KDCPROXY_CONFIG = '/etc/ipa/kdcproxy/kdcproxy.conf'
     CERTMONGER = '/usr/sbin/certmonger'
-
+    NETWORK_MANAGER_CONFIG_DIR = '/etc/NetworkManager/conf.d'
 
 path_namespace = BasePathNamespace
