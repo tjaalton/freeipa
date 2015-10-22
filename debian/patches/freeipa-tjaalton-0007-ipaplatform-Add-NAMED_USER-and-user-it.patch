@@ -1,0 +1,37 @@
+From 77be9a8b67a49ca263e82dde5bf87d432ca64922 Mon Sep 17 00:00:00 2001
+From: Timo Aaltonen <tjaalton@debian.org>
+Date: Tue, 6 Oct 2015 16:27:21 +0300
+Subject: [PATCH 2/2] ipaplatform: Add NAMED_USER to constants
+
+https://fedorahosted.org/freeipa/ticket/5343
+---
+ ipaplatform/base/constants.py     | 1 +
+ ipaserver/install/bindinstance.py | 3 ++-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+--- a/ipaplatform/base/constants.py
++++ b/ipaplatform/base/constants.py
+@@ -10,3 +10,4 @@ This base platform module exports platfo
+ class BaseConstantsNamespace(object):
+     HTTPD_USER = "apache"
+     IPA_DNS_PACKAGE_NAME = "freeipa-server-dns"
++    NAMED_USER = "named"
+--- a/ipaserver/install/bindinstance.py
++++ b/ipaserver/install/bindinstance.py
+@@ -36,6 +36,7 @@ from ipapython.dn import DN
+ import ipalib
+ from ipalib import api, errors
+ from ipaplatform import services
++from ipaplatform.constants import constants
+ from ipaplatform.paths import paths
+ from ipaplatform.tasks import tasks
+ from ipalib.util import (validate_zonemgr_str, normalize_zonemgr,
+@@ -555,7 +556,7 @@ class BindInstance(service.Service):
+     suffix = ipautil.dn_attribute_property('_suffix')
+ 
+     def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders, ntp,
+-              reverse_zones, named_user="named", zonemgr=None,
++              reverse_zones, named_user=constants.NAMED_USER, zonemgr=None,
+               ca_configured=None, no_dnssec_validation=False):
+         self.named_user = named_user
+         self.fqdn = fqdn

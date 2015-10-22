@@ -372,7 +372,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
                          "ipaplatform.rhel"],
 --- a/ipaserver/install/ntpinstance.py
 +++ b/ipaserver/install/ntpinstance.py
-@@ -46,6 +46,8 @@ class NTPInstance(service.Service):
+@@ -50,6 +50,8 @@ class NTPInstance(service.Service):
              os = "fedora"
          elif ipautil.file_exists(paths.ETC_REDHAT_RELEASE):
              os = "rhel"
@@ -381,34 +381,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  
          srv_vals = []
          srv_vals.append("0.%s.pool.ntp.org" % os)
-@@ -106,9 +108,9 @@ class NTPInstance(service.Service):
-         fd.close()
-         for line in lines:
-             sline = line.strip()
--            if not sline.startswith('OPTIONS'):
-+            if not sline.startswith('NTPD_OPTS'):
-                 continue
--            sline = sline.replace('"', '')
-+            sline = sline.replace('\'', '')
-             for opt in needopts:
-                 if sline.find(opt['val']) != -1:
-                     opt['need'] = False
-@@ -124,12 +126,12 @@ class NTPInstance(service.Service):
-             for line in lines:
-                 if not done:
-                     sline = line.strip()
--                    if not sline.startswith('OPTIONS'):
-+                    if not sline.startswith('NTPD_OPTS'):
-                         fd.write(line)
-                         continue
--                    sline = sline.replace('"', '')
-+                    sline = sline.replace('\'', '')
-                     (variable, opts) = sline.split('=', 1)
--                    fd.write('OPTIONS="%s %s"\n' % (opts, ' '.join(newopts)))
-+                    fd.write('NTPD_OPTS="%s %s"\n' % (opts, ' '.join(newopts)))
-                     done = True
-                 else:
-                     fd.write(line)
 --- a/ipaserver/install/ldapupdate.py
 +++ b/ipaserver/install/ldapupdate.py
 @@ -328,9 +328,9 @@ class LDAPUpdate:
@@ -425,55 +397,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          try:
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -140,6 +140,7 @@ class HTTPInstance(service.Service):
-         if not self.is_kdcproxy_configured():
+@@ -159,6 +159,7 @@ class HTTPInstance(service.Service):
+             self.step("create KDC proxy user", create_kdcproxy_user)
              self.step("create KDC proxy config", self.create_kdcproxy_conf)
              self.step("enable KDC proxy", self.enable_kdcproxy)
 +        ipautil.run(["/usr/sbin/a2enmod", "nss"], capture_output=True)
          self.step("restarting httpd", self.__start)
          self.step("configuring httpd to start on boot", self.__enable)
  
-@@ -170,14 +171,14 @@ class HTTPInstance(service.Service):
-         self.move_service(self.principal)
-         self.add_cert_to_service()
- 
--        pent = pwd.getpwnam("apache")
-+        pent = pwd.getpwnam("www-data")
-         os.chown(paths.IPA_KEYTAB, pent.pw_uid, pent.pw_gid)
- 
-     def remove_httpd_ccache(self):
-         # Clean up existing ccache
-         # Make sure that empty env is passed to avoid passing KRB5CCNAME from
-         # current env
--        ipautil.run(['kdestroy', '-A'], runas='apache', raiseonerr=False, env={})
-+        ipautil.run(['kdestroy', '-A'], runas='www-data', raiseonerr=False, env={})
- 
-     def __configure_http(self):
-         target_fname = paths.HTTPD_IPA_CONF
-@@ -226,11 +227,11 @@ class HTTPInstance(service.Service):
-         installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSRequireSafeNegotiation', 'on', False)
- 
-     def __set_mod_nss_passwordfile(self):
--        installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSPassPhraseDialog', 'file:/etc/httpd/conf/password.conf')
-+        installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSPassPhraseDialog', 'file:' + paths.HTTPD_PASSWORD_CONF)
- 
-     def __add_include(self):
-         """This should run after __set_mod_nss_port so is already backed up"""
--        if installutils.update_file(paths.HTTPD_NSS_CONF, '</VirtualHost>', 'Include conf.d/ipa-rewrite.conf\n</VirtualHost>') != 0:
-+        if installutils.update_file(paths.HTTPD_NSS_CONF, '</VirtualHost>', 'Include conf-available/ipa-rewrite.conf\n</VirtualHost>') != 0:
-             print "Adding Include conf.d/ipa-rewrite to %s failed." % paths.HTTPD_NSS_CONF
- 
-     def configure_certmonger_renewal_guard(self):
-@@ -306,7 +307,7 @@ class HTTPInstance(service.Service):
-         os.chmod(certs.NSS_DIR + "/secmod.db", 0660)
-         os.chmod(certs.NSS_DIR + "/pwdfile.txt", 0660)
- 
--        pent = pwd.getpwnam("apache")
-+        pent = pwd.getpwnam("www-data")
-         os.chown(certs.NSS_DIR + "/cert8.db", 0, pent.pw_gid )
-         os.chown(certs.NSS_DIR + "/key3.db", 0, pent.pw_gid )
-         os.chown(certs.NSS_DIR + "/secmod.db", 0, pent.pw_gid )
-@@ -451,6 +452,8 @@ class HTTPInstance(service.Service):
+@@ -470,6 +471,8 @@ class HTTPInstance(service.Service):
          enabled = self.restore_state("enabled")
  
  
@@ -482,39 +414,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          self.stop_tracking_certificates()
  
          helper = self.restore_state('certmonger_ipa_helper')
---- a/ipaserver/install/ipa_server_certinstall.py
-+++ b/ipaserver/install/ipa_server_certinstall.py
-@@ -151,7 +151,7 @@ class ServerCertInstall(admintool.AdminT
-         os.chmod(os.path.join(dirname, 'key3.db'), 0640)
-         os.chmod(os.path.join(dirname, 'secmod.db'), 0640)
- 
--        pent = pwd.getpwnam("apache")
-+        pent = pwd.getpwnam("www-data")
-         os.chown(os.path.join(dirname, 'cert8.db'), 0, pent.pw_gid)
-         os.chown(os.path.join(dirname, 'key3.db'), 0, pent.pw_gid)
-         os.chown(os.path.join(dirname, 'secmod.db'), 0, pent.pw_gid)
---- a/ipaserver/install/cainstance.py
-+++ b/ipaserver/install/cainstance.py
-@@ -1094,7 +1094,7 @@ class CAInstance(DogtagInstance):
-         os.chmod(self.ra_agent_db + "/key3.db", 0640)
-         os.chmod(self.ra_agent_db + "/secmod.db", 0640)
- 
--        pent = pwd.getpwnam("apache")
-+        pent = pwd.getpwnam("www-data")
-         os.chown(self.ra_agent_db + "/cert8.db", 0, pent.pw_gid )
-         os.chown(self.ra_agent_db + "/key3.db", 0, pent.pw_gid )
-         os.chown(self.ra_agent_db + "/secmod.db", 0, pent.pw_gid )
---- a/ipaserver/install/certs.py
-+++ b/ipaserver/install/certs.py
-@@ -519,7 +519,7 @@ class CertDB(object):
-         f.close()
-         pwdfile.close()
-         # TODO: replace explicit uid by a platform-specific one
--        self.set_perms(self.pwd_conf, uid="apache")
-+        self.set_perms(self.pwd_conf, uid="www-data")
- 
-     def find_root_cert(self, nickname):
-         """
 --- a/init/ipa_memcached.conf
 +++ b/init/ipa_memcached.conf
 @@ -1,5 +1,5 @@
@@ -524,26 +423,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  MAXCONN=1024
  CACHESIZE=64
  OPTIONS=
---- a/ipaserver/install/bindinstance.py
-+++ b/ipaserver/install/bindinstance.py
-@@ -572,7 +572,7 @@ class BindInstance(service.Service):
-     suffix = ipautil.dn_attribute_property('_suffix')
- 
-     def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders, ntp,
--              reverse_zones, named_user="named", zonemgr=None,
-+              reverse_zones, named_user="bind", zonemgr=None,
-               ca_configured=None, no_dnssec_validation=False):
-         self.named_user = named_user
-         self.fqdn = fqdn
-@@ -1013,7 +1013,7 @@ class BindInstance(service.Service):
- 
-     def __generate_rndc_key(self):
-         installutils.check_entropy()
--        ipautil.run(['/usr/libexec/generate-rndc-key.sh'])
-+        ipautil.run(paths.GENERATE_RNDC_KEY)
- 
-     def add_master_dns_records(self, fqdn, ip_addresses, realm_name, domain_name,
-                                reverse_zones, ntp=False, ca_configured=None):
 --- a/init/systemd/ipa_memcached.service
 +++ b/init/systemd/ipa_memcached.service
 @@ -4,7 +4,7 @@ After=network.target
@@ -568,3 +447,28 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  
  include "$RFC1912_ZONES";
  include "$ROOT_KEY";
+--- /dev/null
++++ b/ipaplatform/debian/constants.py
+@@ -0,0 +1,22 @@
++#
++# Copyright (C) 2015  FreeIPA Contributors see COPYING for license
++#
++
++'''
++This Debian family platform module exports platform dependant constants.
++'''
++
++# Fallback to default path definitions
++from ipaplatform.base.constants import BaseConstantsNamespace
++
++
++class DebianConstantsNamespace(BaseConstantsNamespace):
++    HTTPD_USER = "www-data"
++    NAMED_USER = "bind"
++    # ntpd init variable used for daemon options
++    NTPD_OPTS_VAR = "NTPD_OPTS"
++    # quote used for daemon options
++    NTPD_OPTS_QUOTE = "\'"
++    SECURE_NFS_VAR = "NEED_GSSD"
++
++constants = DebianConstantsNamespace()

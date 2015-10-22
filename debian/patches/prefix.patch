@@ -21,7 +21,7 @@ use the debian layout when installing python modules
  	fi
  
  client-dirs:
-@@ -176,11 +176,11 @@ server: version-update
+@@ -177,11 +177,11 @@ server: version-update
  
  server-install: server
  	if [ "$(DESTDIR)" = "" ]; then \
@@ -37,7 +37,7 @@ use the debian layout when installing python modules
  	fi
  
  tests: version-update tests-man-autogen
-@@ -191,7 +191,7 @@ tests-install: tests
+@@ -192,7 +192,7 @@ tests-install: tests
  	if [ "$(DESTDIR)" = "" ]; then \
  		cd ipatests; $(PYTHON) setup.py install; \
  	else \
@@ -62,6 +62,20 @@ use the debian layout when installing python modules
 @@ -9,7 +9,7 @@ install:
  	if [ "$(DESTDIR)" = "" ]; then \
  		python2 setup.py install; \
+ 	else \
+-		python2 setup.py install --root $(DESTDIR); \
++		python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
+ 	fi
+ 
+ clean:
+--- a/ipapython/ipap11helper/Makefile
++++ b/ipapython/ipap11helper/Makefile
+@@ -7,9 +7,9 @@ all:
+ 
+ install:
+ 	if [ "$(DESTDIR)" = "" ]; then \
+-		python2 setup.py install; \
++		python2 setup.py install --install-layout=deb; \
  	else \
 -		python2 setup.py install --root $(DESTDIR); \
 +		python2 setup.py install --root $(DESTDIR) --install-layout=deb; \

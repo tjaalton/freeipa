@@ -1,9 +1,17 @@
-Description: Fix typo
-Author: Benjamin Drung <benjamin.drung@profitbricks.com>
+From 9d9dad56a74a35aee30669bc7477035e5c794b9f Mon Sep 17 00:00:00 2001
+From: Benjamin Drung <benjamin.drung@profitbricks.com>
+Date: Mon, 5 Oct 2015 15:44:04 +0300
+Subject: [PATCH] default.conf.5: Fix a typo
 
+---
+ ipa-client/man/default.conf.5 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ipa-client/man/default.conf.5 b/ipa-client/man/default.conf.5
+index d5cef5b36f55c719287d636a18ebbb52079310ca..c7790c82346deb9f87cbf23c0fa583dc151aff1c 100644
 --- a/ipa-client/man/default.conf.5
 +++ b/ipa-client/man/default.conf.5
-@@ -140,7 +140,7 @@
+@@ -140,7 +140,7 @@ Note: logger names are a dot ('.') separated list forming a path
  in the logger tree.  The dot character is also a regular
  expression metacharacter (matches any character) therefore you
  will usually need to escape the dot in the logger names by
@@ -12,3 +20,6 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  .TP
  .B mode <mode>
  Specifies the mode the server is running in. The currently support values are \fBproduction\fR and \fBdevelopment\fR. When running in production mode some self\-tests are skipped to improve performance.
+-- 
+2.5.0
+

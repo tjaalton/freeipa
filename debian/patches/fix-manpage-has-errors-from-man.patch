@@ -1,13 +1,22 @@
-Description: Fix manpage-has-errors-from-man warning (found by Lintian).
- See https://lintian.debian.org/tags/manpage-has-errors-from-man.html for
- an explanation. Issues found were
- ipa-client-install.1.gz 208: warning [p 5, 4.0i]: cannot adjust line
- default.conf.5.gz 50: warning: macro `np' not defined
-Author: Benjamin Drung <benjamin.drung@profitbricks.com>
+From 33751c9a644cc071222f00c44ec7baf0fe05ffc8 Mon Sep 17 00:00:00 2001
+From: Benjamin Drung <benjamin.drung@profitbricks.com>
+Date: Mon, 5 Oct 2015 15:43:06 +0300
+Subject: [PATCH] Fix manpage-has-errors-from-man warning (found by Lintian)
 
+See https://lintian.debian.org/tags/manpage-has-errors-from-man.html for
+an explanation. Issues found were
+ipa-client-install.1.gz 208: warning [p 5, 4.0i]: cannot adjust line
+default.conf.5.gz 50: warning: macro `np' not defined
+---
+ ipa-client/man/default.conf.5       |  4 +--
+ ipa-client/man/ipa-client-install.1 | 49 +++++++++++++++++++++++--------------
+ 2 files changed, 33 insertions(+), 20 deletions(-)
+
+diff --git a/ipa-client/man/default.conf.5 b/ipa-client/man/default.conf.5
+index 75b9f86bcf4fe065c65f0a1b115976fc1cec13bd..d5cef5b36f55c719287d636a18ebbb52079310ca 100644
 --- a/ipa-client/man/default.conf.5
 +++ b/ipa-client/man/default.conf.5
-@@ -47,14 +47,14 @@ Valid lines consist of an option name, a
+@@ -47,14 +47,14 @@ Valid lines consist of an option name, an equals sign and a value. Spaces surrou
  
  Values should not be quoted, the quotes will not be stripped.
  
@@ -24,9 +33,11 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  
  Options must appear in the section named [global]. There are no other sections defined or used currently.
  
+diff --git a/ipa-client/man/ipa-client-install.1 b/ipa-client/man/ipa-client-install.1
+index 0fafd8a3f2ee24b400b1cbeada4ddf7cea9493b0..cdcc56fee6ce82e0fe00048d52b13d27e8fe3450 100644
 --- a/ipa-client/man/ipa-client-install.1
 +++ b/ipa-client/man/ipa-client-install.1
-@@ -216,36 +216,49 @@ Unattended uninstallation. The user will
+@@ -222,36 +222,49 @@ Unattended uninstallation. The user will not be prompted.
  .TP
  Files that will be replaced if SSSD is configured (default):
  
@@ -94,3 +105,6 @@ Author: Benjamin Drung <benjamin.drung@profitbricks.com>
  .SH "EXIT STATUS"
  0 if the installation was successful
  
+-- 
+2.5.0
+
