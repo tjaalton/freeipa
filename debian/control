@@ -14,6 +14,7 @@ Build-Depends:
  krb5-user,
  libcmocka-dev,
  libcurl4-nss-dev,
+ libini-config-dev,
  libkrad-dev,
  libkrb5-dev (>= 1.12),
  libldap2-dev,
@@ -35,6 +36,7 @@ Build-Depends:
  libxmlrpc-core-c3-dev (>= 1.33.06),
  python-all-dev,
  python-cryptography,
+ python-dbus,
  python-dnspython (>= 1.11.1),
  python-gssapi,
  python-ldap (>= 2.4.15),
@@ -135,6 +137,7 @@ Architecture: any
 Depends:
  bind9utils,
  certmonger (>= 0.76.8),
+ curl,
  dnsutils,
  krb5-user,
  libcurl3 (>= 7.22.0),
@@ -147,7 +150,6 @@ Depends:
  python-gssapi,
  python-ldap,
  sssd (>= 1.12.3),
- wget,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
