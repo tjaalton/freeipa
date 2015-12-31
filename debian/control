@@ -16,7 +16,7 @@ Build-Depends:
  libcurl4-nss-dev,
  libini-config-dev,
  libkrad-dev,
- libkrb5-dev (>= 1.12),
+ libkrb5-dev (>= 1.13),
  libldap2-dev,
  libnspr4-dev,
  libnss3-dev,
