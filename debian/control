@@ -117,7 +117,6 @@ Architecture: any
 Depends:
  freeipa-server (= ${binary:Version}),
  python-libsss-nss-idmap,
- python-m2crypto,
  python-samba,
  samba,
  winbind,
