@@ -1,12 +1,4 @@
 # upstreamed
-freeipa-tjaalton-0006-2-ipaplatform-Add-HTTPD_USER-to-constants-and-use-it.patch
-freeipa-tjaalton-0007-ipaplatform-Add-NAMED_USER-and-user-it.patch
-freeipa-tjaalton-0008-2-httpinstance-Use-full-path-via-HTTPD_IPA_REWRITE_CONF.patch
-freeipa-tjaalton-0009-2-ipaplatform-Add-SECURE_NFS_VAR-to-constants.patch
-freeipa-tjaalton-0010-2-ipaplatform-Add-NTPD_OPTS_VAR-and-NTPD_OPTS_QUOTE-to.patch
-fix-hyphen-used-as-minus-sign.patch
-fix-manpage-has-errors-from-man.patch
-fix-typo.patch
 
 # not upstreamable
 work-around-apache-fail.diff
