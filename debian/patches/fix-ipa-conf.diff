@@ -21,9 +21,9 @@ Description: Fix paths
 +  GssapiCredStore client_keytab:/etc/apache2/ipa.keytab
 +  GssapiDelegCcacheDir /var/run/apache2/ipa/clientcaches
    GssapiUseS4U2Proxy on
+   GssapiAllowedMech krb5
    Require valid-user
-   ErrorDocument 401 /ipa/errors/unauthorized.html
-@@ -132,8 +132,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+@@ -141,8 +141,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  
  #  List explicitly only the fonts we want to serve

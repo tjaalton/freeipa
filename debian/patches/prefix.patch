@@ -5,7 +5,7 @@ use the debian layout when installing python modules
 
 --- a/Makefile
 +++ b/Makefile
-@@ -99,11 +99,11 @@ client-install: client client-dirs
+@@ -107,11 +107,11 @@ client-install: client client-dirs
  	done
  	cd install/po && $(MAKE) install || exit 1;
  	if [ "$(DESTDIR)" = "" ]; then \
@@ -21,7 +21,7 @@ use the debian layout when installing python modules
  	fi
  
  client-dirs:
-@@ -177,11 +177,11 @@ server: version-update
+@@ -187,11 +187,11 @@ server: version-update
  
  server-install: server
  	if [ "$(DESTDIR)" = "" ]; then \
@@ -37,7 +37,7 @@ use the debian layout when installing python modules
  	fi
  
  tests: version-update tests-man-autogen
-@@ -192,7 +192,7 @@ tests-install: tests
+@@ -202,7 +202,7 @@ tests-install: tests
  	if [ "$(DESTDIR)" = "" ]; then \
  		cd ipatests; $(PYTHON) setup.py install; \
  	else \
@@ -50,35 +50,32 @@ use the debian layout when installing python modules
 +++ b/ipapython/Makefile
 @@ -15,7 +15,7 @@ install:
  	if [ "$(DESTDIR)" = "" ]; then \
- 		python2 setup.py install; \
+ 		$(PYTHON) setup.py install; \
  	else \
--		python2 setup.py install --root $(DESTDIR); \
-+		python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
+-		$(PYTHON) setup.py install --root $(DESTDIR); \
++		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
  	fi
  	@for subdir in $(SUBDIRS); do \
  		(cd $$subdir && $(MAKE) $@) || exit 1; \
 --- a/ipapython/py_default_encoding/Makefile
 +++ b/ipapython/py_default_encoding/Makefile
-@@ -9,7 +9,7 @@ install:
- 	if [ "$(DESTDIR)" = "" ]; then \
- 		python2 setup.py install; \
- 	else \
--		python2 setup.py install --root $(DESTDIR); \
-+		python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
+@@ -13,7 +13,7 @@ install:
+ 		if [ "$(DESTDIR)" = "" ]; then \
+ 			python2 setup.py install; \
+ 		else \
+-			python2 setup.py install --root $(DESTDIR); \
++			python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
+ 		fi; \
  	fi
  
- clean:
 --- a/ipapython/ipap11helper/Makefile
 +++ b/ipapython/ipap11helper/Makefile
-@@ -7,9 +7,9 @@ all:
- 
- install:
+@@ -8,7 +8,7 @@ install:
  	if [ "$(DESTDIR)" = "" ]; then \
--		python2 setup.py install; \
-+		python2 setup.py install --install-layout=deb; \
+ 		$(PYTHON) setup.py install; \
  	else \
--		python2 setup.py install --root $(DESTDIR); \
-+		python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
+-		$(PYTHON) setup.py install --root $(DESTDIR); \
++		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
  	fi
  
  clean:

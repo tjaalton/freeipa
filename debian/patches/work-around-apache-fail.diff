@@ -1,7 +1,7 @@
 Description: service apache2 restart fails on sid, so don't do that
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -164,7 +164,8 @@ class HTTPInstance(service.Service):
+@@ -176,7 +176,8 @@ class HTTPInstance(service.Service):
  
      def __start(self):
          self.backup_state("running", self.is_running())
@@ -13,7 +13,7 @@ Description: service apache2 restart fails on sid, so don't do that
          self.backup_state("enabled", self.is_enabled())
 --- a/install/tools/ipa-dns-install
 +++ b/install/tools/ipa-dns-install
-@@ -130,7 +130,8 @@ def main():
+@@ -142,7 +142,8 @@ def main():
      fstore = sysrestore.FileStore(paths.SYSRESTORE)
      http = httpinstance.HTTPInstance(fstore)
      service.print_msg("Restarting the web server")
@@ -25,7 +25,7 @@ Description: service apache2 restart fails on sid, so don't do that
  
 --- a/ipaserver/install/server/install.py
 +++ b/ipaserver/install/server/install.py
-@@ -860,7 +860,8 @@ def install(installer):
+@@ -967,7 +967,8 @@ def install(installer):
  
      # Restart httpd to pick up the new IPA configuration
      service.print_msg("Restarting the web server")
@@ -37,7 +37,7 @@ Description: service apache2 restart fails on sid, so don't do that
          kra.install(api, None, options)
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -621,7 +621,8 @@ def install(installer):
+@@ -777,7 +777,8 @@ def install(installer):
  
      # Restart httpd to pick up the new IPA configuration
      service.print_msg("Restarting the web server")
@@ -46,4 +46,4 @@ Description: service apache2 restart fails on sid, so don't do that
 +    http.start()
  
      # Call client install script
-     try:
+     service.print_msg("Configuring client side components")
