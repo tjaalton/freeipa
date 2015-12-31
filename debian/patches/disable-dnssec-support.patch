@@ -1,0 +1,524 @@
+From 80cae5f5ea38528caab01efae9100659e2ebb86e Mon Sep 17 00:00:00 2001
+From: Jan Cholasta <jcholast@redhat.com>
+Date: Tue, 21 Oct 2014 14:25:50 +0200
+Subject: [PATCH] Disable DNSSEC support
+
+---
+ install/share/bind.named.conf.template |  2 +-
+ install/tools/ipa-dns-install          | 52 ++++------------------------------
+ install/tools/ipa-replica-install      | 16 ++++-------
+ install/tools/ipa-replica-manage       | 12 --------
+ install/tools/ipa-server-install       | 40 +++-----------------------
+ install/tools/ipa-upgradeconfig        | 10 -------
+ ipalib/plugins/dns.py                  |  4 ++-
+ ipaplatform/redhat/services.py         |  6 ++--
+ ipapython/Makefile                     |  2 +-
+ ipapython/setup.py.in                  |  2 +-
+ ipaserver/install/bindinstance.py      | 25 ----------------
+ 11 files changed, 24 insertions(+), 147 deletions(-)
+
+--- a/install/share/bind.named.conf.template
++++ b/install/share/bind.named.conf.template
+@@ -18,12 +18,8 @@ options {
+ 	pid-file "$NAMED_PID";
+ 
+ 	dnssec-enable yes;
+-	dnssec-validation yes;
++	dnssec-validation no;
+ 
+-	/* Path to ISC DLV key */
+-	bindkeys-file "$BINDKEYS_FILE";
+-
+-	managed-keys-directory "$MANAGED_KEYS_DIR";
+ };
+ 
+ /* If you want to enable debugging, eg. using the 'rndc trace' command,
+@@ -40,7 +36,6 @@ logging {
+ 
+ 
+ include "$RFC1912_ZONES";
+-include "$ROOT_KEY";
+ 
+ dynamic-db "ipa" {
+ 	library "ldap.so";
+--- a/install/tools/ipa-dns-install
++++ b/install/tools/ipa-dns-install
+@@ -23,8 +23,7 @@ from optparse import OptionGroup, SUPPRE
+ 
+ import krbV
+ 
+-from ipaserver.install import (service, bindinstance, ntpinstance,
+-    httpinstance, dnskeysyncinstance, opendnssecinstance, odsexporterinstance)
++from ipaserver.install import service, bindinstance, ntpinstance, httpinstance
+ from ipaserver.install.installutils import *
+ from ipaserver.install import installutils
+ from ipapython import version
+@@ -54,10 +53,6 @@ def parse_options():
+                       help="The reverse DNS zone to use. This option can be used multiple times")
+     parser.add_option("--no-reverse", dest="no_reverse", action="store_true",
+                       default=False, help="Do not create new reverse DNS zone")
+-    parser.add_option("--no-dnssec-validation", dest="no_dnssec_validation", action="store_true",
+-                      default=False, help="Disable DNSSEC validation")
+-    parser.add_option("--dnssec-master", dest="dnssec_master", action="store_true",
+-                      default=False, help="Setup server to be DNSSEC key master")
+     parser.add_option("--zonemgr", action="callback", callback=bindinstance.zonemgr_callback,
+                       type="string",
+                       help="DNS zone manager e-mail address. Defaults to hostmaster@DOMAIN")
+@@ -67,6 +62,10 @@ def parse_options():
+     options, args = parser.parse_args()
+     safe_options = parser.get_safe_opts(options)
+ 
++    # Disable DNSSEC support
++    options.no_dnssec_validation = False
++    options.dnssec_master = False
++
+     if options.forwarders and options.no_forwarders:
+         parser.error("You cannot specify a --forwarder option together with --no-forwarders")
+     elif options.reverse_zones and options.no_reverse:
+@@ -101,21 +100,6 @@ def main():
+     print ""
+     print "This includes:"
+     print "  * Configure DNS (bind)"
+-    print "  * Configure SoftHSM (required by DNSSEC)"
+-    print "  * Configure ipa-dnskeysyncd (required by DNSSEC)"
+-    if options.dnssec_master:
+-        print "  * Configure ipa-ods-exporter (required by DNSSEC key master)"
+-        print "  * Configure OpenDNSSEC (required by DNSSEC key master)"
+-        print "  * Generate DNSSEC master key (required by DNSSEC key master)"
+-    print ""
+-    print "NOTE: DNSSEC zone signing is not enabled by default"
+-    print ""
+-    if options.dnssec_master:
+-        print "DNSSEC support is experimental!"
+-        print ""
+-        print "Plan carefully, current version doesn't allow you to move DNSSEC"
+-        print "key master to different server and master cannot be uninstalled"
+-        print ""
+     print ""
+     print "To accept the default shown in brackets, press the Enter key."
+     print ""
+@@ -126,15 +110,9 @@ def main():
+         sys.exit("Aborted")
+ 
+     # Check bind packages are installed
+-    if not (bindinstance.check_inst(options.unattended) and
+-            dnskeysyncinstance.check_inst()):
++    if not bindinstance.check_inst(options.unattended):
+         sys.exit("Aborting installation.")
+ 
+-    if options.dnssec_master:
+-        # check opendnssec packages are installed
+-        if not opendnssecinstance.check_inst():
+-            sys.exit("Aborting installation")
+-
+     # Initialize the ipalib api
+     cfg = dict(
+         in_server=True,
+@@ -160,15 +138,6 @@ def main():
+     except errors.ACIError:
+         sys.exit("Password is not valid!")
+ 
+-    ods = opendnssecinstance.OpenDNSSECInstance(fstore, dm_password,
+-                                                start_tls=True)
+-    if options.dnssec_master:
+-        dnssec_masters = ods.get_masters()
+-        # we can reinstall current server if it is dnssec master
+-        if not api.env.host in dnssec_masters and dnssec_masters:
+-            print "DNSSEC key master(s):", u','.join(dnssec_masters)
+-            sys.exit("Only one DNSSEC key master is supported in current version.")
+-
+     ip_addresses = get_server_ip_address(api.env.host, fstore,
+         options.unattended, True, options.ip_addresses)
+ 
+@@ -179,13 +148,6 @@ def main():
+     else:
+         dns_forwarders = read_dns_forwarders()
+ 
+-    # test DNSSEC forwarders
+-    if dns_forwarders:
+-        if (not bindinstance.check_forwarders(dns_forwarders, root_logger)
+-                and not options.no_dnssec_validation):
+-            options.no_dnssec_validation = True
+-            print "WARNING: DNSSEC validation will be disabled"
+-
+     root_logger.debug("will use dns_forwarders: %s\n", str(dns_forwarders))
+ 
+     if bind.dm_password:
+@@ -214,19 +176,6 @@ def main():
+                no_dnssec_validation=options.no_dnssec_validation)
+     bind.create_instance()
+ 
+-    # on dnssec master this must be installed last
+-    dnskeysyncd = dnskeysyncinstance.DNSKeySyncInstance(fstore, dm_password,
+-                                                        start_tls=True)
+-    dnskeysyncd.create_instance(api.env.host, api.env.realm)
+-    if options.dnssec_master:
+-        ods_exporter = odsexporterinstance.ODSExporterInstance(fstore,
+-                                                               dm_password,
+-                                                               start_tls=True)
+-
+-        ods_exporter.create_instance(api.env.host, api.env.realm)
+-        ods.create_instance(api.env.host, api.env.realm)
+-
+-    dnskeysyncd.start_dnskeysyncd()
+     bind.start_named()
+ 
+     # Restart http instance to make sure that python-dns has the right resolver
+--- a/install/tools/ipa-replica-install
++++ b/install/tools/ipa-replica-install
+@@ -33,7 +33,7 @@ from ipapython import ipautil
+ 
+ from ipaserver.install import dsinstance, installutils, krbinstance, service
+ from ipaserver.install import bindinstance, httpinstance, ntpinstance
+-from ipaserver.install import memcacheinstance, dnskeysyncinstance
++from ipaserver.install import memcacheinstance
+ from ipaserver.install import otpdinstance
+ from ipaserver.install.replication import replica_conn_check, ReplicationManager
+ from ipaserver.install.installutils import (ReplicaConfig, expand_replica_info,
+@@ -115,8 +115,6 @@ def parse_options():
+                         metavar="REVERSE_ZONE")
+     dns_group.add_option("--no-reverse", dest="no_reverse", action="store_true",
+                       default=False, help="Do not create new reverse DNS zone")
+-    dns_group.add_option("--no-dnssec-validation", dest="no_dnssec_validation", action="store_true",
+-                      default=False, help="Disable DNSSEC validation")
+     dns_group.add_option("--no-host-dns", dest="no_host_dns", action="store_true",
+                       default=False,
+                       help="Do not use DNS for hostname lookup during installation")
+@@ -127,6 +125,9 @@ def parse_options():
+     options, args = parser.parse_args()
+     safe_options = parser.get_safe_opts(options)
+ 
++    # Disable DNSSEC support
++    options.no_dnssec_validation = False
++
+     if len(args) != 1:
+         parser.error("you must provide a file generated by ipa-replica-prepare")
+ 
+@@ -139,8 +140,6 @@ def parse_options():
+             parser.error("You cannot specify a --reverse-zone option without the --setup-dns option")
+         if options.no_reverse:
+             parser.error("You cannot specify a --no-reverse option without the --setup-dns option")
+-        if options.no_dnssec_validation:
+-            parser.error("You cannot specify a --no-dnssec-validation option without the --setup-dns option")
+     elif options.forwarders and options.no_forwarders:
+         parser.error("You cannot specify a --forwarder option together with --no-forwarders")
+     elif not options.forwarders and not options.no_forwarders:
+@@ -274,10 +273,6 @@ def install_bind(config, options):
+                no_dnssec_validation=options.no_dnssec_validation)
+     bind.create_instance()
+     print ""
+-    dnskeysyncd = dnskeysyncinstance.DNSKeySyncInstance(
+-        dm_password=config.dirman_password)
+-    dnskeysyncd.create_instance(api.env.host, api.env.realm)
+-    dnskeysyncd.start_dnskeysyncd()
+     bind.start_named()
+     print ""
+     bind.check_global_configuration()
+@@ -354,8 +349,7 @@ def check_dirsrv():
+         sys.exit(1)
+ 
+ def check_bind():
+-    if not (bindinstance.check_inst(unattended=True) and
+-            dnskeysyncinstance.check_inst()):
++    if not bindinstance.check_inst(unattended=True):
+         print "Aborting installation"
+         sys.exit(1)
+ 
+--- a/install/tools/ipa-replica-manage
++++ b/install/tools/ipa-replica-manage
+@@ -29,7 +29,6 @@ import socket
+ from ipapython import ipautil
+ from ipaserver.install import replication, dsinstance, installutils
+ from ipaserver.install import bindinstance, cainstance, certs
+-from ipaserver.install import opendnssecinstance, dnskeysyncinstance
+ from ipaserver.plugins import ldap2
+ from ipapython import version, ipaldap
+ from ipalib import api, errors, util
+@@ -695,14 +694,6 @@ def del_master(realm, hostname, options)
+             if not options.force and not ipautil.user_input("Continue to delete?", False):
+                 sys.exit("Deletion aborted")
+ 
+-        # test if replica is not DNSSEC master
+-        # allow to delete it if is last DNS server
+-        if 'DNS' in this_services and other_dns and not options.force:
+-            dnssec_masters = opendnssecinstance.get_dnssec_key_masters(delrepl.conn)
+-            if hostname in dnssec_masters:
+-                print "Replica is active DNSSEC key master. Uninstall could break your DNS system."
+-                sys.exit("Deletion aborted")
+-
+         # Pick CA renewal master
+         ca = cainstance.CAInstance(api.env.realm, certs.NSS_DIR)
+         if ca.is_renewal_master(hostname):
+@@ -757,9 +748,6 @@ def del_master(realm, hostname, options)
+             bind.remove_master_dns_records(hostname, realm, realm.lower())
+             bind.remove_ipa_ca_dns_records(hostname, realm.lower())
+             bind.remove_server_ns_records(hostname)
+-
+-            keysyncd = dnskeysyncinstance.DNSKeySyncInstance()
+-            keysyncd.remove_replica_public_keys(hostname)
+     except Exception, e:
+         print "Failed to cleanup %s DNS entries: %s" % (hostname, e)
+         print "You may need to manually remove them from the tree"
+--- a/install/tools/ipa-server-install
++++ b/install/tools/ipa-server-install
+@@ -49,9 +49,6 @@ except ImportError:
+ from ipaserver.install import dsinstance
+ from ipaserver.install import krbinstance
+ from ipaserver.install import bindinstance
+-from ipaserver.install import dnskeysyncinstance
+-from ipaserver.install import opendnssecinstance
+-from ipaserver.install import odsexporterinstance
+ from ipaserver.install import httpinstance
+ from ipaserver.install import ntpinstance
+ from ipaserver.install import certs
+@@ -290,8 +287,6 @@ def parse_options():
+                       action="append", default=[], metavar="REVERSE_ZONE")
+     dns_group.add_option("--no-reverse", dest="no_reverse", action="store_true",
+                       default=False, help="Do not create reverse DNS zone")
+-    dns_group.add_option("--no-dnssec-validation", dest="no_dnssec_validation", action="store_true",
+-                      default=False, help="Disable DNSSEC validation")
+     dns_group.add_option("--zonemgr", action="callback", callback=bindinstance.zonemgr_callback,
+                       type="string",
+                       help="DNS zone manager e-mail address. Defaults to hostmaster@DOMAIN")
+@@ -311,6 +306,9 @@ def parse_options():
+     options, args = parser.parse_args()
+     safe_options = parser.get_safe_opts(options)
+ 
++    # Disable DNSSEC support
++    options.no_dnssec_validation = False
++
+     if options.dm_password is not None:
+         try:
+             validate_dm_password(options.dm_password)
+@@ -337,8 +335,6 @@ def parse_options():
+             parser.error("You cannot specify a --reverse-zone option without the --setup-dns option")
+         if options.no_reverse:
+             parser.error("You cannot specify a --no-reverse option without the --setup-dns option")
+-        if options.no_dnssec_validation:
+-            parser.error("You cannot specify a --no-dnssec-validation option without the --setup-dns option")
+     elif options.forwarders and options.no_forwarders:
+         parser.error("You cannot specify a --forwarder option together with --no-forwarders")
+     elif options.reverse_zones and options.no_reverse:
+@@ -578,17 +574,7 @@ def uninstall():
+         api.env.realm, certs.NSS_DIR, dogtag_constants=dogtag_constants)
+     if ca_instance.is_configured():
+         ca_instance.uninstall()
+-
+-    ods = opendnssecinstance.OpenDNSSECInstance(fstore)
+-    if ods.is_configured():
+-        ods.uninstall()
+-
+-    ods_exporter = odsexporterinstance.ODSExporterInstance(fstore)
+-    if ods_exporter.is_configured():
+-        ods_exporter.uninstall()
+-
+     bindinstance.BindInstance(fstore).uninstall()
+-    dnskeysyncinstance.DNSKeySyncInstance(fstore).uninstall()
+     httpinstance.HTTPInstance(fstore).uninstall()
+     krbinstance.KrbInstance(fstore).uninstall()
+     dsinstance.DsInstance(fstore=fstore).uninstall()
+@@ -746,20 +732,6 @@ def main():
+                    "agreements.\n\n")
+             print textwrap.fill(msg, width=80, replace_whitespace=False)
+         else:
+-
+-            # test if server is DNSSEC key master
+-            masters = opendnssecinstance.get_dnssec_key_masters(conn)
+-            if api.env.host in masters:
+-                print "This server is active DNSSEC key master. Uninstall could break your DNS system."
+-                if not (options.unattended or user_input("Are you sure you "
+-                                                         "want to continue "
+-                                                         "with the uninstall "
+-                                                         "procedure?",
+-                                                         False)):
+-                    print ""
+-                    print "Aborting uninstall operation."
+-                    sys.exit(1)
+-
+             rm = replication.ReplicationManager(
+                 realm=api.env.realm,
+                 hostname=api.env.host,
+@@ -908,8 +880,7 @@ def main():
+ 
+     # check bind packages are installed
+     if options.setup_dns:
+-        if not (bindinstance.check_inst(options.unattended) and
+-                dnskeysyncinstance.check_inst()):
++        if not bindinstance.check_inst(options.unattended):
+             sys.exit("Aborting installation")
+ 
+         # Don't require an external DNS to say who we are if we are
+@@ -1298,9 +1269,6 @@ def main():
+         api.Backend.ldap2.connect(bind_dn=DN(('cn', 'Directory Manager')), bind_pw=dm_password)
+ 
+         bind.create_instance()
+-        dnskeysyncd = dnskeysyncinstance.DNSKeySyncInstance(fstore, dm_password)
+-        dnskeysyncd.create_instance(api.env.host, api.env.realm)
+-        dnskeysyncd.start_dnskeysyncd()
+         bind.start_named()
+         print ""
+         bind.check_global_configuration()
+--- a/install/tools/ipa-upgradeconfig
++++ b/install/tools/ipa-upgradeconfig
+@@ -54,7 +54,6 @@ from ipaserver.install import cainstance
+ from ipaserver.install import certs
+ from ipaserver.install import otpdinstance
+ from ipaserver.install import sysupgrade
+-from ipaserver.install import dnskeysyncinstance
+ 
+ 
+ def parse_options():
+@@ -1436,14 +1435,6 @@ def main():
+         except ipalib.errors.DuplicateEntry:
+             pass
+ 
+-    # install DNSKeySync service only if DNS is configured on server
+-    if bindinstance.named_conf_exists():
+-            dnskeysyncd = dnskeysyncinstance.DNSKeySyncInstance(fstore, ldapi=True)
+-            if not dnskeysyncd.is_configured():
+-                ds.start()
+-                dnskeysyncd.create_instance(fqdn, api.env.realm)
+-                dnskeysyncd.start_dnskeysyncd()
+-
+     cleanup_kdc(fstore)
+     cleanup_adtrust(fstore)
+     setup_firefox_extension(fstore)
+@@ -1457,13 +1448,6 @@ def main():
+                           named_enable_serial_autoincrement(),
+                           named_update_gssapi_configuration(),
+                           named_update_pid_file(),
+-                          named_enable_dnssec(),
+-                          named_validate_dnssec(),
+-                          named_bindkey_file_option(),
+-                          named_managed_keys_dir_option(),
+-                          named_root_key_include(),
+-                          mask_named_regular(),
+-                          fix_dyndb_ldap_workdir_permissions(),
+                          )
+ 
+     if any(named_conf_changes):
+--- a/ipalib/plugins/dns.py
++++ b/ipalib/plugins/dns.py
+@@ -2617,7 +2617,9 @@ class dnszone(DNSZoneBase):
+             if options['idnssecinlinesigning'] is True:
+                 messages.add_message(options['version'], result,
+                     messages.DNSSECWarning(
+-                    additional_info=_("Visit 'http://www.freeipa.org/page/Releases/4.1.0#DNSSEC_Support'.")
++                    additional_info=_("Manual configuration needed, please "
++                    "visit 'http://www.freeipa.org/page/Releases/4.0.0#"
++                    "Experimental_DNSSEC_Support'")
+                 ))
+             else:
+                 messages.add_message(options['version'], result,
+--- a/ipaplatform/redhat/services.py
++++ b/ipaplatform/redhat/services.py
+@@ -69,7 +69,7 @@ redhat_system_units['ipa-otpd'] = 'ipa-o
+ redhat_system_units['ipa-dnskeysyncd'] = 'ipa-dnskeysyncd.service'
+ redhat_system_units['named-regular'] = 'named.service'
+ redhat_system_units['named-pkcs11'] = 'named-pkcs11.service'
+-redhat_system_units['named'] = redhat_system_units['named-pkcs11']
++redhat_system_units['named'] = redhat_system_units['named-regular']
+ redhat_system_units['ods-enforcerd'] = 'ods-enforcerd.service'
+ redhat_system_units['ods_enforcerd'] = redhat_system_units['ods-enforcerd']
+ redhat_system_units['ods-signerd'] = 'ods-signerd.service'
+@@ -243,10 +243,10 @@ class RedHatNamedService(RedHatService):
+         return u'named'
+ 
+     def get_binary_path(self):
+-        return paths.NAMED_PKCS11
++        return paths.NAMED
+ 
+     def get_package_name(self):
+-        return u"bind-pkcs11"
++        return u"bind"
+ 
+ 
+ class RedHatODSEnforcerdService(RedHatService):
+--- a/ipapython/Makefile
++++ b/ipapython/Makefile
+@@ -3,7 +3,7 @@ PACKAGEDIR ?= $(DESTDIR)/$(PYTHONLIBDIR)
+ CONFIGDIR ?= $(DESTDIR)/etc/ipa
+ TESTS = $(wildcard test/*.py)
+ 
+-SUBDIRS = py_default_encoding ipap11helper
++SUBDIRS = py_default_encoding
+ 
+ all:
+ 	@for subdir in $(SUBDIRS); do \
+--- a/ipapython/setup.py.in
++++ b/ipapython/setup.py.in
+@@ -65,7 +65,7 @@ def setup_package():
+             classifiers=filter(None, CLASSIFIERS.split('\n')),
+             platforms = ["Linux", "Solaris", "Unix"],
+             package_dir = {'ipapython': ''},
+-            packages = [ "ipapython", "ipapython.dnssec" ],
++            packages = [ "ipapython" ],
+         )
+     finally:
+         del sys.path[0]
+--- a/ipaserver/install/bindinstance.py
++++ b/ipaserver/install/bindinstance.py
+@@ -552,7 +552,6 @@ class BindInstance(service.Service):
+         self.sub_dict = None
+         self.reverse_zones = []
+         self.dm_password = dm_password
+-        self.named_regular = services.service('named-regular')
+ 
+         if fstore:
+             self.fstore = fstore
+@@ -661,8 +660,6 @@ class BindInstance(service.Service):
+             if self.get_state("running") is None:
+                 # first time store status
+                 self.backup_state("running", self.is_running())
+-                self.backup_state("named-regular-running",
+-                                  self.named_regular.is_running())
+             self.restart()
+         except Exception as e:
+             root_logger.error("Named service failed to start (%s)", e)
+@@ -671,8 +668,6 @@ class BindInstance(service.Service):
+     def __enable(self):
+         if self.get_state("enabled") is None:
+             self.backup_state("enabled", self.is_running())
+-            self.backup_state("named-regular-enabled",
+-                              self.named_regular.is_running())
+         # We do not let the system start IPA components on its own,
+         # Instead we reply on the IPA init script to start only enabled
+         # components as found in our LDAP configuration tree
+@@ -683,17 +678,6 @@ class BindInstance(service.Service):
+             # don't crash, just report error
+             root_logger.error("DNS service already exists")
+ 
+-        # disable named, we need to run named-pkcs11 only
+-        try:
+-            self.named_regular.stop()
+-        except Exception as e:
+-            root_logger.debug("Unable to stop named (%s)", e)
+-
+-        try:
+-            self.named_regular.mask()
+-        except Exception as e:
+-            root_logger.debug("Unable to mask named (%s)", e)
+-
+     def __setup_sub_dict(self):
+         if self.forwarders:
+             fwds = "\n"
+@@ -1176,8 +1160,6 @@ class BindInstance(service.Service):
+ 
+         running = self.restore_state("running")
+         enabled = self.restore_state("enabled")
+-        named_regular_running = self.restore_state("named-regular-running")
+-        named_regular_enabled = self.restore_state("named-regular-enabled")
+ 
+         self.dns_backup.clear_records(api.Backend.ldap2.isconnected())
+ 
+@@ -1196,10 +1178,3 @@ class BindInstance(service.Service):
+ 
+         if not running is None and running:
+             self.start()
+-
+-        self.named_regular.unmask()
+-        if named_regular_enabled:
+-            self.named_regular.enable()
+-
+-        if named_regular_running:
+-            self.named_regular.start()

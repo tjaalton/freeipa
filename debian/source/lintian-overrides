@@ -1,0 +1,6 @@
+# lintian fails with javascript files
+source-is-missing install/ui/build/dojo/dojo.js
+source-is-missing install/ui/src/libs/bootstrap.js
+source-is-missing install/ui/src/libs/jquery.js
+source-is-missing install/ui/src/libs/qrcode.js
+source-is-missing install/ui/util/build/build.js

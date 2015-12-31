@@ -1,0 +1,474 @@
+commit b076743f2cdd3a3cb9e8d0e8be7be8c90160fc21
+Author: Timo Aaltonen <tjaalton@ubuntu.com>
+Date:   Fri Mar 1 12:21:00 2013 +0200
+
+    add debian platform support
+
+--- /dev/null
++++ b/ipaplatform/debian/__init__.py
+@@ -0,0 +1,22 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++This module contains Debian specific platform files.
++"""
+--- /dev/null
++++ b/ipaplatform/debian/paths.py
+@@ -0,0 +1,71 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++This Debian base platform module exports default filesystem paths as common
++in Debian-based systems.
++"""
++
++# Fallback to default path definitions
++from ipaplatform.base.paths import BasePathNamespace
++
++
++class DebianPathNamespace(BasePathNamespace):
++    ETC_HTTPD_DIR = "/etc/apache2"
++    HTTPD_ALIAS_DIR = "/etc/apache2/nssdb"
++    ALIAS_CACERT_ASC = "/etc/apache2/nssdb/cacert.asc"
++    ALIAS_PWDFILE_TXT = "/etc/apache2/nssdb/pwdfile.txt"
++    HTTPD_CONF_D_DIR = "/etc/apache2/conf-enabled/"
++    HTTPD_IPA_PKI_PROXY_CONF = "/etc/apache2/conf-enabled/ipa-pki-proxy.conf"
++    HTTPD_IPA_REWRITE_CONF = "/etc/apache2/conf-available/ipa-rewrite.conf"
++    HTTPD_IPA_CONF = "/etc/apache2/conf-enabled/ipa.conf"
++    HTTPD_NSS_CONF = "/etc/apache2/mods-available/nss.conf"
++    IPA_KEYTAB = "/etc/apache2/ipa.keytab"
++    HTTPD_PASSWORD_CONF = "/etc/apache2/password.conf"
++    NAMED_CONF = "/etc/bind/named.conf"
++    NAMED_KEYTAB = "/etc/bind/named.keytab"
++    NAMED_RFC1912_ZONES = "/etc/bind/named.conf.default-zones"
++    OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
++    ETC_DEBIAN_VERSION = "/etc/debian_version"
++    ETC_SYSCONFIG_DIR = "/etc/default"
++    SYSCONFIG_AUTOFS = "/etc/default/autofs"
++    SYSCONFIG_DIRSRV = "/etc/default/dirsrv"
++    SYSCONFIG_DIRSRV_INSTANCE = "/etc/default/dirsrv-%s"
++    SYSCONFIG_DIRSRV_SYSTEMD = "/etc/default/dirsrv.systemd"
++    SYSCONFIG_KRB5KDC_DIR = "/etc/default/krb5-kdc"
++    SYSCONFIG_NFS = "/etc/default/nfs-common"
++    SYSCONFIG_NTPD = "/etc/default/ntp"
++    SYSCONFIG_PKI = "/etc/dogtag/"
++    SYSCONFIG_PKI_TOMCAT = "/etc/default/pki-tomcat"
++    SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/dogtag/tomcat/pki-tomcat"
++    SBIN_SERVICE = "/usr/sbin/service"
++    BIND_LDAP_SO = "/usr/share/doc/bind9-dyndb-ldap/copyright"
++    LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
++    HTTPD = "/usr/sbin/apache2ctl"
++    SETUP_DS_PL = "/usr/sbin/setup-ds"
++    NAMED_VAR_DIR = "/var/cache/bind"
++    VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
++    VAR_KRB5KDC_K5_REALM = "/var/lib/krb5kdc/.k5."
++    CACERT_PEM = "/var/lib/krb5kdc/cacert.pem"
++    KRB5KDC_KDC_CONF = "/var/lib/krb5kdc/kdc.conf"
++    KDC_PEM = "/var/lib/krb5kdc/kdc.pem"
++    VAR_LOG_HTTPD_DIR = "/var/log/apache2"
++    GENERATE_RNDC_KEY = "/usr/share/ipa/generate-rndc-key.sh"
++
++paths = DebianPathNamespace()
+--- /dev/null
++++ b/ipaplatform/debian/services.py
+@@ -0,0 +1,198 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++Contains Debian-specific service class implementations.
++"""
++
++import time
++
++from ipaplatform.tasks import tasks
++from ipaplatform.base import services as base_services
++from ipaplatform.redhat import services as redhat_services
++from ipapython import ipautil
++from ipapython.ipa_log_manager import root_logger
++from ipalib import api
++from ipaplatform.paths import paths
++
++# Mappings from service names as FreeIPA code references to these services
++# to their actual systemd service names
++debian_system_units = redhat_services.redhat_system_units
++
++debian_system_units['pki-tomcatd'] = 'pki-tomcatd.service'
++debian_system_units['pki_tomcatd'] = debian_system_units['pki-tomcatd']
++
++# Service classes that implement Debian-specific behaviour
++
++class DebianService(redhat_services.RedHatService):
++    system_units = debian_system_units
++
++
++class DebianSysvService(base_services.PlatformService):
++    def __wait_for_open_ports(self, instance_name=""):
++        """
++        If this is a service we need to wait for do so.
++        """
++        ports = None
++        if instance_name in base_services.wellknownports:
++            ports = base_services.wellknownports[instance_name]
++        else:
++            if self.service_name in base_services.wellknownports:
++                ports = base_services.wellknownports[self.service_name]
++        if ports:
++            ipautil.wait_for_open_ports('localhost', ports, api.env.startup_timeout)
++    def stop(self, instance_name='', capture_output=True):
++        ipautil.run([paths.SBIN_SERVICE, self.service_name, "stop",
++                     instance_name], capture_output=capture_output)
++        if 'context' in api.env and api.env.context in ['ipactl', 'installer']:
++            update_service_list = True
++        else:
++            update_service_list = False
++        super(DebianSysvService, self).stop(instance_name)
++
++    def start(self, instance_name='', capture_output=True, wait=True):
++        ipautil.run([paths.SBIN_SERVICE, self.service_name, "start",
++                     instance_name], capture_output=capture_output)
++        if 'context' in api.env and api.env.context in ['ipactl', 'installer']:
++            update_service_list = True
++        else:
++            update_service_list = False
++        if wait and self.is_running(instance_name):
++            self.__wait_for_open_ports(instance_name)
++        super(DebianSysvService, self).start(instance_name)
++
++    def restart(self, instance_name='', capture_output=True, wait=True):
++        ipautil.run([paths.SBIN_SERVICE, self.service_name, "restart",
++                     instance_name], capture_output=capture_output)
++        if wait and self.is_running(instance_name):
++            self.__wait_for_open_ports(instance_name)
++
++    def is_running(self, instance_name=""):
++        ret = True
++        try:
++            (sout, serr, rcode) = ipautil.run([paths.SBIN_SERVICE,
++                                              self.service_name, "status",
++                                              instance_name])
++            if sout.find("NOT running") >= 0:
++                ret = False
++            if sout.find("stop") >= 0:
++                ret = False
++        except ipautil.CalledProcessError:
++                ret = False
++        return ret
++
++    def is_installed(self):
++        installed = True
++        try:
++            ipautil.run([paths.SBIN_SERVICE, self.service_name, "status"])
++        except ipautil.CalledProcessError, e:
++            if e.returncode == 1:
++                # service is not installed or there is other serious issue
++                installed = False
++        return installed
++
++    def is_enabled(self, instance_name=""):
++        # Services are always assumed to be enabled when installed
++        return True
++
++    def enable(self):
++        return True
++
++    def disable(self):
++        return True
++
++    def install(self):
++        return True
++
++    def remove(self):
++        return True
++
++    def tune_nofile_platform(self):
++        return True
++
++# For services which have no Debian counterpart
++class DebianNoService(base_services.PlatformService):
++    def restart(self):
++        return True
++
++    def disable(self):
++        return True
++
++
++class DebianSSHService(DebianSysvService):
++    def get_config_dir(self, instance_name=""):
++        return '/etc/ssh'
++
++class DebianNamedService(DebianSysvService):
++    def get_user_name(self):
++        return u'bind'
++
++    def get_group_name(self):
++        return u'bind'
++
++    def get_binary_path(self):
++        return paths.NAMED
++
++    def get_package_name(self):
++        return u'bind9'
++
++
++# Function that constructs proper Debian-specific server classes for services
++# of specified name
++
++def debian_service_class_factory(name):
++    if name == 'dirsrv':
++        return redhat_services.RedHatDirectoryService(name)
++    if name == 'domainname':
++        return DebianNoService(name)
++    if name == 'ipa':
++        return redhat_services.RedHatIPAService(name)
++    if name == 'httpd':
++        return DebianSysvService("apache2")
++    if name == 'kadmin':
++        return DebianSysvService("krb5-admin-server")
++    if name == 'krb5kdc':
++        return DebianSysvService("krb5-kdc")
++    if name == 'messagebus':
++        return DebianSysvService("dbus")
++    if name == 'named':
++        return DebianNamedService("bind9")
++    if name == 'ntpd':
++        return DebianSysvService("ntp")
++    if name == 'sshd':
++        return DebianSSHService(name)
++    return DebianService(name)
++
++
++# Magicdict containing DebianService instances.
++
++class DebianServices(base_services.KnownServices):
++    def __init__(self):
++        services = dict()
++        for s in base_services.wellknownservices:
++            services[s] = debian_service_class_factory(s)
++        # Call base class constructor. This will lock services to read-only
++        super(DebianServices, self).__init__(services)
++
++
++# Objects below are expected to be exported by platform module
++
++from ipaplatform.base.services import timedate_services
++service = debian_service_class_factory
++knownservices = DebianServices()
+--- /dev/null
++++ b/ipaplatform/debian/tasks.py
+@@ -0,0 +1,53 @@
++# Authors:
++#   Timo Aaltonen <tjaalton@ubuntu.com>
++#
++# Copyright (C) 2014 Timo Aaltonen
++# see file 'COPYING' for use and warranty information
++#
++# This program is free software; you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++"""
++This module contains default Debian-specific implementations of system tasks.
++"""
++
++from ipaplatform.paths import paths
++from ipaplatform.base.tasks import *
++from ipaplatform.redhat.tasks import RedHatTaskNamespace
++
++class DebianTaskNamespace(RedHatTaskNamespace):
++
++    def restore_pre_ipa_client_configuration(self, fstore, statestore,
++                                             was_sssd_installed,
++                                             was_sssd_configured):
++        return True
++
++    def set_nisdomain(self, nisdomain):
++        return True
++
++    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
++        return True
++
++    def modify_pam_to_use_krb5(self, statestore):
++        return True
++
++    def insert_ca_cert_into_systemwide_ca_store(self, ca_certs):
++        return True
++
++    def remove_ca_certs_from_systemwide_ca_store(self):
++        return True
++
++    def restore_network_configuration(self, fstore, statestore):
++        return True
++
++tasks = DebianTaskNamespace()
+--- a/ipaplatform/setup.py.in
++++ b/ipaplatform/setup.py.in
+@@ -67,6 +67,7 @@ def setup_package():
+             package_dir = {'ipaplatform': ''},
+             packages = ["ipaplatform",
+                         "ipaplatform.base",
++                        "ipaplatform.debian",
+                         "ipaplatform.fedora",
+                         "ipaplatform.redhat",
+                         "ipaplatform.rhel"],
+--- a/ipaserver/install/ntpinstance.py
++++ b/ipaserver/install/ntpinstance.py
+@@ -50,6 +50,8 @@ class NTPInstance(service.Service):
+             os = "fedora"
+         elif ipautil.file_exists(paths.ETC_REDHAT_RELEASE):
+             os = "rhel"
++        elif ipautil.file_exists(paths.ETC_DEBIAN_VERSION):
++            os = "debian"
+ 
+         srv_vals = []
+         srv_vals.append("0.%s.pool.ntp.org" % os)
+--- a/ipaserver/install/ldapupdate.py
++++ b/ipaserver/install/ldapupdate.py
+@@ -328,9 +328,9 @@ class LDAPUpdate:
+         bits = platform.architecture()[0]
+ 
+         if bits == "64bit":
+-            return "64"
++            return "/x86_64-linux-gnu"
+         else:
+-            return ""
++            return "/i386-linux-gnu"
+ 
+     def _template_str(self, s):
+         try:
+--- a/ipaserver/install/httpinstance.py
++++ b/ipaserver/install/httpinstance.py
+@@ -159,6 +159,7 @@ class HTTPInstance(service.Service):
+             self.step("create KDC proxy user", create_kdcproxy_user)
+             self.step("create KDC proxy config", self.create_kdcproxy_conf)
+             self.step("enable KDC proxy", self.enable_kdcproxy)
++        ipautil.run(["/usr/sbin/a2enmod", "nss"], capture_output=True)
+         self.step("restarting httpd", self.__start)
+         self.step("configuring httpd to start on boot", self.__enable)
+ 
+@@ -470,6 +471,8 @@ class HTTPInstance(service.Service):
+         enabled = self.restore_state("enabled")
+ 
+ 
++        ipautil.run(["/usr/sbin/a2dismod", "nss"], capture_output=True)
++
+         self.stop_tracking_certificates()
+ 
+         helper = self.restore_state('certmonger_ipa_helper')
+--- a/init/ipa_memcached.conf
++++ b/init/ipa_memcached.conf
+@@ -1,5 +1,5 @@
+ SOCKET_PATH=/var/run/ipa_memcached/ipa_memcached
+-USER=apache
++USER=www-data
+ MAXCONN=1024
+ CACHESIZE=64
+ OPTIONS=
+--- a/init/systemd/ipa_memcached.service
++++ b/init/systemd/ipa_memcached.service
+@@ -4,7 +4,7 @@ After=network.target
+ 
+ [Service]
+ Type=forking
+-EnvironmentFile=/etc/sysconfig/ipa_memcached
++EnvironmentFile=/etc/default/ipa_memcached
+ PIDFile=/var/run/ipa_memcached/ipa_memcached.pid
+ ExecStart=/usr/bin/memcached -d -s $SOCKET_PATH -u $USER -m $CACHESIZE -c $MAXCONN -P /var/run/ipa_memcached/ipa_memcached.pid $OPTIONS
+ 
+--- a/install/share/bind.named.conf.template
++++ b/install/share/bind.named.conf.template
+@@ -38,10 +38,6 @@ logging {
+ 	};
+ };
+ 
+-zone "." IN {
+-	type hint;
+-	file "named.ca";
+-};
+ 
+ include "$RFC1912_ZONES";
+ include "$ROOT_KEY";
+--- /dev/null
++++ b/ipaplatform/debian/constants.py
+@@ -0,0 +1,22 @@
++#
++# Copyright (C) 2015  FreeIPA Contributors see COPYING for license
++#
++
++'''
++This Debian family platform module exports platform dependant constants.
++'''
++
++# Fallback to default path definitions
++from ipaplatform.base.constants import BaseConstantsNamespace
++
++
++class DebianConstantsNamespace(BaseConstantsNamespace):
++    HTTPD_USER = "www-data"
++    NAMED_USER = "bind"
++    # ntpd init variable used for daemon options
++    NTPD_OPTS_VAR = "NTPD_OPTS"
++    # quote used for daemon options
++    NTPD_OPTS_QUOTE = "\'"
++    SECURE_NFS_VAR = "NEED_GSSD"
++
++constants = DebianConstantsNamespace()

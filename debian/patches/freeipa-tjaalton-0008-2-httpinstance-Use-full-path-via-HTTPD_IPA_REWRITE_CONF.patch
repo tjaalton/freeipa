@@ -1,0 +1,17 @@
+commit 1d5f8d46ff718fc294d9e66e2fa72200b2be7795
+Author: Timo Aaltonen <tjaalton@debian.org>
+Date:   Tue Oct 6 16:43:09 2015 +0300
+
+    httpinstance: Use full path via HTTPD_IPA_REWRITE_CONF for Include.
+
+--- a/ipaserver/install/httpinstance.py
++++ b/ipaserver/install/httpinstance.py
+@@ -248,7 +248,7 @@ class HTTPInstance(service.Service):
+ 
+     def __add_include(self):
+         """This should run after __set_mod_nss_port so is already backed up"""
+-        if installutils.update_file(paths.HTTPD_NSS_CONF, '</VirtualHost>', 'Include conf.d/ipa-rewrite.conf\n</VirtualHost>') != 0:
++        if installutils.update_file(paths.HTTPD_NSS_CONF, '</VirtualHost>', 'Include {path}\n</VirtualHost>'.format(path=paths.HTTPD_IPA_REWRITE_CONF)) != 0:
+             print "Adding Include conf.d/ipa-rewrite to %s failed." % paths.HTTPD_NSS_CONF
+ 
+     def configure_certmonger_renewal_guard(self):

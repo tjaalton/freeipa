@@ -1,0 +1,139 @@
+freeipa (4.2.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+  * fix-match-hostname.diff, control: Drop the patch and python-openssl
+    deps, not needed anymore
+  * *.install: Updated.
+  * control: Add python-cryptography to build-deps and python-freeipa
+    deps.
+  * control: Add libp11-kit-dev to build-deps, p11-kit to server deps.
+  * patches: Replace bits of platform.diff and other patches with ones
+    sent upstream. Refresh others.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Sat, 03 Oct 2015 08:56:31 +0300
+
+freeipa (4.1.4-1) experimental; urgency=medium
+
+  * New upstream release. (LP: #1492226)
+    - Refresh patches
+    - platform-support.diff: Added NAMED_VAR_DIR.
+    - fix-bind-conf.diff: Dropped, obsolete with above.
+    - disable-dnssec-support.patch: Disable DNSSEC-support as we're
+      missing the dependencies for now.
+  * control: Add python-usb to build-depends and to python-freeipa
+    depends.
+  * control: Bump SSSD dependencies.
+  * control: Add libsofthsm2-dev to build-depends and softhsm2 to server
+    depends.
+  * freeipa-{server,client}.install: Add new files.
+  * control: Bump Depends on slapi-nis for CVE fixes.
+  * control: Bump 389-ds-base, pki-ca depends.
+  * control: Drop dogtag-pki-server-theme from server depends, it's not
+    needed.
+  * control: Server needs newer python-ldap, bump build-dep too.
+  * control: Bump certmonger depends.
+  * control: Bump python-nss depends.
+  * freeipa-client: Add /etc/ipa/nssdb, rework /etc/pki/nssdb handling.
+  * platform: Add DebianNamedService.
+  * platform, disable-dnssec-support.patch: Fix named.conf template.
+  * server.postinst: Run ipa-ldap-updater and ipa-upgradeconfig on
+    postinst.
+  * Revert DNSSEC changes to schema and ACI, makes upgrade tools fail.
+  * server.postrm: Clean logs on purge and disable apache modules on
+    remove/purge.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Fri, 25 Sep 2015 14:07:40 +0300
+
+freeipa (4.0.5-6) unstable; urgency=medium
+
+  * control Add gnupg-agent to python-freeipa depends, and change gnupg
+    to gnupg2. (LP: #1492184)
+  * Rebuild against current krb5, there was an abi break which broke at
+    least the setup phase.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 24 Sep 2015 23:22:24 +0300
+
+freeipa (4.0.5-5) unstable; urgency=medium
+
+  * control: Drop selinux-policy-dev from build-depends, not needed
+    anymore.
+  * client.dirs,postrm: Drop removing /etc/pki/nssdb from postrm and let
+    dpkg handle it. (Closes: #781114)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 09 Apr 2015 17:16:37 +0300
+
+freeipa (4.0.5-4) unstable; urgency=medium
+
+  * control: Fix freeipa-tests depends.
+  * control: Add systemd-sysv to server depends. (Closes: #780386)
+  * freeipa-client.postrm: Purge /etc/pki if empty. (Closes: #781114)
+  * add-a-clear-openssl-exception.diff: Add a clear OpenSSL exception.
+    (Closes: #772136)
+  * control: Add systemd to build-depends.
+  * dont-check-for-systemd-pc.diff: Dropped, not needed anymore.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 02 Apr 2015 10:53:55 +0300
+
+freeipa (4.0.5-3) unstable; urgency=medium
+
+  * rules: Set JAVA_STACK_SIZE to hopefully avoid FTBFS on exotic archs.
+  * freeipa-client.postrm: Remove nssdb files on purge. (Closes:
+    #775387)
+  * freeipa-client.postinst: Fix bashism with echo. (Closes: #772242)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Wed, 04 Mar 2015 14:51:35 +0200
+
+freeipa (4.0.5-2) unstable; urgency=medium
+
+  * Team upload.
+  * Let python-freeipa depend on python-pyasn1, because pyasn1 is imported
+    by ipalib/pkcs10.py and ipalib/plugins/cert.py.
+  * debian/copyright: Drop unused PD license section
+  * debian/copyright: Fix paths of Javascript files
+
+ -- Benjamin Drung <benjamin.drung@profitbricks.com>  Mon, 24 Nov 2014 12:32:36 +0100
+
+freeipa (4.0.5-1) unstable; urgency=medium
+
+  * New upstream release
+    - Fix CVE-2014-7828. (Closes: #768294)
+  * control: Update my email address.
+  * fix-bind-conf.diff, add-debian-platform.diff: Fix bind config
+    template to use Debian specific paths, and replace named.conf not
+    named.conf.local. (Closes: #768122)
+  * rules, -server.postinst: Create /var/cache/bind/data owned by bind
+    user.
+  * rules: Fix /var/lib/ipa/backup permissions.
+  * Add non-standard-dir-perm to server lintian overrides.
+  * copyright: Fix a typo.
+  * control: Bump dependency on bind9-dyndb-ldap to 6.0-4~.
+  * control: Move dependency on python-qrcode and python-yubico from
+    server to python-freeipa and drop python-selinux which belongs to
+    pki-server.
+  * control: Relax libxmlrpc-core-c3-dev buil-dep and 389-ds-base dep
+    for easier backporting.
+  * control: Add python-dateutils to server, and python-dbus and python-
+    memcache to python-freeipa dependencies. (Closes: #768187)
+  * platform: Handle /etc/default/nfs-common and /etc/default/autofs,
+    drop NSS_DB_DIR since it's inherited already. (Closes: #769037)
+  * control: Bump policy to 3.9.6, no changes.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Tue, 11 Nov 2014 10:38:52 +0200
+
+freeipa (4.0.4-2) unstable; urgency=medium
+
+  * control: Add python-qrcode, python-selinux, python-yubico
+    to freeipa-server dependencies. (Closes: #767427)
+  * freeipa-server.postinst: Enable mod_authz_user and mod_deflate too,
+    but since they should be part of the default apache2 install, don't
+    disable them on uninstall like the other modules. (Closes: #767425)
+  * control: Bump server dependency on -mod-nss to 1.0.10-2 which
+    doesn't enable the module by default.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Fri, 31 Oct 2014 11:36:51 +0200
+
+freeipa (4.0.4-1) unstable; urgency=medium
+
+  * Initial release (Closes: #734703)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Sat, 25 Oct 2014 02:43:59 +0300
