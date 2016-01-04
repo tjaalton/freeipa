@@ -4,8 +4,8 @@ set -e
 if [ "$1" = configure ]; then
     if [ -e /usr/share/apache2/apache2-maintscript-helper ]; then
         . /usr/share/apache2/apache2-maintscript-helper
-	if [ ! -e /etc/apache2/mods-enabled/auth_kerb.load ]; then
-            apache2_invoke enmod auth_kerb || exit $?
+	if [ ! -e /etc/apache2/mods-enabled/auth_gssapi.load ]; then
+            apache2_invoke enmod auth_gssapi || exit $?
         fi
 	if [ ! -e /etc/apache2/mods-enabled/authz_user.load ]; then
             apache2_invoke enmod authz_user || exit $?

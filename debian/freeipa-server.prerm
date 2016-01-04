@@ -6,6 +6,9 @@ if [ -e /usr/share/apache2/apache2-maintscript-helper ]; then
     if [ -e /etc/apache2/mods-enabled/auth_kerb ]; then
         apache2_invoke dismod auth_kerb || exit $?
     fi
+    if [ -e /etc/apache2/mods-enabled/auth_gssapi ]; then
+        apache2_invoke dismod auth_gssapi || exit $?
+    fi
     if [ -e /etc/apache2/mods-enabled/expires  ]; then
         apache2_invoke dismod expires || exit $?
     fi
