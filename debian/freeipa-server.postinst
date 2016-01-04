@@ -31,10 +31,8 @@ if [ "$1" = configure ]; then
     # check if IPA is set up
     is_configured=`python2 -c 'from ipaserver.install import installutils; print "yes" if installutils.is_ipa_configured() else "no";'`
     if [ $is_configured = yes ]; then
-        echo "Running ipa-ldap-updater..."
-        ipa-ldap-updater --upgrade --quiet >/dev/null
-        echo "Running ipa-upgradeconfig..."
-        ipa-upgradeconfig --quiet >/dev/null
+        echo "Running ipa-server-upgrade..."
+        ipa-server-upgrade --quiet >/dev/null
     fi
 fi
 
