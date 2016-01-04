@@ -63,6 +63,7 @@ ifneq ($(ONLY_CLIENT), 1)
 
 	mkdir -p $(DESTDIR)/etc/bash_completion.d \
 		 $(DESTDIR)/etc/default \
+		 $(DESTDIR)/etc/ipa/kdcproxy \
 		 $(DESTDIR)/usr/share/ipa/html
 
 	touch $(DESTDIR)/usr/share/ipa/html/ca.crt
@@ -76,6 +77,7 @@ ifneq ($(ONLY_CLIENT), 1)
 
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
 	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa_memcached
+	install -m 0644 install/share/kdcproxy.conf $(DESTDIR)/etc/ipa/kdcproxy/kdcproxy.conf
 	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/share/ipa
