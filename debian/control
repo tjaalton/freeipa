@@ -259,6 +259,7 @@ Depends:
  python-nss (>= 0.16.0),
  python-pyasn1,
  python-qrcode (>= 5.0.0),
+ python-setuptools,
  python-six,
  python-usb (>= 1.0.0~b2),
  python-yubico,
