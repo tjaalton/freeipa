@@ -79,3 +79,14 @@ use the debian layout when installing python modules
  	fi
  
  clean:
+--- a/ipalib/Makefile
++++ b/ipalib/Makefile
+@@ -12,7 +12,7 @@ install:
+ 	if [ "$(DESTDIR)" = "" ]; then \
+ 		$(PYTHON) setup.py install; \
+ 	else \
+-		$(PYTHON) setup.py install --root $(DESTDIR); \
++		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
+ 	fi
+ 
+ clean:
