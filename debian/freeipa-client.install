@@ -1,4 +1,3 @@
-usr/lib/python*/dist-packages/ipaclient/*.py
 usr/sbin/ipa-certupdate
 usr/sbin/ipa-client-automount
 usr/sbin/ipa-client-install
