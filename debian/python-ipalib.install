@@ -1,12 +1,11 @@
 usr/lib/python*/dist-packages/_ipap11helper.so
 usr/lib/python*/dist-packages/_ipap11helper-*.egg-info
 usr/lib/python*/dist-packages/default_encoding_utf8.so
-usr/lib/python*/dist-packages/dnssec/*
 usr/lib/python*/dist-packages/freeipa-*.egg-info
+usr/lib/python*/dist-packages/ipalib-*.egg-info
 usr/lib/python*/dist-packages/ipalib/*
 usr/lib/python*/dist-packages/ipaplatform-*.egg-info
 usr/lib/python*/dist-packages/ipaplatform/*
 usr/lib/python*/dist-packages/ipapython-*.egg-info
-usr/lib/python*/dist-packages/ipapython/*.py
-usr/lib/python*/dist-packages/ipapython/install/*.py
+usr/lib/python*/dist-packages/ipapython/*
 usr/lib/python*/dist-packages/python_default_encoding-*.egg-info

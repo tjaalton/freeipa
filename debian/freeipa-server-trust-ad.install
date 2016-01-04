@@ -3,7 +3,7 @@ etc/oddjobd.conf.d/oddjobd-ipa-trust.conf
 usr/lib/*/dirsrv/plugins/libipa_extdom_extop.so
 usr/lib/*/dirsrv/plugins/libipa_sidgen.so
 usr/lib/*/dirsrv/plugins/libipa_sidgen_task.so
-usr/lib/*/ipa/com.redhat.idm.trust-fetch-domains
+usr/lib/*/ipa/oddjob/com.redhat.idm.trust-fetch-domains
 usr/lib/*/samba/pdb/ipasam.so
 usr/sbin/ipa-adtrust-install
 usr/share/ipa/smb.conf.empty
