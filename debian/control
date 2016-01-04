@@ -73,7 +73,7 @@ Depends:
  apache2,
  bind9,
  bind9-dyndb-ldap (>= 6.0-4~),
- certmonger (>= 0.76.8),
+ certmonger (>= 0.78),
  fonts-font-awesome,
  freeipa-admintools (= ${binary:Version}),
  freeipa-client (= ${binary:Version}),
@@ -92,6 +92,7 @@ Depends:
  libsasl2-modules-gssapi-mit,
  memcached,
  ntp,
+ oddjob,
  p11-kit,
  pki-ca (>= 10.2.6),
  pki-kra (>= 10.2.6),
@@ -154,7 +155,7 @@ Package: freeipa-client
 Architecture: any
 Depends:
  bind9utils,
- certmonger (>= 0.76.8),
+ certmonger (>= 0.78),
  curl,
  dnsutils,
  freeipa-common (= ${binary:Version}),
@@ -164,6 +165,7 @@ Depends:
  libsasl2-modules-gssapi-mit,
  libxmlrpc-core-c3 (>= 1.16.33-3.1ubuntu5),
  ntp,
+ oddjob-mkhomedir,
  python-dnspython,
  python-ipaclient (= ${binary:Version}),
  python-gssapi,
