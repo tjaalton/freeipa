@@ -22,7 +22,7 @@ usr/lib/*/dirsrv/plugins/libtopology.so
 usr/lib/*/ipa-otpd
 usr/lib/*/ipa/ipa-httpd-kdcproxy
 usr/lib/*/ipa/certmonger/*
-usr/lib/*/ipa/oddjob/*
+usr/lib/*/ipa/oddjob/org.freeipa.server.conncheck
 usr/lib/*/krb5/plugins/kdb/*.so
 usr/sbin/ipa-advise
 usr/sbin/ipa-backup
