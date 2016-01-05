@@ -74,9 +74,9 @@ Depends:
  apache2,
  certmonger (>= 0.78),
  fonts-font-awesome,
- freeipa-admintools (= ${binary:Version}),
+ freeipa-admintools (= ${source:Version}),
  freeipa-client (= ${binary:Version}),
- freeipa-common (= ${binary:Version}),
+ freeipa-common (= ${source:Version}),
  krb5-admin-server,
  krb5-kdc,
  krb5-kdc-ldap,
@@ -96,7 +96,7 @@ Depends:
  pki-ca (>= 10.2.6),
  pki-kra (>= 10.2.6),
  python-dateutil,
- python-ipaserver (= ${binary:Version}),
+ python-ipaserver (= ${source:Version}),
  python-gssapi,
  python-ldap (>= 2.4.15),
  slapi-nis (>= 0.54.2),
@@ -118,7 +118,7 @@ Architecture: all
 Breaks: freeipa-server (<< 4.3.0-1)
 Replaces: freeipa-server (<< 4.3.0-1)
 Depends:
- freeipa-server (= ${binary:Version}),
+ freeipa-server (>= ${source:Version}),
  bind9,
  bind9-dyndb-ldap (>= 6.0-4~),
  ${misc:Depends},
@@ -134,9 +134,9 @@ Description: FreeIPA centralized identity framework -- IPA DNS integration
 Package: freeipa-server-trust-ad
 Architecture: any
 Depends:
- freeipa-common (= ${binary:Version}),
+ freeipa-common (= ${source:Version}),
  freeipa-server (= ${binary:Version}),
- python-ipaserver (= ${binary:Version}),
+ python-ipaserver (= ${source:Version}),
  python-samba,
  samba,
  winbind,
@@ -174,7 +174,7 @@ Depends:
  certmonger (>= 0.78),
  curl,
  dnsutils,
- freeipa-common (= ${binary:Version}),
+ freeipa-common (= ${source:Version}),
  krb5-user,
  libcurl3 (>= 7.22.0),
  libnss3-tools,
@@ -183,7 +183,7 @@ Depends:
  ntp,
  oddjob-mkhomedir,
  python-dnspython,
- python-ipaclient (= ${binary:Version}),
+ python-ipaclient (= ${source:Version}),
  python-gssapi,
  python-ldap,
  sssd (>= 1.13.1),
@@ -202,8 +202,8 @@ Description: FreeIPA centralized identity framework -- client
 Package: freeipa-admintools
 Architecture: all
 Depends:
- freeipa-client (= ${binary:Version}),
- python-ipalib (= ${binary:Version}),
+ freeipa-client (>= ${source:Version}),
+ python-ipalib (>= ${source:Version}),
  python-gssapi,
  python-ldap,
  ${misc:Depends},
@@ -219,9 +219,9 @@ Description: FreeIPA centralized identity framework -- admintools
 Package: freeipa-tests
 Architecture: all
 Depends:
- freeipa-client (= ${binary:Version}),
- python-ipalib (= ${binary:Version}),
- python-ipatests (= ${binary:Version}),
+ freeipa-client (>= ${source:Version}),
+ python-ipalib (>= ${source:Version}),
+ python-ipatests (>= ${source:Version}),
  ${misc:Depends},
  ${python:Depends}
 Recommends: python-yaml
@@ -241,7 +241,7 @@ Replaces: freeipa-client (<< 4.3.0-1)
 Depends:
  freeipa-common (= ${binary:Version}),
  python-dnspython,
- python-ipalib (= ${binary:Version}),
+ python-ipalib (>= ${source:Version}),
  ${misc:Depends},
  ${python:Depends},
 Description: FreeIPA centralized identity framework -- Python modules for ipaclient
@@ -258,7 +258,7 @@ Section: python
 Breaks: python-freeipa
 Replaces: python-freeipa
 Depends:
- freeipa-common (= ${binary:Version}),
+ freeipa-common (= ${source:Version}),
  gnupg2,
  gnupg-agent,
  iproute,
@@ -301,7 +301,7 @@ Depends:
  python-dnspython,
  python-gssapi,
  python-ipaclient (= ${binary:Version}),
- python-ipalib (= ${binary:Version}),
+ python-ipalib (>= ${source:Version}),
  python-kdcproxy,
  python-ldap,
  python-libsss-nss-idmap,
@@ -323,7 +323,7 @@ Replaces: freeipa-tests (<< 4.3.0-1)
 Depends:
  libnss3-tools,
  python-coverage,
- python-ipalib (= ${binary:Version}),
+ python-ipalib (>= ${source:Version}),
  python-nose,
  python-paramiko,
  python-paste,
