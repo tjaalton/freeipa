@@ -69,13 +69,11 @@ ifneq ($(ONLY_CLIENT), 1)
 		 $(DESTDIR)/usr/share/ipa/html
 
 	touch $(DESTDIR)/usr/share/ipa/html/ca.crt
-	touch $(DESTDIR)/usr/share/ipa/html/configure.jar
 	touch $(DESTDIR)/usr/share/ipa/html/kerberosauth.xpi
 	touch $(DESTDIR)/usr/share/ipa/html/krb.con
 	touch $(DESTDIR)/usr/share/ipa/html/krb.js
 	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
 	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
-	touch $(DESTDIR)/usr/share/ipa/html/preferences.html
 
 	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa_memcached
 	install -m 0644 install/share/kdcproxy.conf $(DESTDIR)/etc/ipa/kdcproxy/kdcproxy.conf
