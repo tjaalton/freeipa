@@ -3,6 +3,8 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
 ONLY_CLIENT=0
 DESTDIR=$(CURDIR)/debian/tmp
 
@@ -81,6 +83,11 @@ ifneq ($(ONLY_CLIENT), 1)
 	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/share/ipa
+
+	for i in $(DESTDIR)/etc/oddjobd.conf.d/ipa-server.conf \
+		$(DESTDIR)/etc/oddjobd.conf.d/oddjobd-ipa-trust.conf; do \
+		sed -i -e"s/libexec.*\//lib\/$(DEB_HOST_MULTIARCH)\/ipa\/oddjob\//" $$i ; \
+	done
 else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
 endif
