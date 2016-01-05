@@ -1,5 +1,6 @@
 etc/default/ipa_memcached
 etc/ipa/html/*
+etc/ipa/kdcproxy
 etc/dbus-1/system.d/org.freeipa.server.conf
 etc/oddjobd.conf.d/ipa-server.conf
 lib/systemd/system/*
