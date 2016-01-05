@@ -30,7 +30,6 @@ usr/sbin/ipa-ca-install
 usr/sbin/ipa-cacert-manage
 usr/sbin/ipa-compat-manage
 usr/sbin/ipa-csreplica-manage
-usr/sbin/ipa-dns-install
 usr/sbin/ipa-kra-install
 usr/sbin/ipa-ldap-updater
 usr/sbin/ipa-managed-entries
@@ -71,7 +70,6 @@ usr/share/man/man1/ipa-ca-install.1*
 usr/share/man/man1/ipa-cacert-manage.1*
 usr/share/man/man1/ipa-compat-manage.1*
 usr/share/man/man1/ipa-csreplica-manage.1*
-usr/share/man/man1/ipa-dns-install.1*
 usr/share/man/man1/ipa-kra-install.1*
 usr/share/man/man1/ipa-ldap-updater.1*
 usr/share/man/man1/ipa-managed-entries.1*

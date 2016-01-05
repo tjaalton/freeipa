@@ -72,8 +72,6 @@ Depends:
  389-ds-base (>= 1.3.4.0),
  acl,
  apache2,
- bind9,
- bind9-dyndb-ldap (>= 6.0-4~),
  certmonger (>= 0.78),
  fonts-font-awesome,
  freeipa-admintools (= ${binary:Version}),
@@ -114,6 +112,24 @@ Description: FreeIPA centralized identity framework -- server
  logs, analysis thereof).
  .
  This is the server package.
+
+Package: freeipa-server-dns
+Architecture: all
+Breaks: freeipa-server (<< 4.3.0-1)
+Replaces: freeipa-server (<< 4.3.0-1)
+Depends:
+ freeipa-server (= ${binary:Version}),
+ bind9,
+ bind9-dyndb-ldap (>= 6.0-4~),
+ ${misc:Depends},
+ ${shlibs:Depends}
+Description: FreeIPA centralized identity framework -- IPA DNS integration
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package adds DNS integration with BIND 9.
 
 Package: freeipa-server-trust-ad
 Architecture: any
