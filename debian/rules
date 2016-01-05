@@ -61,7 +61,7 @@ ifneq ($(ONLY_CLIENT), 1)
 
 	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
 
-	mkdir -p $(DESTDIR)/etc/bash_completion.d \
+	mkdir -p $(DESTDIR)/usr/share/bash-completion/completions \
 		 $(DESTDIR)/etc/default \
 		 $(DESTDIR)/etc/ipa/kdcproxy \
 		 $(DESTDIR)/usr/share/ipa/html
@@ -75,7 +75,7 @@ ifneq ($(ONLY_CLIENT), 1)
 	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
 	touch $(DESTDIR)/usr/share/ipa/html/preferences.html
 
-	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/etc/bash_completion.d/ipa
+	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
 	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa_memcached
 	install -m 0644 install/share/kdcproxy.conf $(DESTDIR)/etc/ipa/kdcproxy/kdcproxy.conf
 	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
