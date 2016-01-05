@@ -1,5 +1,2 @@
 # lintian is just wrong
 freeipa-tests: python-script-but-no-python-dep
-
-# no need to be executable
-freeipa-tests: script-not-executable usr/lib/python*/dist-packages/ipatests/test_integration/scripts/caless-create-pki
