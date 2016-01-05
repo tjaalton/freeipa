@@ -105,7 +105,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,202 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -194,12 +194,16 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    def is_running(self, instance_name=""):
 +        ret = True
 +        try:
-+            (sout, serr, rcode) = ipautil.run([paths.SBIN_SERVICE,
-+                                              self.service_name, "status",
-+                                              instance_name])
++            result = ipautil.run([paths.SBIN_SERVICE,
++                                  self.service_name, "status",
++                                  instance_name],
++                                  capture_output=True)
++            sout = result.output
 +            if sout.find("NOT running") >= 0:
 +                ret = False
 +            if sout.find("stop") >= 0:
++                ret = False
++            if sout.find("inactive") >= 0:
 +                ret = False
 +        except ipautil.CalledProcessError:
 +                ret = False
