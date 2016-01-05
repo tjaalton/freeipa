@@ -103,14 +103,11 @@ endif
 override_dh_install:
 	dh_install --fail-missing
 
-ifneq ($(ONLY_CLIENT), 1)
-	mkdir -m 770 -p $(CURDIR)/debian/freeipa-server/var/cache/bind/data
-	mkdir -m 700 -p $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup
-endif
-
 override_dh_fixperms:
-	dh_fixperms -X var/cache/bind/data -X var/lib/ipa/backup
+	dh_fixperms
 	chmod 0700 $(CURDIR)/debian/freeipa-server/etc/ipa/custodia
+	chmod 0700 $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup
+	chmod 0770 $(CURDIR)/debian/freeipa-server-dns/var/cache/bind/data
 
 %:
 	dh $@ --with autoreconf,python2,systemd
