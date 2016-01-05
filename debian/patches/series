@@ -8,8 +8,3 @@ no-test-lang.diff
 # send upstream
 add-debian-platform.diff
 fix-ipa-conf.diff
-
-disable-dnssec-support.patch
-revert-revert-removal-of-cn-attribute.diff
-revert-dnssec-schema.diff
-revert-dnssec-aci.diff
