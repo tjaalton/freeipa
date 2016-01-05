@@ -77,11 +77,12 @@ ifneq ($(ONLY_CLIENT), 1)
 	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
 	touch $(DESTDIR)/usr/share/ipa/html/preferences.html
 
-	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
 	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa_memcached
 	install -m 0644 install/share/kdcproxy.conf $(DESTDIR)/etc/ipa/kdcproxy/kdcproxy.conf
 	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
+	install -m 0644 init/systemd/ipa-custodia.service $(DESTDIR)/lib/systemd/system
+	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
 	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/share/ipa
 
 	for i in $(DESTDIR)/etc/oddjobd.conf.d/ipa-server.conf \
@@ -109,6 +110,7 @@ endif
 
 override_dh_fixperms:
 	dh_fixperms -X var/cache/bind/data -X var/lib/ipa/backup
+	chmod 0700 $(CURDIR)/debian/freeipa-server/etc/ipa/custodia
 
 %:
 	dh $@ --with autoreconf,python2,systemd
