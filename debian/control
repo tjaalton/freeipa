@@ -92,7 +92,7 @@ Depends:
  libsasl2-modules-gssapi-mit,
  memcached,
  ntp,
- oddjob,
+ oddjob (>= 0.34.3-2),
  p11-kit,
  pki-ca (>= 10.2.6),
  pki-kra (>= 10.2.6),
