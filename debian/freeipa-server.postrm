@@ -43,3 +43,5 @@ case "$1" in
             /var/log/ipaupgrade.log
     ;;
 esac
+
+#DEBHELPER#
