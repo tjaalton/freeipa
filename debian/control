@@ -281,7 +281,7 @@ Depends:
  python-yubico,
  ${misc:Depends},
  ${python:Depends},
- ${shlib:Depends},
+ ${shlibs:Depends},
 Description: FreeIPA centralized identity framework -- shared Python modules
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
