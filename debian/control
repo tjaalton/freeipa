@@ -122,6 +122,7 @@ Depends:
  bind9,
  bind9-dyndb-ldap (>= 6.0-4~),
  ${misc:Depends},
+ ${python:Depends},
  ${shlibs:Depends}
 Description: FreeIPA centralized identity framework -- IPA DNS integration
  FreeIPA is an integrated solution to provide centrally managed Identity
