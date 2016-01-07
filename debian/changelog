@@ -39,6 +39,8 @@ freeipa (4.3.0-1) UNRELEASED; urgency=medium
   * control: Bump server and python-ipaserver dependency on python-ldap
     to 2.4.22 to fix a bug on ipa-server-upgrade.
   * control: Bump server dependency on oddjob to 0.34.3-2.
+  * server.postinst, tmpfile: Create state directories for
+    mod_auth_gssapi.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Sat, 03 Oct 2015 08:56:31 +0300
 

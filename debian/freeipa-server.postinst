@@ -40,4 +40,18 @@ if [ ! -e /run/ipa_memcached ]; then
     chown www-data:www-data /run/ipa_memcached
 fi
 
+if [ ! -e /run/apache2/ipa ]; then
+    mkdir -m 0700 /run/apache2/ipa
+    chown www-data:www-data /run/apache2/ipa
+
+    if [ ! -e /run/apache2/ipa/clientcaches ]; then
+        mkdir -m 0700 /run/apache2/ipa/clientcaches
+        chown www-data:www-data /run/apache2/ipa/clientcaches
+    fi
+    if [ ! -e /run/apache2/ipa/krbcache ]; then
+        mkdir -m 0700 /run/apache2/ipa/krbcache
+        chown www-data:www-data /run/apache2/ipa/krbcache
+    fi
+fi
+
 #DEBHELPER#
