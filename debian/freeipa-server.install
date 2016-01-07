@@ -7,6 +7,7 @@ lib/systemd/system/*
 usr/lib/*/dirsrv/plugins/libipa_cldap.so
 usr/lib/*/dirsrv/plugins/libipa_dns.so
 usr/lib/*/dirsrv/plugins/libipa_enrollment_extop.so
+usr/lib/*/dirsrv/plugins/libipa_extdom_extop.so
 usr/lib/*/dirsrv/plugins/libipa_lockout.so
 usr/lib/*/dirsrv/plugins/libipa_modrdn.so
 usr/lib/*/dirsrv/plugins/libipa_otp_counter.so
@@ -14,6 +15,8 @@ usr/lib/*/dirsrv/plugins/libipa_otp_lasttoken.so
 usr/lib/*/dirsrv/plugins/libipa_pwd_extop.so
 usr/lib/*/dirsrv/plugins/libipa_range_check.so
 usr/lib/*/dirsrv/plugins/libipa_repl_version.so
+usr/lib/*/dirsrv/plugins/libipa_sidgen.so
+usr/lib/*/dirsrv/plugins/libipa_sidgen_task.so
 usr/lib/*/dirsrv/plugins/libipa_uuid.so
 usr/lib/*/dirsrv/plugins/libipa_winsync.so
 usr/lib/*/dirsrv/plugins/libtopology.so

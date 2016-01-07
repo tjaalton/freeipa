@@ -68,6 +68,8 @@ Homepage: http://www.freeipa.org
 
 Package: freeipa-server
 Architecture: any
+Breaks: freeipa-server-trust-ad (<< 4.3.0-1)
+Replaces: freeipa-server-trust-ad (<< 4.3.0-1)
 Depends:
  389-ds-base (>= 1.3.4.0),
  acl,
