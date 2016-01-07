@@ -2,7 +2,7 @@
 
 . /lib/lsb/init-functions
 
-# This script generates /etc/rndc.key if doesn't exist AND if there is no rndc.conf
+# This script generates /etc/bind/rndc.key if doesn't exist AND if there is no rndc.conf
 
 if [ ! -s /etc/rndc.key -a ! -s /etc/rndc.conf ]; then
   echo -n $"Generating /etc/bind/rndc.key:"
