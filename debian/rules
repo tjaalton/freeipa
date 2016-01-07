@@ -37,10 +37,12 @@ override_dh_auto_configure:
 	dh_auto_configure -Dipa-client
 ifneq ($(ONLY_CLIENT), 1)
 	dh_auto_configure -Ddaemons -- \
+		--libexecdir=/usr/lib \
 		--with-openldap \
 		--with-systemdsystemunitdir=/lib/systemd/system
 
-	dh_auto_configure -Dinstall
+	dh_auto_configure -Dinstall -- \
+		--libexecdir=/usr/lib
 endif
 
 override_dh_auto_build:
@@ -61,6 +63,7 @@ ifneq ($(ONLY_CLIENT), 1)
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no install DESTDIR=$(DESTDIR)
 	cd ..
 
+	mv $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)/ipa/certmonger $(DESTDIR)/usr/lib/ipa
 	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
 
 	mkdir -p $(DESTDIR)/usr/share/bash-completion/completions \
@@ -81,11 +84,11 @@ ifneq ($(ONLY_CLIENT), 1)
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa-custodia.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
-	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/share/ipa
+	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/lib/ipa
 
 	for i in $(DESTDIR)/etc/oddjobd.conf.d/ipa-server.conf \
 		$(DESTDIR)/etc/oddjobd.conf.d/oddjobd-ipa-trust.conf; do \
-		sed -i -e"s/libexec.*\//lib\/$(DEB_HOST_MULTIARCH)\/ipa\/oddjob\//" $$i ; \
+		sed -i -e"s/libexec.*\//lib\/ipa\/oddjob\//" $$i ; \
 	done
 else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)

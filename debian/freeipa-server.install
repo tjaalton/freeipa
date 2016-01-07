@@ -4,8 +4,6 @@ etc/ipa/kdcproxy
 etc/dbus-1/system.d/org.freeipa.server.conf
 etc/oddjobd.conf.d/ipa-server.conf
 lib/systemd/system/*
-usr/lib/*/certmonger/dogtag-ipa-ca-renew-agent-submit
-usr/lib/*/certmonger/ipa-server-guard
 usr/lib/*/dirsrv/plugins/libipa_cldap.so
 usr/lib/*/dirsrv/plugins/libipa_dns.so
 usr/lib/*/dirsrv/plugins/libipa_enrollment_extop.so
@@ -20,10 +18,13 @@ usr/lib/*/dirsrv/plugins/libipa_uuid.so
 usr/lib/*/dirsrv/plugins/libipa_winsync.so
 usr/lib/*/dirsrv/plugins/libtopology.so
 usr/lib/*/ipa-otpd
-usr/lib/*/ipa/ipa-httpd-kdcproxy
-usr/lib/*/ipa/certmonger/*
-usr/lib/*/ipa/oddjob/org.freeipa.server.conncheck
 usr/lib/*/krb5/plugins/kdb/*.so
+usr/lib/certmonger/dogtag-ipa-ca-renew-agent-submit
+usr/lib/certmonger/ipa-server-guard
+usr/lib/ipa/certmonger/*
+usr/lib/ipa/generate-rndc-key.sh
+usr/lib/ipa/ipa-httpd-kdcproxy
+usr/lib/ipa/oddjob/org.freeipa.server.conncheck
 usr/sbin/ipa-advise
 usr/sbin/ipa-backup
 usr/sbin/ipa-ca-install
@@ -52,7 +53,6 @@ usr/share/ipa/*.uldif
 usr/share/ipa/advise/legacy/*.template
 usr/share/ipa/copy-schema-to-ca.py
 usr/share/ipa/ffextension/*
-usr/share/ipa/generate-rndc-key.sh
 usr/share/ipa/html/*
 usr/share/ipa/ipa-pki-proxy.conf
 usr/share/ipa/ipa-rewrite.conf
