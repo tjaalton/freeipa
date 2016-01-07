@@ -63,8 +63,7 @@ ifneq ($(ONLY_CLIENT), 1)
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no install DESTDIR=$(DESTDIR)
 	cd ..
 
-	mv $(DESTDIR)/usr/lib/$(DEB_HOST_MULTIARCH)/ipa/certmonger $(DESTDIR)/usr/lib/ipa
-	chmod 755 $(DESTDIR)/usr/lib/*/ipa/certmonger/*
+	chmod 755 $(DESTDIR)/usr/lib/ipa/certmonger/*
 
 	mkdir -p $(DESTDIR)/usr/share/bash-completion/completions \
 		 $(DESTDIR)/etc/default \
