@@ -9,3 +9,4 @@ no-test-lang.diff
 add-debian-platform.diff
 fix-ipa-conf.diff
 fix-kdcproxy-paths.diff
+fix-ipa-otpd-install.diff
