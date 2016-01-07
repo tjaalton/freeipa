@@ -41,6 +41,7 @@ freeipa (4.3.0-1) UNRELEASED; urgency=medium
   * control: Bump server dependency on oddjob to 0.34.3-2.
   * server.postinst, tmpfile: Create state directories for
     mod_auth_gssapi.
+  * fix-kdcproxy-paths.diff: Fix paths in kdcproxy configs.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Sat, 03 Oct 2015 08:56:31 +0300
 
