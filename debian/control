@@ -302,6 +302,7 @@ Breaks: freeipa-server (<< 4.3.0-1), freeipa-server-trust-ad (<< 4.3.0-1)
 Replaces: freeipa-server (<< 4.3.0-1), freeipa-server-trust-ad (<< 4.3.0-1)
 Depends:
  freeipa-common (= ${binary:Version}),
+ pki-tools (>= 10.2.6-3),
  python-dbus,
  python-dnspython,
  python-gssapi,
