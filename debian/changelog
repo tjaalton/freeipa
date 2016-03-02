@@ -48,6 +48,7 @@ freeipa (4.3.0-1) UNRELEASED; urgency=medium
       modify.
     - Use systemwide certificate store; put ipa-ca.crt in
       /usr/local/share/ca-certificates, and run update-ca-certificates
+    - Map smb service to smbd (LP: #1543230)
   * rules, server.install: Install scripts under /usr/lib instead of
     multiarch path to avoid hacking the code too much.
   * fix-ipa-otpd-install.diff, rules, server.install: Put ipa-otpd in

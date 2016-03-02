@@ -387,7 +387,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,204 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -569,6 +569,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        return DebianNamedService("bind9")
 +    if name == 'ntpd':
 +        return DebianSysvService("ntp")
++    if name == 'smb':
++        return DebianSysvService("smbd")
 +    if name == 'sshd':
 +        return DebianSSHService(name)
 +    return DebianService(name)
