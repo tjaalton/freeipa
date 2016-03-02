@@ -33,7 +33,8 @@ freeipa (4.3.0-1) UNRELEASED; urgency=medium
   * Split freeipa-server-dns from server.
   * admintools: Use the new location for bash completions.
   * rules: Fix paths in oddjob configs.
-  * control, rules: Add support for custodia.
+  * control, rules, fix-ipa-conf.diff, fix-custodia-conf.diff:
+    Add support for custodia.
   * rules: Remove obsolete configure.jar, preferences.html.
   * platform: Fix ipautil.run stdout handling, add support for systemd.
   * control: Bump server and python-ipaserver dependency on python-ldap

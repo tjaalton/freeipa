@@ -12,3 +12,4 @@ fix-kdcproxy-paths.diff
 fix-ipa-otpd-install.diff
 fix-certmonger-script-install.diff
 use-httpd-user.diff
+fix-custodia-conf.diff

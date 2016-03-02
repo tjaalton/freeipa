@@ -23,6 +23,15 @@ Description: Fix paths
    GssapiUseS4U2Proxy on
    GssapiAllowedMech krb5
    Require valid-user
+@@ -107,7 +107,7 @@ WSGIScriptReloading Off
+ # Custodia stuff is redirected to the custodia daemon
+ # after authentication
+ <Location "/ipa/keys/">
+-    ProxyPass "unix:/run/httpd/ipa-custodia.sock|http://localhost/keys/"
++    ProxyPass "unix:/run/apache2/ipa-custodia.sock|http://localhost/keys/"
+     RequestHeader set GSS_NAME %{GSS_NAME}s
+     RequestHeader set REMOTE_USER %{REMOTE_USER}s
+ </Location>
 @@ -141,8 +141,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  
