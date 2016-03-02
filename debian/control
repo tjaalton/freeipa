@@ -312,6 +312,7 @@ Depends:
  python-ldap (>= 2.4.22),
  python-libsss-nss-idmap,
  python-pyasn1,
+ zip,
  ${misc:Depends},
  ${python:Depends},
 Description: FreeIPA centralized identity framework -- Python modules for server
