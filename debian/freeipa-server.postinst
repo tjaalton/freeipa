@@ -25,6 +25,9 @@ if [ "$1" = configure ]; then
 	if [ ! -e /etc/apache2/mods-enabled/proxy_ajp.load ]; then
             apache2_invoke enmod proxy_ajp || exit $?
         fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy_http.load ]; then
+            apache2_invoke enmod proxy_http || exit $?
+        fi
 	if [ ! -e /etc/apache2/mods-enabled/rewrite.load ]; then
             apache2_invoke enmod rewrite || exit $?
         fi

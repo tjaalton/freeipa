@@ -30,6 +30,9 @@ case "$1" in
             if [ -e /etc/apache2/mods-enabled/proxy_ajp.load ]; then
                 apache2_invoke dismod proxy_ajp || exit $?
             fi
+            if [ -e /etc/apache2/mods-enabled/proxy_http.load ]; then
+                apache2_invoke dismod proxy_http || exit $?
+            fi
             if [ -e /etc/apache2/mods-enabled/rewrite.load ]; then
                 apache2_invoke dismod rewrite || exit $?
             fi
