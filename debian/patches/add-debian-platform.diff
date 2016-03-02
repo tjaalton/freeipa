@@ -131,7 +131,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +#   PAM_LDAP_CONF = "/etc/pam_ldap.conf"
 +#   PASSWD = "/etc/passwd"
 +#   SYSTEMWIDE_IPA_CA_CRT = "/etc/pki/ca-trust/source/anchors/ipa-ca.crt"
-+#   IPA_P11_KIT = "/etc/pki/ca-trust/source/ipa.p11-kit"
++    IPA_P11_KIT = "/usr/local/share/ca-certificates/ipa-ca.crt"
 +#   NSS_DB_DIR = "/etc/pki/nssdb"
 +#   PKI_TOMCAT = "/etc/pki/pki-tomcat"
 +#   PKI_TOMCAT_ALIAS_DIR = "/etc/pki/pki-tomcat/alias"
@@ -217,7 +217,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +#   SSS_SSH_AUTHORIZEDKEYS = "/usr/bin/sss_ssh_authorizedkeys"
 +#   SSS_SSH_KNOWNHOSTSPROXY = "/usr/bin/sss_ssh_knownhostsproxy"
 +#   BIN_TIMEOUT = "/usr/bin/timeout"
-+#   UPDATE_CA_TRUST = "/usr/bin/update-ca-trust"
++    UPDATE_CA_TRUST = "/usr/sbin/update-ca-certificates"
 +#   BIN_CURL = "/usr/bin/curl"
 +#   ZIP = "/usr/bin/zip"
 +    BIND_LDAP_SO = "/usr/share/doc/bind9-dyndb-ldap/copyright"
@@ -592,7 +592,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +knownservices = DebianServices()
 --- /dev/null
 +++ b/ipaplatform/debian/tasks.py
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,47 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -634,12 +634,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        return True
 +
 +    def modify_pam_to_use_krb5(self, statestore):
-+        return True
-+
-+    def insert_ca_cert_into_systemwide_ca_store(self, ca_certs):
-+        return True
-+
-+    def remove_ca_certs_from_systemwide_ca_store(self):
 +        return True
 +
 +    def restore_network_configuration(self, fstore, statestore):

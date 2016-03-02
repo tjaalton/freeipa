@@ -42,8 +42,11 @@ freeipa (4.3.0-1) UNRELEASED; urgency=medium
   * server.postinst, tmpfile: Create state directories for
     mod_auth_gssapi.
   * fix-kdcproxy-paths.diff: Fix paths in kdcproxy configs.
-  * add-debian-platform.diff: Update paths.py to include all variables,
-    comment out ones we don't modify.
+  * add-debian-platform.diff:
+    - Update paths.py to include all variables, comment out ones we don't
+      modify.
+    - Use systemwide certificate store; put ipa-ca.crt in
+      /usr/local/share/ca-certificates, and run update-ca-certificates
   * rules, server.install: Install scripts under /usr/lib instead of
     multiarch path to avoid hacking the code too much.
   * fix-ipa-otpd-install.diff, rules, server.install: Put ipa-otpd in
