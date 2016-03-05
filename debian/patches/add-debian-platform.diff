@@ -731,7 +731,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  include "$ROOT_KEY";
 --- /dev/null
 +++ b/ipaplatform/debian/constants.py
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,31 @@
 +#
 +# Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 +#
@@ -745,12 +745,21 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +
 +class DebianConstantsNamespace(BaseConstantsNamespace):
++#   DS_USER = "dirsrv"
++#   DS_GROUP = "dirsrv"
 +    HTTPD_USER = "www-data"
++#   IPA_DNS_PACKAGE_NAME = "freeipa-server-dns"
++#   KDCPROXY_USER = "kdcproxy"
 +    NAMED_USER = "bind"
++    NAMED_GROUP = "bind"
 +    # ntpd init variable used for daemon options
 +    NTPD_OPTS_VAR = "NTPD_OPTS"
 +    # quote used for daemon options
 +    NTPD_OPTS_QUOTE = "\'"
++    ODS_USER = "opendnssec"
++    ODS_GROUP = "opendnssec"
++#   PKI_USER = "pkiuser"
 +    SECURE_NFS_VAR = "NEED_GSSD"
++#   SSSD_USER = "sssd"
 +
 +constants = DebianConstantsNamespace()
