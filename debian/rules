@@ -8,6 +8,7 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 ONLY_CLIENT=0
 DESTDIR=$(CURDIR)/debian/tmp
 
+export SKIP_API_VERSION_CHECK="yes"
 PLATFORM="SUPPORTED_PLATFORM=debian"
 JAVA_STACK_SIZE ?= 8m
 export JAVA_STACK_SIZE
@@ -19,7 +20,7 @@ gentarball:
 	git archive --format=tar experimental --prefix=$(SOURCE)-$(UV)/ | xz --best > ../$(SOURCE)_$(UV).orig.tar.xz
 
 override_dh_auto_clean:
-	for i in daemons install ipapython ipaserver ipa-client; do \
+	for i in asn1 daemons install ipalib ipapython; do \
 		(cd $$i && [ ! -f Makefile ] || $(MAKE) distclean); \
 		(cd $$i && rm -f COPYING INSTALL depcomp install-sh missing py-compile config.guess config.sub aclocal.m4 config.h.in version.m4); \
 	done
