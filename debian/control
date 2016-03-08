@@ -124,7 +124,7 @@ Replaces: freeipa-server (<< 4.3.0-1)
 Depends:
  freeipa-server (>= ${source:Version}),
  bind9,
- bind9-dyndb-ldap (>= 6.0-4~),
+ bind9-dyndb-ldap (>= 8.0-2),
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}

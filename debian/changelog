@@ -74,6 +74,7 @@ freeipa (4.3.0-1) UNRELEASED; urgency=medium
     DNSSEC.
   * create-sysconfig-ods.diff: Create an empty file for opendnssec
     daemons, until opendnssec itself is fixed.
+  * control: Bump dep on bind9-dyndb-ldap.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Sat, 03 Oct 2015 08:56:31 +0300
 
