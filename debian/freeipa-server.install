@@ -1,4 +1,6 @@
 etc/default/ipa_memcached
+etc/default/ipa-dnskeysyncd
+etc/default/ipa-ods-exporter
 etc/ipa/html/*
 etc/ipa/kdcproxy
 etc/dbus-1/system.d/org.freeipa.server.conf
@@ -25,7 +27,10 @@ usr/lib/certmonger/dogtag-ipa-ca-renew-agent-submit
 usr/lib/certmonger/ipa-server-guard
 usr/lib/ipa/certmonger/*
 usr/lib/ipa/generate-rndc-key.sh
+usr/lib/ipa/ipa-dnskeysync-replica
+usr/lib/ipa/ipa-dnskeysyncd
 usr/lib/ipa/ipa-httpd-kdcproxy
+usr/lib/ipa/ipa-ods-exporter
 usr/lib/ipa/ipa-otpd
 usr/lib/ipa/oddjob/org.freeipa.server.conncheck
 usr/sbin/ipa-advise

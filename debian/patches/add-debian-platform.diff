@@ -31,7 +31,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +"""
 --- /dev/null
 +++ b/ipaplatform/debian/paths.py
-@@ -0,0 +1,353 @@
+@@ -0,0 +1,355 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -58,7 +58,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +# Fallback to default path definitions
 +from ipaplatform.base.paths import BasePathNamespace
++import sysconfig
 +
++MULTIARCH = sysconfig.get_config_var('MULTIARCH')
 +
 +class DebianPathNamespace(BasePathNamespace):
 +#   BASH = "/bin/bash"
@@ -114,7 +116,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    NAMED_VAR_DIR = "/var/cache/bind"
 +    NAMED_KEYTAB = "/etc/bind/named.keytab"
 +    NAMED_RFC1912_ZONES = "/etc/bind/named.conf.default-zones"
-+    NAMED_ROOT_KEY = "/etc/bind/named.root.key"
++    NAMED_ROOT_KEY = "/etc/bind/bind.keys"
 +    NAMED_BINDKEYS_FILE = "/etc/bind/named.iscdlv.key"
 +    NAMED_MANAGED_KEYS_DIR = "/var/cache/bind/dynamic"
 +#   NSLCD_CONF = "/etc/nslcd.conf"
@@ -153,15 +155,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    SYSCONFIG_DIRSRV_INSTANCE = "/etc/default/dirsrv-%s"
 +    SYSCONFIG_DIRSRV_SYSTEMD = "/etc/default/dirsrv.systemd"
 +    SYSCONFIG_IPA_DNSKEYSYNCD = "/etc/default/ipa-dnskeysyncd"
-+    SYSOCNFIG_IPA_ODS_EXPORTER = "/etc/default/ipa-ods-exporter"
++    SYSCONFIG_IPA_ODS_EXPORTER = "/etc/default/ipa-ods-exporter"
 +#    SYSCONFIG_HTTPD = "/etc/sysconfig/httpd"
 +    SYSCONFIG_KRB5KDC_DIR = "/etc/default/krb5-kdc"
-+#   SYSCONFIG_NAMED = "/etc/sysconfig/named"
++    SYSCONFIG_NAMED = "/etc/default/bind9"
 +#   SYSCONFIG_NETWORK = "/etc/sysconfig/network"
 +#   SYSCONFIG_NETWORK_IPABKP = "/etc/sysconfig/network.ipabkp"
 +    SYSCONFIG_NFS = "/etc/default/nfs-common"
 +    SYSCONFIG_NTPD = "/etc/default/ntp"
-+#FIXME   SYSCONFIG_ODS = "/etc/sysconfig/ods"
++    SYSCONFIG_ODS = "/etc/default/opendnssec"
 +    SYSCONFIG_PKI = "/etc/dogtag/"
 +    SYSCONFIG_PKI_TOMCAT = "/etc/default/pki-tomcat"
 +    SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/dogtag/tomcat/pki-tomcat"
@@ -170,7 +172,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +#   SYSTEMD_IPA_SERVICE = "/etc/systemd/system/multi-user.target.wants/ipa.service"
 +#   SYSTEMD_SSSD_SERVICE = "/etc/systemd/system/multi-user.target.wants/sssd.service"
 +#   SYSTEMD_PKI_TOMCAT_SERVICE = "/etc/systemd/system/pki-tomcatd.target.wants/pki-tomcatd@pki-tomcat.service"
-+#FIXME   DNSSEC_TRUSTED_KEY = "/etc/trusted-key.key"
++    DNSSEC_TRUSTED_KEY = "/etc/bind/trusted-key.key"
 +#   HOME_DIR = "/home"
 +#   ROOT_IPA_CACHE = "/root/.ipa_cache"
 +#   ROOT_PKI = "/root/.pki"
@@ -221,11 +223,11 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +#   BIN_CURL = "/usr/bin/curl"
 +#   ZIP = "/usr/bin/zip"
 +    BIND_LDAP_SO = "/usr/share/doc/bind9-dyndb-ldap/copyright"
-+#   BIND_LDAP_DNS_IPA_WORKDIR = "/var/named/dyndb-ldap/ipa/"
-+#   BIND_LDAP_DNS_ZONE_WORKDIR = "/var/named/dyndb-ldap/ipa/master/"
++    BIND_LDAP_DNS_IPA_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/"
++    BIND_LDAP_DNS_ZONE_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/master/"
 +#   USR_LIB_DIRSRV = "/usr/lib/dirsrv"
 +#   LIB_FIREFOX = "/usr/lib/firefox"
-+#FIXME   LIBSOFTHSM2_SO = "/usr/lib/pkcs11/libsofthsm2.so"
++    LIBSOFTHSM2_SO = "/usr/lib/%s/softhsm/libsofthsm2.so" % MULTIARCH
 +    LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
 +#   BIND_LDAP_SO_64 = "/usr/lib64/bind/ldap.so"
 +#   USR_LIB_DIRSRV_64 = "/usr/lib64/dirsrv"
@@ -358,7 +360,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +#   LOG_SECURE = "/var/log/secure"
 +    NAMED_RUN = "/var/cache/bind/data/named.run"
 +    VAR_OPENDNSSEC_DIR = "/var/lib/opendnssec"
-+    OPENDNSSEC_KASP_DB = "/var/lib/opendnssec/kasp.db"
++    OPENDNSSEC_KASP_DB = "/var/lib/opendnssec/db/kasp.db"
 +    IPA_ODS_EXPORTER_CCACHE = "/var/lib/opendnssec/tmp/ipa-ods-exporter.ccache"
 +#   VAR_RUN_DIRSRV_DIR = "/var/run/dirsrv"
 +    KRB5CC_HTTPD = "/var/run/apache2/ipa/krbcache/krb5ccache"
@@ -387,7 +389,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,194 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -425,8 +427,15 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +# to their actual systemd service names
 +debian_system_units = redhat_services.redhat_system_units
 +
++debian_system_units['named-regular'] = 'bind9.service'
++debian_system_units['named-pkcs11'] = 'bind9-pkcs11.service'
++debian_system_units['named'] = debian_system_units['named-pkcs11']
 +debian_system_units['pki-tomcatd'] = 'pki-tomcatd.service'
 +debian_system_units['pki_tomcatd'] = debian_system_units['pki-tomcatd']
++debian_system_units['ods-enforcerd'] = 'opendnssec-enforcer.service'
++debian_system_units['ods_enforcerd'] = debian_system_units['ods-enforcerd']
++debian_system_units['ods-signerd'] = 'opendnssec-signer.service'
++debian_system_units['ods_signerd'] = debian_system_units['ods-signerd']
 +
 +# Service classes that implement Debian-specific behaviour
 +
@@ -528,24 +537,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    def disable(self):
 +        return True
 +
-+
 +class DebianSSHService(DebianSysvService):
 +    def get_config_dir(self, instance_name=""):
 +        return '/etc/ssh'
-+
-+class DebianNamedService(DebianSysvService):
-+    def get_user_name(self):
-+        return u'bind'
-+
-+    def get_group_name(self):
-+        return u'bind'
-+
-+    def get_binary_path(self):
-+        return paths.NAMED
-+
-+    def get_package_name(self):
-+        return u'bind9'
-+
 +
 +# Function that constructs proper Debian-specific server classes for services
 +# of specified name
@@ -565,8 +559,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        return DebianSysvService("krb5-kdc")
 +    if name == 'messagebus':
 +        return DebianSysvService("dbus")
-+    if name == 'named':
-+        return DebianNamedService("bind9")
 +    if name == 'ntpd':
 +        return DebianSysvService("ntp")
 +    if name == 'smb':
