@@ -1,0 +1,672 @@
+From 3509be46991fd0bc41b69c28d25c8cfc936001a2 Mon Sep 17 00:00:00 2001
+From: Timo Aaltonen <tjaalton@debian.org>
+Date: Fri, 4 Mar 2016 21:02:27 +0200
+Subject: [PATCH] ipaplatform: Move remaining user/group constants to
+ ipaplatform.constants.
+
+Use ipaplatform.constants in every corner instead of importing other bits or calling
+some platform specific things, and remove hopefully last remnants of hardcoded uid's.
+---
+ install/oddjob/com.redhat.idm.trust-fetch-domains |  5 ++++-
+ install/share/copy-schema-to-ca.py                |  6 ++++--
+ ipaplatform/base/constants.py                     |  8 +++++++
+ ipaplatform/base/services.py                      | 12 -----------
+ ipaplatform/redhat/services.py                    | 26 -----------------------
+ ipaserver/install/bindinstance.py                 |  5 +++--
+ ipaserver/install/cainstance.py                   |  6 ++++--
+ ipaserver/install/certs.py                        |  3 ++-
+ ipaserver/install/dns.py                          |  6 ++++--
+ ipaserver/install/dnskeysyncinstance.py           | 11 ++++++----
+ ipaserver/install/dogtaginstance.py               |  1 -
+ ipaserver/install/dsinstance.py                   | 17 ++++++++-------
+ ipaserver/install/httpinstance.py                 |  2 +-
+ ipaserver/install/ipa_backup.py                   |  7 +++---
+ ipaserver/install/ipa_restore.py                  |  9 +++++---
+ ipaserver/install/ipa_server_certinstall.py       |  3 ++-
+ ipaserver/install/krainstance.py                  |  5 ++++-
+ ipaserver/install/krbinstance.py                  |  7 ++++--
+ ipaserver/install/odsexporterinstance.py          |  9 +++++---
+ ipaserver/install/opendnssecinstance.py           | 19 +++++++++++------
+ ipaserver/install/server/upgrade.py               |  6 ++++--
+ 21 files changed, 89 insertions(+), 84 deletions(-)
+
+--- a/install/oddjob/com.redhat.idm.trust-fetch-domains
++++ b/install/oddjob/com.redhat.idm.trust-fetch-domains
+@@ -8,6 +8,7 @@ from ipapython.dn import DN
+ from ipalib.config import Env
+ from ipalib.constants import DEFAULT_CONFIG
+ from ipapython.ipautil import kinit_keytab
++from ipaplatform.constants import constants
+ import sys
+ import os, pwd
+ 
+@@ -17,6 +18,8 @@ import gssapi
+ if six.PY3:
+     unicode = str
+ 
++SSSD_USER = constants.SSSD_USER
++
+ def retrieve_keytab(api, ccache_name, oneway_keytab_name, oneway_principal):
+     getkeytab_args = ["/usr/sbin/ipa-getkeytab",
+                       "-s", api.env.host,
+@@ -30,7 +33,7 @@ def retrieve_keytab(api, ccache_name, on
+                 raiseonerr=False)
+     # Make sure SSSD is able to read the keytab
+     try:
+-        sssd = pwd.getpwnam('sssd')
++        sssd = pwd.getpwnam(SSSD_USER)
+         os.chown(oneway_keytab_name, sssd[2], sssd[3])
+     except KeyError as e:
+         # If user 'sssd' does not exist, we don't need to chown from root to sssd
+--- a/install/share/copy-schema-to-ca.py
++++ b/install/share/copy-schema-to-ca.py
+@@ -19,9 +19,9 @@ from hashlib import sha1
+ 
+ from ipapython import ipautil, dogtag
+ from ipapython.ipa_log_manager import root_logger, standard_logging_setup
+-from ipaserver.install.dsinstance import DS_USER, schema_dirname
+-from ipaserver.install.cainstance import PKI_USER
++from ipaserver.install.dsinstance import schema_dirname
+ from ipalib import api
++from ipaplatform.constants import constants
+ 
+ try:
+     from ipaplatform import services
+@@ -43,6 +43,8 @@ SCHEMA_FILENAMES = (
+     "05rfc2247.ldif",
+ )
+ 
++DS_USER = constants.DS_USER
++PKI_USER = constants.PKI_USER
+ 
+ def _sha1_file(filename):
+     with open(filename, 'rb') as f:
+--- a/ipaplatform/base/constants.py
++++ b/ipaplatform/base/constants.py
+@@ -8,12 +8,20 @@ This base platform module exports platfo
+ 
+ 
+ class BaseConstantsNamespace(object):
++    DS_USER = "dirsrv"
++    DS_GROUP = "dirsrv"
+     HTTPD_USER = "apache"
+     IPA_DNS_PACKAGE_NAME = "freeipa-server-dns"
++    KDCPROXY_USER = "kdcproxy"
+     NAMED_USER = "named"
++    NAMED_GROUP = "named"
+     # ntpd init variable used for daemon options
+     NTPD_OPTS_VAR = "OPTIONS"
+     # quote used for daemon options
+     NTPD_OPTS_QUOTE = "\""
++    ODS_USER = "ods"
++    ODS_GROUP = "ods"
++    PKI_USER = "pkiuser"
+     # nfsd init variable used to enable kerberized NFS
+     SECURE_NFS_VAR = "SECURE_NFS"
++    SSSD_USER = "sssd"
+--- a/ipaplatform/base/services.py
++++ b/ipaplatform/base/services.py
+@@ -181,18 +181,6 @@ class PlatformService(object):
+     def get_config_dir(self, instance_name=""):
+         return
+ 
+-    def get_user_name(self, instance_name=""):
+-        return
+-
+-    def get_group_name(self, instance_name=""):
+-        return
+-
+-    def get_binary_path(self):
+-        return
+-
+-    def get_package_name(self):
+-        return
+-
+ 
+ class SystemdService(PlatformService):
+     SYSTEMD_SRV_TARGET = "%s.target.wants"
+--- a/ipaplatform/redhat/services.py
++++ b/ipaplatform/redhat/services.py
+@@ -247,28 +247,6 @@ class RedHatCAService(RedHatService):
+             self.wait_until_running()
+ 
+ 
+-class RedHatNamedService(RedHatService):
+-    def get_user_name(self):
+-        return u'named'
+-
+-    def get_group_name(self):
+-        return u'named'
+-
+-    def get_binary_path(self):
+-        return paths.NAMED_PKCS11
+-
+-    def get_package_name(self):
+-        return u"bind-pkcs11"
+-
+-
+-class RedHatODSEnforcerdService(RedHatService):
+-    def get_user_name(self):
+-        return u'ods'
+-
+-    def get_group_name(self):
+-        return u'ods'
+-
+-
+ # Function that constructs proper Red Hat OS family-specific server classes for
+ # services of specified name
+ 
+@@ -281,10 +259,6 @@ def redhat_service_class_factory(name):
+         return RedHatSSHService(name)
+     if name in ('pki-tomcatd', 'pki_tomcatd'):
+         return RedHatCAService(name)
+-    if name == 'named':
+-        return RedHatNamedService(name)
+-    if name in ('ods-enforcerd', 'ods_enforcerd'):
+-        return RedHatODSEnforcerdService(name)
+     return RedHatService(name)
+ 
+ 
+--- a/ipaserver/install/bindinstance.py
++++ b/ipaserver/install/bindinstance.py
+@@ -56,6 +56,7 @@ if six.PY3:
+ 
+ NAMED_CONF = paths.NAMED_CONF
+ RESOLV_CONF = paths.RESOLV_CONF
++NAMED_USER = constants.NAMED_USER
+ 
+ named_conf_section_ipa_start_re = re.compile('\s*dynamic-db\s+"ipa"\s+{')
+ named_conf_section_options_start_re = re.compile('\s*options\s+{')
+@@ -607,7 +608,7 @@ class BindInstance(service.Service):
+     suffix = ipautil.dn_attribute_property('_suffix')
+ 
+     def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders, ntp,
+-              reverse_zones, named_user=constants.NAMED_USER, zonemgr=None,
++              reverse_zones, named_user=NAMED_USER, zonemgr=None,
+               ca_configured=None, no_dnssec_validation=False):
+         self.named_user = named_user
+         self.fqdn = fqdn
+@@ -1258,4 +1259,4 @@ class BindInstance(service.Service):
+             self.named_regular.start()
+ 
+         installutils.remove_keytab(paths.NAMED_KEYTAB)
+-        installutils.remove_ccache(run_as='named')
++        installutils.remove_ccache(run_as=NAMED_USER)
+--- a/ipaserver/install/cainstance.py
++++ b/ipaserver/install/cainstance.py
+@@ -68,7 +68,7 @@ from ipaserver.install import ldapupdate
+ from ipaserver.install import replication
+ from ipaserver.install import service
+ from ipaserver.install.dogtaginstance import (
+-    PKI_USER, export_kra_agent_pem, DogtagInstance)
++    export_kra_agent_pem, DogtagInstance)
+ from ipaserver.plugins import ldap2
+ 
+ # Python 3 rename. The package is available in "six.moves.http_client", but
+@@ -107,6 +107,8 @@ ADMIN_GROUPS = [
+     'Security Domain Administrators'
+ ]
+ 
++HTTPD_USER = constants.HTTPD_USER
++PKI_USER = constants.PKI_USER
+ 
+ def check_port():
+     """
+@@ -918,7 +920,7 @@ class CAInstance(DogtagInstance):
+         os.chmod(self.ra_agent_db + "/key3.db", 0o640)
+         os.chmod(self.ra_agent_db + "/secmod.db", 0o640)
+ 
+-        pent = pwd.getpwnam(constants.HTTPD_USER)
++        pent = pwd.getpwnam(HTTPD_USER)
+         os.chown(self.ra_agent_db + "/cert8.db", 0, pent.pw_gid )
+         os.chown(self.ra_agent_db + "/key3.db", 0, pent.pw_gid )
+         os.chown(self.ra_agent_db + "/secmod.db", 0, pent.pw_gid )
+--- a/ipaserver/install/certs.py
++++ b/ipaserver/install/certs.py
+@@ -50,6 +50,7 @@ from ipaplatform.paths import paths
+ # where apache can reach
+ NSS_DIR = paths.HTTPD_ALIAS_DIR
+ 
++HTTPD_USER = constants.HTTPD_USER
+ 
+ def get_cert_nickname(cert):
+     """
+@@ -513,7 +514,7 @@ class CertDB(object):
+         f.write(pwdfile.read())
+         f.close()
+         pwdfile.close()
+-        self.set_perms(self.pwd_conf, uid=constants.HTTPD_USER)
++        self.set_perms(self.pwd_conf, uid=HTTPD_USER)
+ 
+     def find_root_cert(self, nickname):
+         """
+--- a/ipaserver/install/dns.py
++++ b/ipaserver/install/dns.py
+@@ -36,6 +36,8 @@ from ipaserver.install import opendnssec
+ ip_addresses = []
+ reverse_zones = []
+ 
++NAMED_GROUP = constants.NAMED_GROUP
++ODS_USER = constants.ODS_USER
+ 
+ def _find_dnssec_enabled_zones(conn):
+     search_kw = {'idnssecinlinesigning': True}
+@@ -239,8 +241,8 @@ def install_check(standalone, replica, o
+             dnskeysyncd.stop()
+             try:
+                 ipautil.run(cmd, env=environment,
+-                            runas=ods_enforcerd.get_user_name(),
+-                            suplementary_groups=[named.get_group_name()])
++                            runas=ODS_USER,
++                            suplementary_groups=[NAMED_GROUP])
+             except CalledProcessError as e:
+                 root_logger.debug("%s", e)
+                 raise RuntimeError("This IPA server cannot be promoted to "
+--- a/ipaserver/install/dnskeysyncinstance.py
++++ b/ipaserver/install/dnskeysyncinstance.py
+@@ -22,6 +22,7 @@ from ipapython.dn import DN
+ from ipapython import ipaldap
+ from ipapython import sysrestore, ipautil
+ from ipaplatform import services
++from ipaplatform.constants import constants
+ from ipaplatform.paths import paths
+ from ipalib import errors, api
+ from ipalib.constants import CACERT
+@@ -31,6 +32,10 @@ softhsm_token_label = u'ipaDNSSEC'
+ softhsm_slot = 0
+ replica_keylabel_template = u"dnssec-replica:%s"
+ 
++NAMED_USER = constants.NAMED_USER
++NAMED_GROUP = constants.NAMED_GROUP
++ODS_USER = constants.ODS_USER
++ODS_GROUP = constants.ODS_GROUP
+ 
+ def dnssec_container_exists(fqdn, suffix, dm_password=None, ldapi=False,
+                             realm=None, autobind=ipaldap.AUTOBIND_DISABLED):
+@@ -142,14 +147,14 @@ class DNSKeySyncInstance(service.Service
+     def __get_named_uid(self):
+         named = services.knownservices.named
+         try:
+-            return pwd.getpwnam(named.get_user_name()).pw_uid
++            return pwd.getpwnam(NAMED_USER).pw_uid
+         except KeyError:
+             raise RuntimeError("Named UID not found")
+ 
+     def __get_named_gid(self):
+         named = services.knownservices.named
+         try:
+-            return grp.getgrnam(named.get_group_name()).gr_gid
++            return grp.getgrnam(NAMED_GROUP).gr_gid
+         except KeyError:
+             raise RuntimeError("Named GID not found")
+ 
+@@ -160,12 +165,12 @@ class DNSKeySyncInstance(service.Service
+         self.named_gid = self.__get_named_gid()
+ 
+         try:
+-            self.ods_uid = pwd.getpwnam(ods_enforcerd.get_user_name()).pw_uid
++            self.ods_uid = pwd.getpwnam(ODS_USER).pw_uid
+         except KeyError:
+             raise RuntimeError("OpenDNSSEC UID not found")
+ 
+         try:
+-            self.ods_gid = grp.getgrnam(ods_enforcerd.get_group_name()).gr_gid
++            self.ods_gid = grp.getgrnam(ODS_GROUP).gr_gid
+         except KeyError:
+             raise RuntimeError("OpenDNSSEC GID not found")
+ 
+--- a/ipaserver/install/dogtaginstance.py
++++ b/ipaserver/install/dogtaginstance.py
+@@ -45,7 +45,6 @@ from ipaserver.install import replicatio
+ from ipaserver.install.installutils import stopped_service
+ from ipapython.ipa_log_manager import log_mgr
+ 
+-PKI_USER = "pkiuser"
+ HTTPD_USER = constants.HTTPD_USER
+ 
+ def get_security_domain():
+--- a/ipaserver/install/dsinstance.py
++++ b/ipaserver/install/dsinstance.py
+@@ -43,15 +43,15 @@ from ipaserver.install import upgradeins
+ from ipalib import api
+ from ipalib import certstore
+ from ipalib import errors
+-from ipalib import constants
+-from ipaplatform.tasks import tasks
+-from ipalib.constants import CACERT
++from ipalib.constants import CACERT, DOMAIN_LEVEL_0, MAX_DOMAIN_LEVEL, MIN_DOMAIN_LEVEL
+ from ipapython.dn import DN
+ from ipaplatform import services
++from ipaplatform.constants import constants
+ from ipaplatform.paths import paths
++from ipaplatform.tasks import tasks
+ 
+-DS_USER = 'dirsrv'
+-DS_GROUP = 'dirsrv'
++DS_USER = constants.DS_USER
++DS_GROUP = constants.DS_GROUP
+ 
+ IPA_SCHEMA_FILES = ("60kerberos.ldif",
+                     "60samba.ldif",
+@@ -175,7 +175,7 @@ def get_domain_level(api=api):
+     try:
+         entry = conn.get_entry(dn, ['ipaDomainLevel'])
+     except errors.NotFound:
+-        return constants.DOMAIN_LEVEL_0
++        return DOMAIN_LEVEL_0
+     return int(entry.single_value['ipaDomainLevel'])
+ 
+ 
+@@ -500,8 +500,8 @@ class DsInstance(service.Service):
+                              GROUP=DS_GROUP,
+                              IDRANGE_SIZE=idrange_size,
+                              DOMAIN_LEVEL=self.domainlevel,
+-                             MAX_DOMAIN_LEVEL=constants.MAX_DOMAIN_LEVEL,
+-                             MIN_DOMAIN_LEVEL=constants.MIN_DOMAIN_LEVEL,
++                             MAX_DOMAIN_LEVEL=MAX_DOMAIN_LEVEL,
++                             MIN_DOMAIN_LEVEL=MIN_DOMAIN_LEVEL,
+                              STRIP_ATTRS=" ".join(replication.STRIP_ATTRS),
+                              EXCLUDES='(objectclass=*) $ EXCLUDE ' +
+                              ' '.join(replication.EXCLUDES),
+@@ -708,7 +708,7 @@ class DsInstance(service.Service):
+         self._ldap_mod("repoint-managed-entries.ldif", self.sub_dict)
+ 
+     def configure_dirsrv_ccache(self):
+-        pent = pwd.getpwnam("dirsrv")
++        pent = pwd.getpwnam(DS_USER)
+         ccache = paths.TMP_KRB5CC % pent.pw_uid
+         filepath = paths.SYSCONFIG_DIRSRV
+         if not os.path.exists(filepath):
+--- a/ipaserver/install/httpinstance.py
++++ b/ipaserver/install/httpinstance.py
+@@ -54,8 +54,8 @@ SELINUX_BOOLEAN_SETTINGS = dict(
+     httpd_run_ipa='on',
+ )
+ 
+-KDCPROXY_USER = 'kdcproxy'
+ HTTPD_USER = constants.HTTPD_USER
++KDCPROXY_USER = constants.KDCPROXY_USER
+ 
+ def httpd_443_configured():
+     """
+--- a/ipaserver/install/ipa_backup.py
++++ b/ipaserver/install/ipa_backup.py
+@@ -24,8 +24,9 @@ import tempfile
+ import time
+ import pwd
+ from optparse import OptionGroup
+-from ipaplatform.paths import paths
+ from ipaplatform import services
++from ipaplatform.constants import constants
++from ipaplatform.paths import paths
+ 
+ from six.moves.configparser import SafeConfigParser
+ 
+@@ -35,14 +36,12 @@ from ipapython.ipautil import run, write
+ from ipapython import admintool
+ from ipapython.config import IPAOptionParser
+ from ipapython.dn import DN
+-from ipaserver.install.dsinstance import DS_USER
+ from ipaserver.install.replication import wait_for_task
+ from ipaserver.install import installutils
+ from ipapython import ipaldap
+ from ipalib.session import ISO8601_DATETIME_FMT
+ from ipalib.constants import CACERT
+ from six.moves.configparser import SafeConfigParser
+-from ipaplatform.tasks import tasks
+ 
+ """
+ A test gpg can be generated like this:
+@@ -65,6 +64,7 @@ EOF
+       --keyring /root/backup.pub --list-secret-keys
+ """
+ 
++DS_USER = constants.DS_USER
+ 
+ def encrypt_file(filename, keyring, remove_original=True):
+     source = filename
+--- a/ipaserver/install/ipa_restore.py
++++ b/ipaserver/install/ipa_restore.py
+@@ -35,23 +35,26 @@ from ipapython import version, ipautil,
+ from ipapython.ipautil import run, user_input
+ from ipapython import admintool
+ from ipapython.dn import DN
+-from ipaserver.install.dsinstance import create_ds_user, DS_USER
+-from ipaserver.install.cainstance import PKI_USER, create_ca_user
++from ipaserver.install.dsinstance import create_ds_user
++from ipaserver.install.cainstance import create_ca_user
+ from ipaserver.install.replication import (wait_for_task, ReplicationManager,
+                                            get_cs_replication_manager)
+ from ipaserver.install import installutils
+ from ipaserver.install import dsinstance, httpinstance, cainstance
+ from ipapython import ipaldap
+ import ipapython.errors
+-from ipaplatform.tasks import tasks
+ from ipaplatform import services
++from ipaplatform.constants import constants
+ from ipaplatform.paths import paths
++from ipaplatform.tasks import tasks
+ 
+ try:
+     from ipaserver.install import adtrustinstance
+ except ImportError:
+     adtrustinstance = None
+ 
++DS_USER = constants.DS_USER
++PKI_USER = constants.PKI_USER
+ 
+ def recursive_chown(path, uid, gid):
+     '''
+--- a/ipaserver/install/ipa_server_certinstall.py
++++ b/ipaserver/install/ipa_server_certinstall.py
+@@ -33,6 +33,7 @@ from ipalib import api, errors
+ from ipalib.constants import CACERT
+ from ipaserver.install import certs, dsinstance, httpinstance, installutils
+ 
++HTTPD_USER = constants.HTTPD_USER
+ 
+ class ServerCertInstall(admintool.AdminTool):
+     command_name = 'ipa-server-certinstall'
+@@ -152,7 +153,7 @@ class ServerCertInstall(admintool.AdminT
+         os.chmod(os.path.join(dirname, 'key3.db'), 0o640)
+         os.chmod(os.path.join(dirname, 'secmod.db'), 0o640)
+ 
+-        pent = pwd.getpwnam(constants.HTTPD_USER)
++        pent = pwd.getpwnam(HTTPD_USER)
+         os.chown(os.path.join(dirname, 'cert8.db'), 0, pent.pw_gid)
+         os.chown(os.path.join(dirname, 'key3.db'), 0, pent.pw_gid)
+         os.chown(os.path.join(dirname, 'secmod.db'), 0, pent.pw_gid)
+--- a/ipaserver/install/krainstance.py
++++ b/ipaserver/install/krainstance.py
+@@ -28,6 +28,7 @@ from six.moves.configparser import Confi
+ from ipalib import api
+ from ipalib import x509
+ from ipaplatform import services
++from ipaplatform.constants import constants
+ from ipaplatform.paths import paths
+ from ipapython import certdb
+ from ipapython import ipautil
+@@ -38,7 +39,7 @@ from ipaserver.install import installuti
+ from ipaserver.install import ldapupdate
+ from ipaserver.install import service
+ from ipaserver.install.dogtaginstance import (
+-    PKI_USER, export_kra_agent_pem, DogtagInstance)
++    export_kra_agent_pem, DogtagInstance)
+ from ipaserver.plugins import ldap2
+ from ipapython.ipa_log_manager import log_mgr
+ 
+@@ -54,6 +55,8 @@ ADMIN_GROUPS = [
+ 
+ LDAPMOD_ERR_ALREADY_EXISTS = 68
+ 
++PKI_USER = constants.PKI_USER
++
+ class KRAInstance(DogtagInstance):
+     """
+     We assume that the CA has already been installed, and we use the
+--- a/ipaserver/install/krbinstance.py
++++ b/ipaserver/install/krbinstance.py
+@@ -48,8 +48,11 @@ import struct
+ 
+ from ipaserver.install import certs
+ from distutils import version
+-from ipaplatform.tasks import tasks
++from ipaplatform.constants import constants
+ from ipaplatform.paths import paths
++from ipaplatform.tasks import tasks
++
++DS_USER = constants.DS_USER
+ 
+ class KpasswdInstance(service.SimpleServiceInstance):
+     def __init__(self):
+@@ -334,7 +337,7 @@ class KrbInstance(service.Service):
+         vardict = {"KRB5_KTNAME": paths.DS_KEYTAB}
+         ipautil.config_replace_variables(paths.SYSCONFIG_DIRSRV,
+                                          replacevars=vardict)
+-        pent = pwd.getpwnam(dsinstance.DS_USER)
++        pent = pwd.getpwnam(DS_USER)
+         os.chown(paths.DS_KEYTAB, pent.pw_uid, pent.pw_gid)
+ 
+     def __create_host_keytab(self):
+--- a/ipaserver/install/odsexporterinstance.py
++++ b/ipaserver/install/odsexporterinstance.py
+@@ -13,10 +13,13 @@ from ipaserver.install import installuti
+ from ipapython.ipa_log_manager import *
+ from ipapython.dn import DN
+ from ipapython import sysrestore, ipautil, ipaldap
+-from ipaplatform.paths import paths
+ from ipaplatform import services
++from ipaplatform.constants import constants
++from ipaplatform.paths import paths
+ from ipalib import errors, api
+ 
++ODS_USER = constants.ODS_USER
++ODS_GROUP = constants.ODS_GROUP
+ 
+ class ODSExporterInstance(service.Service):
+     def __init__(self, fstore=None, dm_password=None, ldapi=False,
+@@ -68,12 +71,12 @@ class ODSExporterInstance(service.Servic
+         ods_enforcerd = services.knownservices.ods_enforcerd
+ 
+         try:
+-            self.ods_uid = pwd.getpwnam(ods_enforcerd.get_user_name()).pw_uid
++            self.ods_uid = pwd.getpwnam(ODS_USER).pw_uid
+         except KeyError:
+             raise RuntimeError("OpenDNSSEC UID not found")
+ 
+         try:
+-            self.ods_gid = grp.getgrnam(ods_enforcerd.get_group_name()).gr_gid
++            self.ods_gid = grp.getgrnam(ODS_GROUP).gr_gid
+         except KeyError:
+             raise RuntimeError("OpenDNSSEC GID not found")
+ 
+--- a/ipaserver/install/opendnssecinstance.py
++++ b/ipaserver/install/opendnssecinstance.py
+@@ -17,6 +17,7 @@ from ipapython.ipa_log_manager import *
+ from ipapython.dn import DN
+ from ipapython import sysrestore, ipautil, ipaldap, p11helper
+ from ipaplatform import services
++from ipaplatform.constants import constants
+ from ipaplatform.paths import paths
+ from ipalib import errors, api
+ from ipaserver.install import dnskeysyncinstance
+@@ -24,6 +25,10 @@ from ipaserver.install import dnskeysync
+ KEYMASTER = u'dnssecKeyMaster'
+ softhsm_slot = 0
+ 
++NAMED_USER = constants.NAMED_USER
++NAMED_GROUP = constants.NAMED_GROUP
++ODS_USER = constants.ODS_USER
++ODS_GROUP = constants.ODS_GROUP
+ 
+ def get_dnssec_key_masters(conn):
+     """
+@@ -127,22 +132,22 @@ class OpenDNSSECInstance(service.Service
+         ods_enforcerd = services.knownservices.ods_enforcerd
+ 
+         try:
+-            self.named_uid = pwd.getpwnam(named.get_user_name()).pw_uid
++            self.named_uid = pwd.getpwnam(NAMED_USER).pw_uid
+         except KeyError:
+             raise RuntimeError("Named UID not found")
+ 
+         try:
+-            self.named_gid = grp.getgrnam(named.get_group_name()).gr_gid
++            self.named_gid = grp.getgrnam(NAMED_GROUP).gr_gid
+         except KeyError:
+             raise RuntimeError("Named GID not found")
+ 
+         try:
+-            self.ods_uid = pwd.getpwnam(ods_enforcerd.get_user_name()).pw_uid
++            self.ods_uid = pwd.getpwnam(ODS_USER).pw_uid
+         except KeyError:
+             raise RuntimeError("OpenDNSSEC UID not found")
+ 
+         try:
+-            self.ods_gid = grp.getgrnam(ods_enforcerd.get_group_name()).gr_gid
++            self.ods_gid = grp.getgrnam(ODS_GROUP).gr_gid
+         except KeyError:
+             raise RuntimeError("OpenDNSSEC GID not found")
+ 
+@@ -289,7 +294,7 @@ class OpenDNSSECInstance(service.Service
+             ods_enforcerd = services.knownservices.ods_enforcerd
+             cmd = [paths.ODS_KSMUTIL, 'zonelist', 'export']
+             result = ipautil.run(cmd,
+-                                 runas=ods_enforcerd.get_user_name(),
++                                 runas=ODS_USER,
+                                  capture_output=True)
+             with open(paths.OPENDNSSEC_ZONELIST_FILE, 'w') as zonelistf:
+                 zonelistf.write(result.output)
+@@ -305,7 +310,7 @@ class OpenDNSSECInstance(service.Service
+             ]
+ 
+             ods_enforcerd = services.knownservices.ods_enforcerd
+-            ipautil.run(command, stdin="y", runas=ods_enforcerd.get_user_name())
++            ipautil.run(command, stdin="y", runas=ODS_USER)
+ 
+     def __setup_dnskeysyncd(self):
+         # set up dnskeysyncd this is DNSSEC master
+@@ -354,7 +359,7 @@ class OpenDNSSECInstance(service.Service
+             cmd = [paths.IPA_ODS_EXPORTER, 'ipa-full-update']
+             try:
+                 self.print_msg("Exporting DNSSEC data before uninstallation")
+-                ipautil.run(cmd, runas=ods_enforcerd.get_user_name())
++                ipautil.run(cmd, runas=ODS_USER)
+             except CalledProcessError:
+                 root_logger.error("DNSSEC data export failed")
+ 
+--- a/ipaserver/install/server/upgrade.py
++++ b/ipaserver/install/server/upgrade.py
+@@ -19,13 +19,14 @@ import SSSDConfig
+ import ipalib.util
+ import ipalib.errors
+ from ipaplatform import services
++from ipaplatform.constants import constants
++from ipaplatform.paths import paths
+ from ipaplatform.tasks import tasks
+ from ipapython import ipautil, sysrestore, version, certdb
+ from ipapython import ipaldap
+ from ipapython.ipa_log_manager import *
+ from ipapython import certmonger
+ from ipapython.dn import DN
+-from ipaplatform.paths import paths
+ from ipaserver.install import installutils
+ from ipaserver.install import dsinstance
+ from ipaserver.install import httpinstance
+@@ -47,6 +48,7 @@ from ipaserver.install.ldapupdate import
+ if six.PY3:
+     unicode = str
+ 
++PKI_USER = constants.PKI_USER
+ 
+ class KpasswdInstance(service.SimpleServiceInstance):
+     def __init__(self):
+@@ -929,7 +931,7 @@ def copy_crl_file(old_path, new_path=Non
+         os.symlink(realpath, new_path)
+     else:
+         shutil.copy2(old_path, new_path)
+-        pent = pwd.getpwnam(cainstance.PKI_USER)
++        pent = pwd.getpwnam(PKI_USER)
+         os.chown(new_path, pent.pw_uid, pent.pw_gid)
+ 
+     tasks.restore_context(new_path)
