@@ -102,6 +102,7 @@ Depends:
  python-ipaserver (= ${source:Version}),
  python-gssapi,
  python-ldap (>= 2.4.22),
+ python-systemd,
  slapi-nis (>= 0.54.2),
  softhsm2,
  systemd-sysv,
