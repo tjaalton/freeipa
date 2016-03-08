@@ -1,6 +1,8 @@
-freeipa (4.3.0-1) UNRELEASED; urgency=medium
+freeipa (4.3.0+git20160302-1) UNRELEASED; urgency=medium
 
-  * New upstream release.
+  * New upstream snapshot.
+    - refresh patches
+    - drop no-test-lang.diff, obsolete
   * fix-match-hostname.diff, control: Drop the patch and python-openssl
     deps, not needed anymore
   * *.install: Updated.
@@ -53,11 +55,8 @@ freeipa (4.3.0-1) UNRELEASED; urgency=medium
     multiarch path to avoid hacking the code too much.
   * fix-ipa-otpd-install.diff, rules, server.install: Put ipa-otpd in
     /usr/lib/ipa instead of directly under multiarch lib path.
-  * fix-certmonger-script-install.diff: Install certmonger scripts under
-    /usr/lib/ipa instead of multiarch path.
   * control, server*.install: Move dirsrv plugins from server-trust-ad
     to server, needed on upgrades even if trust-ad isn't set up.
-  * user-httpd-user.diff: Patch dogtaginstance.py to use HTTPD_USER.
   * control: Add pki-tools to python-ipaserver deps.
   * server: Enable mod_proxy_ajp and mod_proxy_http on postinst, disable
     on postrm.

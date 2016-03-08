@@ -5,23 +5,19 @@ use the debian layout when installing python modules
 
 --- a/Makefile
 +++ b/Makefile
-@@ -107,11 +107,11 @@ client-install: client client-dirs
- 	done
+@@ -113,9 +113,9 @@ client-install: client client-dirs
  	cd install/po && $(MAKE) install || exit 1;
- 	if [ "$(DESTDIR)" = "" ]; then \
--		$(PYTHON) setup-client.py install; \
--		(cd ipaplatform && $(PYTHON) setup.py install); \
-+		$(PYTHON) setup-client.py install --install-layout=deb; \
-+		(cd ipaplatform && $(PYTHON) setup.py install --install-layout=deb); \
- 	else \
--		$(PYTHON) setup-client.py install --root $(DESTDIR); \
--		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR)); \
-+		$(PYTHON) setup-client.py install --root $(DESTDIR) --install-layout=deb; \
-+		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb); \
- 	fi
+ 	@for subdir in $(CLIENTPYDIRS); do \
+ 		if [ "$(DESTDIR)" = "" ]; then \
+-			(cd $$subdir && $(PYTHON) setup.py install); \
++			(cd $$subdir && $(PYTHON) setup.py install --install-layout=deb); \
+ 		else \
+-			(cd $$subdir && $(PYTHON) setup.py install --root $(DESTDIR)); \
++			(cd $$subdir && $(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb); \
+ 		fi \
+ 	done
  
- client-dirs:
-@@ -187,11 +187,11 @@ server: version-update
+@@ -198,11 +198,11 @@ server: version-update
  
  server-install: server
  	if [ "$(DESTDIR)" = "" ]; then \
@@ -37,7 +33,7 @@ use the debian layout when installing python modules
  	fi
  
  tests: version-update tests-man-autogen
-@@ -202,7 +202,7 @@ tests-install: tests
+@@ -213,7 +213,7 @@ tests-install: tests
  	if [ "$(DESTDIR)" = "" ]; then \
  		cd ipatests; $(PYTHON) setup.py install; \
  	else \
@@ -48,7 +44,7 @@ use the debian layout when installing python modules
  
 --- a/ipapython/Makefile
 +++ b/ipapython/Makefile
-@@ -15,7 +15,7 @@ install:
+@@ -13,7 +13,7 @@ install:
  	if [ "$(DESTDIR)" = "" ]; then \
  		$(PYTHON) setup.py install; \
  	else \
@@ -57,28 +53,6 @@ use the debian layout when installing python modules
  	fi
  	@for subdir in $(SUBDIRS); do \
  		(cd $$subdir && $(MAKE) $@) || exit 1; \
---- a/ipapython/py_default_encoding/Makefile
-+++ b/ipapython/py_default_encoding/Makefile
-@@ -13,7 +13,7 @@ install:
- 		if [ "$(DESTDIR)" = "" ]; then \
- 			python2 setup.py install; \
- 		else \
--			python2 setup.py install --root $(DESTDIR); \
-+			python2 setup.py install --root $(DESTDIR) --install-layout=deb; \
- 		fi; \
- 	fi
- 
---- a/ipapython/ipap11helper/Makefile
-+++ b/ipapython/ipap11helper/Makefile
-@@ -8,7 +8,7 @@ install:
- 	if [ "$(DESTDIR)" = "" ]; then \
- 		$(PYTHON) setup.py install; \
- 	else \
--		$(PYTHON) setup.py install --root $(DESTDIR); \
-+		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
- 	fi
- 
- clean:
 --- a/ipalib/Makefile
 +++ b/ipalib/Makefile
 @@ -12,7 +12,7 @@ install:

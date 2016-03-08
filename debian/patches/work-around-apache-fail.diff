@@ -1,7 +1,7 @@
 Description: service apache2 restart fails on sid, so don't do that
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -176,7 +176,8 @@ class HTTPInstance(service.Service):
+@@ -191,7 +191,8 @@ class HTTPInstance(service.Service):
  
      def __start(self):
          self.backup_state("running", self.is_running())
@@ -21,11 +21,11 @@ Description: service apache2 restart fails on sid, so don't do that
 +    http.stop()
 +    http.start()
  
-     return 0
- 
+     # execute ipactl to refresh services status
+     ipautil.run(['ipactl', 'start', '--ignore-service-failures'],
 --- a/ipaserver/install/server/install.py
 +++ b/ipaserver/install/server/install.py
-@@ -967,7 +967,8 @@ def install(installer):
+@@ -999,7 +999,8 @@ def install(installer):
  
      # Restart httpd to pick up the new IPA configuration
      service.print_msg("Restarting the web server")
@@ -33,11 +33,11 @@ Description: service apache2 restart fails on sid, so don't do that
 +    http.stop()
 +    http.start()
  
-     if setup_kra:
-         kra.install(api, None, options)
+     # update DNA shared config entry is done as far as possible
+     # from restart to avoid waiting for its creation
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -777,7 +777,8 @@ def install(installer):
+@@ -856,7 +856,8 @@ def install(installer):
  
      # Restart httpd to pick up the new IPA configuration
      service.print_msg("Restarting the web server")

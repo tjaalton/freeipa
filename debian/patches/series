@@ -3,15 +3,12 @@
 # not upstreamable
 work-around-apache-fail.diff
 prefix.patch
-no-test-lang.diff
 
 # send upstream
 add-debian-platform.diff
 fix-ipa-conf.diff
 fix-kdcproxy-paths.diff
 fix-ipa-otpd-install.diff
-fix-certmonger-script-install.diff
-use-httpd-user.diff
 fix-custodia-conf.diff
 fix-replicainstall.diff
 ipaplatform-Move-remaining-user-group-constants-to-i.patch

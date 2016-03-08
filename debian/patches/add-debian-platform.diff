@@ -657,7 +657,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          srv_vals.append("0.%s.pool.ntp.org" % os)
 --- a/ipaserver/install/ldapupdate.py
 +++ b/ipaserver/install/ldapupdate.py
-@@ -332,9 +332,9 @@ class LDAPUpdate:
+@@ -335,9 +335,9 @@ class LDAPUpdate:
          bits = platform.architecture()[0]
  
          if bits == "64bit":
@@ -671,7 +671,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          try:
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -168,6 +168,7 @@ class HTTPInstance(service.Service):
+@@ -183,6 +183,7 @@ class HTTPInstance(service.Service):
              self.step("create KDC proxy user", create_kdcproxy_user)
              self.step("create KDC proxy config", self.create_kdcproxy_conf)
              self.step("enable KDC proxy", self.enable_kdcproxy)
@@ -679,7 +679,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          self.step("restarting httpd", self.__start)
          self.step("configuring httpd to start on boot", self.__enable)
          self.step("enabling oddjobd", self.enable_and_start_oddjobd)
-@@ -483,6 +484,8 @@ class HTTPInstance(service.Service):
+@@ -502,6 +503,8 @@ class HTTPInstance(service.Service):
              except Exception:
                  pass
  

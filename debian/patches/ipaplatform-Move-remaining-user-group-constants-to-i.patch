@@ -177,7 +177,7 @@ some platform specific things, and remove hopefully last remnants of hardcoded u
  
  named_conf_section_ipa_start_re = re.compile('\s*dynamic-db\s+"ipa"\s+{')
  named_conf_section_options_start_re = re.compile('\s*options\s+{')
-@@ -607,7 +608,7 @@ class BindInstance(service.Service):
+@@ -611,7 +612,7 @@ class BindInstance(service.Service):
      suffix = ipautil.dn_attribute_property('_suffix')
  
      def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders, ntp,
@@ -186,7 +186,7 @@ some platform specific things, and remove hopefully last remnants of hardcoded u
                ca_configured=None, no_dnssec_validation=False):
          self.named_user = named_user
          self.fqdn = fqdn
-@@ -1258,4 +1259,4 @@ class BindInstance(service.Service):
+@@ -1262,4 +1263,4 @@ class BindInstance(service.Service):
              self.named_regular.start()
  
          installutils.remove_keytab(paths.NAMED_KEYTAB)
@@ -212,7 +212,7 @@ some platform specific things, and remove hopefully last remnants of hardcoded u
  
  def check_port():
      """
-@@ -918,7 +920,7 @@ class CAInstance(DogtagInstance):
+@@ -921,7 +923,7 @@ class CAInstance(DogtagInstance):
          os.chmod(self.ra_agent_db + "/key3.db", 0o640)
          os.chmod(self.ra_agent_db + "/secmod.db", 0o640)
  
@@ -231,7 +231,7 @@ some platform specific things, and remove hopefully last remnants of hardcoded u
  
  def get_cert_nickname(cert):
      """
-@@ -513,7 +514,7 @@ class CertDB(object):
+@@ -512,7 +513,7 @@ class CertDB(object):
          f.write(pwdfile.read())
          f.close()
          pwdfile.close()
@@ -251,7 +251,7 @@ some platform specific things, and remove hopefully last remnants of hardcoded u
  
  def _find_dnssec_enabled_zones(conn):
      search_kw = {'idnssecinlinesigning': True}
-@@ -239,8 +241,8 @@ def install_check(standalone, replica, o
+@@ -231,8 +233,8 @@ def install_check(standalone, api, repli
              dnskeysyncd.stop()
              try:
                  ipautil.run(cmd, env=environment,
@@ -387,8 +387,8 @@ some platform specific things, and remove hopefully last remnants of hardcoded u
  HTTPD_USER = constants.HTTPD_USER
 +KDCPROXY_USER = constants.KDCPROXY_USER
  
- def httpd_443_configured():
-     """
+ # See contrib/nsscipersuite/nssciphersuite.py
+ NSS_CIPHER_SUITE = [
 --- a/ipaserver/install/ipa_backup.py
 +++ b/ipaserver/install/ipa_backup.py
 @@ -24,8 +24,9 @@ import tempfile
@@ -661,7 +661,7 @@ some platform specific things, and remove hopefully last remnants of hardcoded u
  
  class KpasswdInstance(service.SimpleServiceInstance):
      def __init__(self):
-@@ -929,7 +931,7 @@ def copy_crl_file(old_path, new_path=Non
+@@ -945,7 +947,7 @@ def copy_crl_file(old_path, new_path=Non
          os.symlink(realpath, new_path)
      else:
          shutil.copy2(old_path, new_path)
