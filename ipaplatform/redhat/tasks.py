@@ -30,6 +30,9 @@ import stat
 import socket
 import sys
 import base64
+from cffi import FFI
+from ctypes.util import find_library
+from functools import total_ordering
 
 from subprocess import CalledProcessError
 from nss.error import NSPRError
@@ -46,6 +49,14 @@ from ipaplatform.paths import paths
 from ipaplatform.redhat.authconfig import RedHatAuthConfig
 from ipaplatform.base.tasks import BaseTaskNamespace
 
+_ffi = FFI()
+_ffi.cdef("""
+int rpmvercmp (const char *a, const char *b);
+""")
+
+# use ctypes loader to get correct librpm.so library version according to
+# https://cffi.readthedocs.org/en/latest/overview.html#id8
+_librpm = _ffi.dlopen(find_library("rpm"))
 
 log = log_mgr.get_logger(__name__)
 
@@ -64,6 +75,21 @@ def selinux_enabled():
     else:
         # No selinuxenabled, no SELinux
         return False
+
+
+@total_ordering
+class IPAVersion(object):
+
+    def __init__(self, version):
+        self.version = version
+
+    def __eq__(self, other):
+        assert isinstance(other, IPAVersion)
+        return _librpm.rpmvercmp(self.version, other.version) == 0
+
+    def __lt__(self, other):
+        assert isinstance(other, IPAVersion)
+        return _librpm.rpmvercmp(self.version, other.version) < 0
 
 
 class RedHatTaskNamespace(BaseTaskNamespace):
@@ -425,6 +451,13 @@ class RedHatTaskNamespace(BaseTaskNamespace):
 
         super(RedHatTaskNamespace, self).create_system_user(name, group,
             homedir, shell, uid, gid, comment, create_homedir)
+
+    def parse_ipa_version(self, version):
+        """
+        :param version: textual version
+        :return: object implementing proper __cmp__ method for version compare
+        """
+        return IPAVersion(version)
 
 
 tasks = RedHatTaskNamespace()

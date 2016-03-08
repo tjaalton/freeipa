@@ -172,9 +172,9 @@ revzone1_ip = u'172.16.31.0'
 revzone1_ipprefix = u'172.16.31.'
 revzone1_dn = DN(('idnsname', revzone1), api.env.container_dns, api.env.basedn)
 
-revzone2 = u'30.15.172.in-addr.arpa.'
+revzone2 = u'18.198.in-addr.arpa.'
 revzone2_dnsname = DNSName(revzone2)
-revzone2_ip = u'172.15.30.0/24'
+revzone2_ip = u'198.18.0.30/16'
 revzone2_dn = DN(('idnsname',revzone2), api.env.container_dns, api.env.basedn)
 
 revzone3_classless1 = u'70.16.172.in-addr.arpa.'
@@ -1768,6 +1768,15 @@ class test_dns(Declarative):
             },
         ),
 
+        dict(
+            desc='Update global DNS settings - rollback',
+            command=('dnsconfig_mod', [], {'idnsforwarders' : None,}),
+            expected={
+                'value': None,
+                'summary': u'Global DNS configuration is empty',
+                'result': {},
+            },
+        ),
 
         dict(
             desc='Try to add invalid allow-query to zone %r' % zone1,
@@ -2883,6 +2892,15 @@ class test_dns(Declarative):
                     'result': True,
                     'summary': "Found '%s'" % wildcard_rec1_test1,
                     'value': wildcard_rec1_test1,
+                    'messages': ({
+                        'message': u"'dns-resolve' is deprecated. The "
+                                   u"command may return an unexpected result, "
+                                   u"the resolution of the DNS domain is done "
+                                   u"on a randomly chosen IPA server.",
+                        'code': 13015,
+                        'type': u'warning',
+                        'name': u'CommandDeprecatedWarning'
+                    },)
             },
         ),
 
@@ -2894,6 +2912,15 @@ class test_dns(Declarative):
                     'result': True,
                     'summary': "Found '%s'" % wildcard_rec1_test2,
                     'value': wildcard_rec1_test2,
+                    'messages': ({
+                        'message': u"'dns-resolve' is deprecated. The "
+                                   u"command may return an unexpected result, "
+                                   u"the resolution of the DNS domain is done "
+                                   u"on a randomly chosen IPA server.",
+                        'code': 13015,
+                        'type': u'warning',
+                        'name': u'CommandDeprecatedWarning'
+                    },)
             },
         ),
 
@@ -3132,6 +3159,7 @@ class test_root_zone(Declarative):
             command=(
                 'dnszone_add', [zone_root], {
                     'idnssoarname': zone_root_rname,
+                    'skip_overlap_check': True
                 }
             ),
             expected={

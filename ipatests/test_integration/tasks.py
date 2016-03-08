@@ -24,10 +24,12 @@ import textwrap
 import re
 import collections
 import itertools
+import tempfile
 import time
 
 import dns
 from ldif import LDIFWriter
+from SSSDConfig import SSSDConfig
 from six import StringIO
 
 from ipapython import ipautil
@@ -37,13 +39,12 @@ from ipapython.ipa_log_manager import log_mgr
 from ipatests.test_integration import util
 from ipatests.test_integration.env_config import env_to_script
 from ipatests.test_integration.host import Host
-from ipalib.util import get_reverse_zone_default
+from ipalib import errors
+from ipalib.util import get_reverse_zone_default, verify_host_resolvable
 from ipalib.constants import DOMAIN_SUFFIX_NAME
 from ipalib.constants import DOMAIN_LEVEL_0
 
 log = log_mgr.get_logger(__name__)
-
-IPATEST_NM_CONFIG = '20-ipatest-unmanaged-resolv.conf'
 
 
 def check_arguments_are(slice, instanceof):
@@ -65,9 +66,12 @@ def check_arguments_are(slice, instanceof):
 
 def prepare_reverse_zone(host, ip):
     zone = get_reverse_zone_default(ip)
-    host.run_command(["ipa",
+    result = host.run_command(["ipa",
                       "dnszone-add",
                       zone], raiseonerr=False)
+    if result.returncode > 0:
+        log.warning(result.stderr_text)
+    return zone, result.returncode
 
 def prepare_host(host):
     if isinstance(host, Host):
@@ -90,8 +94,7 @@ def allow_sync_ptr(host):
 def apply_common_fixes(host):
     fix_etc_hosts(host)
     fix_hostname(host)
-    modify_nm_resolv_conf_settings(host)
-    fix_resolv_conf(host)
+    prepare_host(host)
 
 
 def backup_file(host, filename):
@@ -148,40 +151,6 @@ def host_service_active(host, service):
         return False
 
 
-def modify_nm_resolv_conf_settings(host):
-    if not host_service_active(host, 'NetworkManager'):
-        return
-
-    config = "[main]\ndns=none\n"
-    path = os.path.join(paths.NETWORK_MANAGER_CONFIG_DIR, IPATEST_NM_CONFIG)
-
-    host.put_file_contents(path, config)
-    host.run_command(['systemctl', 'restart', 'NetworkManager'],
-                     raiseonerr=False)
-
-
-def undo_nm_resolv_conf_settings(host):
-    if not host_service_active(host, 'NetworkManager'):
-        return
-
-    path = os.path.join(paths.NETWORK_MANAGER_CONFIG_DIR, IPATEST_NM_CONFIG)
-    host.run_command(['rm', '-f', path], raiseonerr=False)
-    host.run_command(['systemctl', 'restart', 'NetworkManager'],
-                     raiseonerr=False)
-
-
-def fix_resolv_conf(host):
-    backup_file(host, paths.RESOLV_CONF)
-    lines = host.get_file_contents(paths.RESOLV_CONF).splitlines()
-    lines = ['#' + l if l.startswith('nameserver') else l for l in lines]
-    for other_host in host.domain.hosts:
-        if other_host.role in ('master', 'replica'):
-            lines.append('nameserver %s' % other_host.ip)
-    contents = '\n'.join(lines)
-    log.debug('Writing the following to /etc/resolv.conf:\n%s', contents)
-    host.put_file_contents(paths.RESOLV_CONF, contents)
-
-
 def fix_apache_semaphores(master):
     systemd_available = master.transport.file_exists(paths.SYSTEMCTL)
 
@@ -198,7 +167,6 @@ def fix_apache_semaphores(master):
 def unapply_fixes(host):
     restore_files(host)
     restore_hostname(host)
-    undo_nm_resolv_conf_settings(host)
 
     # Clean up the test directory
     host.run_command(['rm', '-rvf', host.config.test_dir])
@@ -256,7 +224,7 @@ def enable_replication_debugging(host):
                      stdin_text=logging_ldif)
 
 
-def install_master(host, setup_dns=True, setup_kra=False):
+def install_master(host, setup_dns=True, setup_kra=False, extra_args=()):
     host.collect_log(paths.IPASERVER_INSTALL_LOG)
     host.collect_log(paths.IPACLIENT_INSTALL_LOG)
     inst = host.domain.realm.replace('.', '-')
@@ -268,7 +236,8 @@ def install_master(host, setup_dns=True, setup_kra=False):
 
     args = [
         'ipa-server-install', '-U',
-        '-r', host.domain.name,
+        '-n', host.domain.name,
+        '-r', host.domain.realm,
         '-p', host.config.dirman_password,
         '-a', host.config.admin_password,
         "--domain-level=%i" % host.config.domain_level
@@ -277,8 +246,11 @@ def install_master(host, setup_dns=True, setup_kra=False):
     if setup_dns:
         args.extend([
             '--setup-dns',
-            '--forwarder', host.config.dns_forwarder
+            '--forwarder', host.config.dns_forwarder,
+            '--auto-reverse'
         ])
+
+    args.extend(extra_args)
 
     host.run_command(args)
     enable_replication_debugging(host)
@@ -310,15 +282,26 @@ def domainlevel(host):
         level = int(domlevel_re.findall(result.stdout_text)[0])
     return level
 
+def master_authoritative_for_client_domain(master, client):
+    zone = ".".join(client.hostname.split('.')[1:])
+    result = master.run_command(["ipa", "dnszone-show", zone],
+                                raiseonerr=False)
+    if result.returncode == 0:
+        return True
+    else:
+        return False
+
 
 def replica_prepare(master, replica):
     apply_common_fixes(replica)
     fix_apache_semaphores(replica)
     prepare_reverse_zone(master, replica.ip)
-    master.run_command(['ipa-replica-prepare',
-                        '-p', replica.config.dirman_password,
-                        '--ip-address', replica.ip,
-                        replica.hostname])
+    args = ['ipa-replica-prepare',
+            '-p', replica.config.dirman_password,
+            replica.hostname]
+    if master_authoritative_for_client_domain(master, replica):
+        args.extend(['--ip-address', replica.ip])
+    master.run_command(args)
     replica_bundle = master.get_file_contents(
         paths.REPLICA_INFO_GPG_TEMPLATE % replica.hostname)
     replica_filename = get_replica_filename(replica)
@@ -326,7 +309,7 @@ def replica_prepare(master, replica):
 
 
 def install_replica(master, replica, setup_ca=True, setup_dns=False,
-                    setup_kra=False):
+                    setup_kra=False, extra_args=()):
     replica.collect_log(paths.IPAREPLICA_INSTALL_LOG)
     replica.collect_log(paths.IPAREPLICA_CONNCHECK_LOG)
     allow_sync_ptr(master)
@@ -334,8 +317,7 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     # and replica installation would fail
     args = ['ipa-replica-install', '-U',
             '-p', replica.config.dirman_password,
-            '-w', replica.config.admin_password,
-            '--ip-address', replica.ip]
+            '-w', replica.config.admin_password]
     if setup_ca:
         args.append('--setup-ca')
     if setup_dns:
@@ -343,8 +325,12 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
             '--setup-dns',
             '--forwarder', replica.config.dns_forwarder
         ])
+    if master_authoritative_for_client_domain(master, replica):
+        args.extend(['--ip-address', replica.ip])
+
+    args.extend(extra_args)
+
     if domainlevel(master) == DOMAIN_LEVEL_0:
-        apply_common_fixes(replica)
         # prepare the replica file on master and put it to replica, AKA "old way"
         replica_prepare(master, replica)
         replica_filename = get_replica_filename(replica)
@@ -376,6 +362,14 @@ def install_client(master, client, extra_args=()):
     client.collect_log(paths.IPACLIENT_INSTALL_LOG)
 
     apply_common_fixes(client)
+    allow_sync_ptr(master)
+    # Now, for the situations where a client resides in a different subnet from
+    # master, we need to explicitly tell master to create a reverse zone for
+    # the client and enable dynamic updates for this zone.
+    zone, error = prepare_reverse_zone(master, client.ip)
+    if not error:
+        master.run_command(["ipa", "dnszone-mod", zone,
+                            "--dynamic-update=TRUE"])
 
     client.run_command(['ipa-client-install', '-U',
                         '--domain', client.domain.name,
@@ -564,6 +558,47 @@ def setup_sssd_debugging(host):
     clear_sssd_cache(host)
 
 
+def modify_sssd_conf(host, domain, mod_dict, provider='ipa',
+                     provider_subtype=None):
+    """
+    modify options in a single domain section of host's sssd.conf
+    :param host: multihost.Host object
+    :param domain: domain section name to modify
+    :param mod_dict: dictionary of options which will be passed to
+        SSSDDomain.set_option(). To remove an option specify its value as
+        None
+    :param provider: provider backend to set. Defaults to ipa
+    :param provider_subtype: backend subtype (e.g. id or sudo), will be added
+        to the domain config if not present
+    """
+    try:
+        temp_config_file = tempfile.mkstemp()[1]
+        current_config = host.transport.get_file_contents(paths.SSSD_CONF)
+
+        with open(temp_config_file, 'wb') as f:
+            f.write(current_config)
+
+        sssd_config = SSSDConfig()
+        sssd_config.import_config(temp_config_file)
+        sssd_domain = sssd_config.get_domain(domain)
+
+        if provider_subtype is not None:
+            sssd_domain.add_provider(provider, provider_subtype)
+
+        for m in mod_dict:
+            sssd_domain.set_option(m, mod_dict[m])
+
+        sssd_config.save_domain(sssd_domain)
+
+        new_config = sssd_config.dump(sssd_config.opts).encode('utf-8')
+        host.transport.put_file_contents(paths.SSSD_CONF, new_config)
+    finally:
+        try:
+            os.remove(temp_config_file)
+        except OSError:
+            pass
+
+
 def clear_sssd_cache(host):
     """
     Clears SSSD cache by removing the cache files. Restarts SSSD.
@@ -600,14 +635,31 @@ def sync_time(host, server):
     host.run_command(['ntpdate', server.hostname])
 
 
-def connect_replica(master, replica):
-    kinit_admin(replica)
-    replica.run_command(['ipa-replica-manage', 'connect', master.hostname])
+def connect_replica(master, replica, domain_level=None):
+    if domain_level is None:
+        domain_level = master.config.domain_level
+    if domain_level == DOMAIN_LEVEL_0:
+        replica.run_command(['ipa-replica-manage', 'connect', master.hostname])
+    else:
+        kinit_admin(master)
+        master.run_command(["ipa", "topologysegment-add", DOMAIN_SUFFIX_NAME,
+                            "%s-to-%s" % (master.hostname, replica.hostname),
+                            "--leftnode=%s" % master.hostname,
+                            "--rightnode=%s" % replica.hostname
+                            ])
 
 
-def disconnect_replica(master, replica):
-    kinit_admin(replica)
-    replica.run_command(['ipa-replica-manage', 'disconnect', master.hostname])
+def disconnect_replica(master, replica, domain_level=None):
+    if domain_level is None:
+        domain_level = master.config.domain_level
+    if domain_level == DOMAIN_LEVEL_0:
+        replica.run_command(['ipa-replica-manage', 'disconnect', master.hostname])
+    else:
+        kinit_admin(master)
+        master.run_command(["ipa", "topologysegment-del", DOMAIN_SUFFIX_NAME,
+                            "%s-to-%s" % (master.hostname, replica.hostname),
+                            "--continue"
+                            ])
 
 
 def kinit_admin(host):
@@ -814,6 +866,116 @@ def tree2_topo(master, replicas):
         master = replica
 
 
+@_topo('2-connected')
+def two_connected_topo(master, replicas):
+    r"""No replica has more than 4 agreements and at least two
+        replicas must fail to disconnect the topology.
+
+         .     .     .     .
+         .     .     .     .
+         .     .     .     .
+     ... R --- R     R --- R ...
+          \   / \   / \   /
+           \ /   \ /   \ /
+        ... R     R     R ...
+             \   / \   /
+              \ /   \ /
+               M0 -- R2
+               |     |
+               |     |
+               R1 -- R3
+              . \   /  .
+             .   \ /    .
+            .     R      .
+                 .  .
+                .    .
+               .      .
+    """
+    grow = []
+    pool = [master] + replicas
+
+    try:
+        v0 = pool.pop(0)
+        v1 = pool.pop(0)
+        yield v0, v1
+
+        v2 = pool.pop(0)
+        yield v0, v2
+        grow.append((v0, v2))
+
+        v3 = pool.pop(0)
+        yield v2, v3
+        yield v1, v3
+        grow.append((v1, v3))
+
+        for (r, s) in grow:
+            t = pool.pop(0)
+
+            for (u, v) in [(r, t), (s, t)]:
+                yield u, v
+                w = pool.pop(0)
+                yield u, w
+                x = pool.pop(0)
+                yield v, x
+                yield w, x
+                grow.append((w, x))
+
+    except IndexError:
+        return
+
+
+@_topo('double-circle')
+def double_circle_topo(master, replicas, site_size=6):
+    """
+                      R--R
+                      |\/|
+                      |/\|
+                      R--R
+                     /    \
+                     M -- R
+                    /|    |\
+                   / |    | \
+          R - R - R--|----|--R - R - R
+          | X |   |  |    |  |   | X |
+          R - R - R -|----|--R - R - R
+                   \ |    | /
+                    \|    |/
+                     R -- R
+                     \    /
+                      R--R
+                      |\/|
+                      |/\|
+                      R--R
+    """
+    # to provide redundancy there must be at least two replicas per site
+    assert site_size >= 2
+    # do not handle master other than the rest of the servers
+    servers = [master] + replicas
+
+    # split servers into sites
+    it = [iter(servers)] * site_size
+    sites = [(x[0], x[1], x[2:]) for x in zip(*it)]
+    num_sites = len(sites)
+
+    for i in range(num_sites):
+        (a, b, _ignore) = sites[i]
+        # create agreement inside the site
+        yield a, b
+
+        # create agreement to one server in two next sites
+        for (c, d, _ignore) in [sites[(i+n) % num_sites] for n in [1, 2]]:
+            yield b, c
+
+    if site_size > 2:
+        # deploy servers inside the site
+        for site in sites:
+            site_servers = list(site[2])
+            yield site[0], site_servers[0]
+            for edge in complete_topo(site_servers[0], site_servers[1:]):
+                yield edge
+            yield site[1], site_servers[-1]
+
+
 def install_topo(topo, master, replicas, clients,
                  skip_master=False, setup_replica_cas=True):
     """Install IPA servers and clients in the given topology"""
@@ -890,7 +1052,13 @@ def add_a_records_for_hosts_in_master_domain(master):
     for host in master.domain.hosts:
         # We don't need to take care of the zone creation since it is master
         # domain
-        add_a_record(master, host)
+        try:
+            verify_host_resolvable(host.hostname, log)
+            log.debug("The host (%s) is resolvable." % host.domain.name)
+        except errors.DNSNotARecordError:
+            log.debug("Hostname (%s) does not have A/AAAA record. Adding new one.",
+                     master.hostname)
+            add_a_record(master, host)
 
 
 def add_a_record(master, host):
@@ -932,10 +1100,23 @@ def resolve_record(nameserver, query, rtype="SOA", retry=True, timeout=100):
         time.sleep(1)
 
 
+def ipa_backup(master):
+    result = master.run_command(["ipa-backup"])
+    path_re = re.compile("^Backed up to (?P<backup>.*)$", re.MULTILINE)
+    matched = path_re.search(result.stdout_text + result.stderr_text)
+    return matched.group("backup")
+
+
+def ipa_restore(master, backup_path):
+    master.run_command(["ipa-restore", "-U",
+                        "-p", master.config.dirman_password,
+                        backup_path])
+
+
 def install_kra(host, domain_level=None, first_instance=False, raiseonerr=True):
-    if not domain_level:
-       domain_level = domainlevel(host)
-    command = ["ipa-kra-install", "-U"]
+    if domain_level is None:
+        domain_level = domainlevel(host)
+    command = ["ipa-kra-install", "-U", "-p", host.config.dirman_password]
     if domain_level == DOMAIN_LEVEL_0 and not first_instance:
         replica_file = get_replica_filename(host)
         command.append(replica_file)
@@ -943,8 +1124,8 @@ def install_kra(host, domain_level=None, first_instance=False, raiseonerr=True):
 
 
 def install_ca(host, domain_level=None, first_instance=False, raiseonerr=True):
-    if not domain_level:
-       domain_level = domainlevel(host)
+    if domain_level is None:
+        domain_level = domainlevel(host)
     command = ["ipa-ca-install", "-U", "-p", host.config.dirman_password,
                "-P", 'admin', "-w", host.config.admin_password]
     if domain_level == DOMAIN_LEVEL_0 and not first_instance:
@@ -960,3 +1141,10 @@ def install_dns(host, raiseonerr=True):
         "-U",
     ]
     return host.run_command(args, raiseonerr=raiseonerr)
+
+
+def uninstall_replica(master, replica):
+    master.run_command(["ipa-replica-manage", "del", "--force",
+                        "-p", master.config.dirman_password,
+                        replica.hostname], raiseonerr=False)
+    uninstall_master(replica)

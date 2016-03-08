@@ -246,9 +246,9 @@ class XMLDecryptor(object):
         # Decrypt the data.
         slot = nss.get_best_slot(mech)
         key = nss.import_sym_key(slot, mech, nss.PK11_OriginUnwrap, nss.CKA_ENCRYPT, self.__key)
-        iv = nss.param_from_iv(mech, nss.SecItem(data[0:ivlen/8]))
+        iv = nss.param_from_iv(mech, nss.SecItem(data[0:ivlen//8]))
         ctx = nss.create_context_by_sym_key(mech, nss.CKA_DECRYPT, key, iv)
-        out = ctx.cipher_op(data[ivlen / 8:])
+        out = ctx.cipher_op(data[ivlen // 8:])
         out += ctx.digest_final()
         return out
 
@@ -500,11 +500,12 @@ class OTPTokenImport(admintool.AdminTool):
 
         # Verify a key is provided if one is needed.
         if self.doc.keyname is not None:
-            if self.safe_options.keyfile is None:
+            if self.safe_options.keyfile is None:  # pylint: disable=no-member
                 raise admintool.ScriptError("Encryption key required: %s!" % self.doc.keyname)
 
             # Load the keyfile.
-            with open(self.safe_options.keyfile) as f:
+            keyfile = self.safe_options.keyfile  # pylint: disable=no-member
+            with open(keyfile) as f:
                 self.doc.setKey(f.read())
 
     def run(self):

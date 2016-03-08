@@ -386,6 +386,8 @@ class TestTimeParser(object):
         nose.tools.assert_equal(800000, time.microsecond)
 
     def test_time_zones(self):
+        # pylint: disable=no-member
+
         timestr = "20051213141205Z"
 
         time = ipautil.parse_generalized_time(timestr)
@@ -444,7 +446,7 @@ def test_run_no_capture_output():
 def test_run_bytes():
     result = ipautil.run(['echo', b'\x01\x02'], capture_output=True)
     assert result.returncode == 0
-    assert result.output == b'\x01\x02\n'
+    assert result.raw_output == b'\x01\x02\n'
 
 
 def test_run_decode():

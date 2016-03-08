@@ -14,7 +14,7 @@
 %global selinux_policy_version 3.12.1-153
 %else
 %global samba_version 2:4.0.5-1
-%global selinux_policy_version 3.13.1-128.6
+%global selinux_policy_version 3.13.1-158.4
 %endif
 
 %define krb5_base_version %(LC_ALL=C rpm -q --qf '%%{VERSION}' krb5-devel | grep -Eo '^[^.]+\.[^.]+')
@@ -93,9 +93,7 @@ BuildRequires:  systemd
 BuildRequires:  libunistring-devel
 BuildRequires:  python-lesscpy
 BuildRequires:  python-yubico >= 1.2.3
-BuildRequires:  softhsm-devel >= 2.0.0rc1-1
 BuildRequires:  openssl-devel
-BuildRequires:  p11-kit-devel
 BuildRequires:  pki-base >= 10.2.6
 BuildRequires:  python-pytest-multihost >= 0.5
 BuildRequires:  python-pytest-sourceorder
@@ -132,7 +130,7 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: %{name}-admintools = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python2-ipaserver = %{version}-%{release}
-Requires: 389-ds-base >= 1.3.4.4
+Requires: 389-ds-base >= 1.3.4.6
 Requires: openldap-clients > 2.4.35-4
 Requires: nss >= 3.14.3-12.0
 Requires: nss-tools >= 3.14.3-12.0
@@ -155,16 +153,16 @@ Requires(pre): systemd-units
 Requires(post): systemd-units
 Requires: selinux-policy >= %{selinux_policy_version}
 Requires(post): selinux-policy-base >= %{selinux_policy_version}
-Requires: slapi-nis >= 0.54.2-1
-Requires: pki-ca >= 10.2.6-12
-Requires: pki-kra >= 10.2.6-12
+Requires: slapi-nis >= 0.55-1
+Requires: pki-ca >= 10.2.6-13
+Requires: pki-kra >= 10.2.6-13
 Requires(preun): python systemd-units
 Requires(postun): python systemd-units
 Requires: zip
 Requires: policycoreutils >= 2.1.12-5
 Requires: tar
 Requires(pre): certmonger >= 0.78
-Requires(pre): 389-ds-base >= 1.3.4.4
+Requires(pre): 389-ds-base >= 1.3.4.6
 Requires: fontawesome-fonts
 Requires: open-sans-fonts
 Requires: openssl
@@ -214,6 +212,7 @@ Requires: python-pyasn1
 Requires: dbus-python
 Requires: python-dns >= 1.11.1
 Requires: python-kdcproxy >= 0.3
+Requires: rpm-libs
 
 %description -n python2-ipaserver
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -324,7 +323,7 @@ Requires: pam_krb5
 Requires: curl
 Requires: libcurl >= 7.21.7-2
 Requires: xmlrpc-c >= 1.27.4
-Requires: sssd >= 1.13.1
+Requires: sssd >= 1.13.3-5
 Requires: python-sssdconfig
 Requires: certmonger >= 0.78
 Requires: nss-tools
@@ -358,7 +357,7 @@ BuildArch: noarch
 %{?python_provide:%python_provide python2-ipaclient}
 Requires: %{name}-client-common = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
-Requires: python2-ipalib%{?_isa} = %{version}-%{release}
+Requires: python2-ipalib = %{version}-%{release}
 Requires: python-dns >= 1.11.1
 
 %description -n python2-ipaclient
@@ -369,6 +368,30 @@ features for further integration with Linux based clients (SUDO, automount)
 and integration with Active Directory based infrastructures (Trusts).
 If your network uses IPA for authentication, this package should be
 installed on every client machine.
+
+
+%if 0%{?with_python3}
+
+%package -n python3-ipaclient
+Summary: Python libraries used by IPA client
+Group: System Environment/Libraries
+BuildArch: noarch
+%{?python_provide:%python_provide python3-ipaclient}
+Requires: %{name}-client-common = %{version}-%{release}
+Requires: %{name}-common = %{version}-%{release}
+Requires: python3-ipalib = %{version}-%{release}
+Requires: python3-dns >= 1.11.1
+
+%description -n python3-ipaclient
+IPA is an integrated solution to provide centrally managed Identity (users,
+hosts, services), Authentication (SSO, 2FA), and Authorization
+(host access control, SELinux user roles, services). The solution provides
+features for further integration with Linux based clients (SUDO, automount)
+and integration with Active Directory based infrastructures (Trusts).
+If your network uses IPA for authentication, this package should be
+installed on every client machine.
+
+%endif  # with_python3
 
 
 %package client-common
@@ -395,7 +418,7 @@ Summary: IPA administrative tools
 Group: System Environment/Base
 BuildArch: noarch
 Requires: %{name}-client-common = %{version}-%{release}
-Requires: python2-ipalib%{?_isa} = %{version}-%{release}
+Requires: python2-ipalib = %{version}-%{release}
 Requires: python-ldap
 
 Provides: %{alt_name}-admintools = %{version}
@@ -418,7 +441,7 @@ BuildArch: noarch
 Obsoletes: %{name}-python < 4.2.91
 Provides: %{name}-python = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
-Requires: python2-ipalib%{?_isa} = %{version}-%{release}
+Requires: python2-ipalib = %{version}-%{release}
 
 Provides: %{alt_name}-python-compat = %{version}
 Conflicts: %{alt_name}-python-compat
@@ -442,9 +465,9 @@ python2-ipalib and %{name}-common. Packages still depending on
 %package -n python2-ipalib
 Summary: Python libraries used by IPA
 Group: System Environment/Libraries
+BuildArch: noarch
 Conflicts: %{name}-python < %{version}-%{release}
 %{?python_provide:%python_provide python2-ipalib}
-%{?python_provide:%{?_isa:%python_provide python2-ipalib%{_isa}}}
 Provides: python2-ipapython = %{version}-%{release}
 %{?python_provide:%python_provide python2-ipapython}
 Provides: python2-ipaplatform = %{version}-%{release}
@@ -470,6 +493,7 @@ Requires: dbus-python
 Requires: python-setuptools
 Requires: python-six
 Requires: python-jwcrypto
+Requires: python-cffi
 
 Conflicts: %{alt_name}-python < %{version}
 
@@ -487,8 +511,8 @@ If you are using IPA, you need to install this package.
 %package -n python3-ipalib
 Summary: Python3 libraries used by IPA
 Group: System Environment/Libraries
+BuildArch: noarch
 %{?python_provide:%python_provide python3-ipalib}
-%{?python_provide:%{?_isa:%python_provide python3-ipalib%{_isa}}}
 Provides: python3-ipapython = %{version}-%{release}
 %{?python_provide:%python_provide python3-ipapython}
 Provides: python3-ipaplatform = %{version}-%{release}
@@ -514,6 +538,7 @@ Requires: python3-dbus
 Requires: python3-setuptools
 Requires: python3-six
 Requires: python3-jwcrypto
+Requires: python3-cffi
 
 %description -n python3-ipalib
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -553,10 +578,10 @@ If you are using IPA, you need to install this package.
 Summary: IPA tests and test tools
 BuildArch: noarch
 Obsoletes: %{name}-tests < 4.2.91
-Provides: %{name}-tests%{?_isa} = %{version}-%{release}
+Provides: %{name}-tests = %{version}-%{release}
 %{?python_provide:%python_provide python2-ipatests}
 Requires: %{name}-client-common = %{version}-%{release}
-Requires: python2-ipalib%{?_isa} = %{version}-%{release}
+Requires: python2-ipalib = %{version}-%{release}
 Requires: tar
 Requires: xz
 Requires: python-nose
@@ -566,8 +591,9 @@ Requires: python-coverage
 Requires: python-polib
 Requires: python-pytest-multihost >= 0.5
 Requires: python-pytest-sourceorder
+Requires: ldns-utils
 
-Provides: %{alt_name}-tests%{?_isa} = %{version}
+Provides: %{alt_name}-tests = %{version}
 Conflicts: %{alt_name}-tests
 Obsoletes: %{alt_name}-tests < %{version}
 
@@ -587,7 +613,7 @@ Summary: IPA tests and test tools
 BuildArch: noarch
 %{?python_provide:%python_provide python3-ipatests}
 Requires: %{name}-client-common = %{version}-%{release}
-Requires: python3-ipalib%{?_isa} = %{version}-%{release}
+Requires: python3-ipalib = %{version}-%{release}
 Requires: tar
 Requires: xz
 Requires: python3-nose
@@ -596,6 +622,7 @@ Requires: python3-coverage
 Requires: python3-polib
 Requires: python3-pytest-multihost >= 0.5
 Requires: python3-pytest-sourceorder
+Requires: ldns-utils
 
 %description -n python3-ipatests
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -630,15 +657,11 @@ rm -f ipaplatform/tasks.py
 rm -f ipaplatform/paths.py
 rm -f ipaplatform/constants.py
 make version-update
-cd ipa-client; ../autogen.sh --prefix=%{_usr} --sysconfdir=%{_sysconfdir} --localstatedir=%{_localstatedir} --libdir=%{_libdir} --mandir=%{_mandir}; cd ..
+cd client; ../autogen.sh --prefix=%{_usr} --sysconfdir=%{_sysconfdir} --localstatedir=%{_localstatedir} --libdir=%{_libdir} --mandir=%{_mandir}; cd ..
 %if ! %{ONLY_CLIENT}
 cd daemons; ../autogen.sh --prefix=%{_usr} --sysconfdir=%{_sysconfdir} --localstatedir=%{_localstatedir} --libdir=%{_libdir} --mandir=%{_mandir} --with-openldap; cd ..
 cd install; ../autogen.sh --prefix=%{_usr} --sysconfdir=%{_sysconfdir} --localstatedir=%{_localstatedir} --libdir=%{_libdir} --mandir=%{_mandir}; cd ..
 %endif # ONLY_CLIENT
-
-%if 0%{?with_python3}
-(cd ipapython/ipap11helper && make PYTHON=%{__python3} IPA_VERSION_IS_GIT_SNAPSHOT=no %{?_smp_mflags} all)
-%endif
 
 %if ! %{ONLY_CLIENT}
 make IPA_VERSION_IS_GIT_SNAPSHOT=no %{?_smp_mflags} all
@@ -694,6 +717,7 @@ make client-install DESTDIR=%{buildroot}
 (cd ipalib && make PYTHON=%{__python3} IPA_VERSION_IS_GIT_SNAPSHOT=no %{?_smp_mflags} DESTDIR=%{buildroot} install)
 (cd ipapython && make PYTHON=%{__python3} IPA_VERSION_IS_GIT_SNAPSHOT=no %{?_smp_mflags} DESTDIR=%{buildroot} install)
 (cd ipaplatform && %{__python3} setup.py install --root %{buildroot})
+(cd ipaclient && %{__python3} setup.py install --root %{buildroot})
 %endif # with_python3
 
 %find_lang %{gettext_domain}
@@ -701,9 +725,6 @@ make client-install DESTDIR=%{buildroot}
 mkdir -p %{buildroot}%{_usr}/share/ipa
 
 %if ! %{ONLY_CLIENT}
-# FIXME: https://bugzilla.redhat.com/show_bug.cgi?id=1289930
-mv %{buildroot}%{_libexecdir}/ipa/oddjob/com.redhat.idm.trust-fetch-domains %{buildroot}%{_libexecdir}/ipa/com.redhat.idm.trust-fetch-domains
-
 # Remove .la files from libtool - we don't want to package
 # these files
 rm %{buildroot}/%{plugin_dir}/libipa_pwd_extop.la
@@ -943,15 +964,8 @@ if [ $1 -gt 1 ] ; then
         fi
     fi
 
-    if [ ! -f '/etc/ipa/nssdb/cert8.db' -a $restore -ge 2 ]; then
-        python2 -c 'from ipapython.certdb import create_ipa_nssdb; create_ipa_nssdb()' >/dev/null 2>&1
-        tempfile=$(mktemp)
-        if certutil -L -d /etc/pki/nssdb -n 'IPA CA' -a >"$tempfile" 2>/var/log/ipaupgrade.log; then
-            certutil -A -d /etc/ipa/nssdb -n 'IPA CA' -t CT,C,C -a -i "$tempfile" >/var/log/ipaupgrade.log 2>&1
-        elif certutil -L -d /etc/pki/nssdb -n 'External CA cert' -a >"$tempfile" 2>/var/log/ipaupgrade.log; then
-            certutil -A -d /etc/ipa/nssdb -n 'External CA cert' -t C,, -a -i "$tempfile" >/var/log/ipaupgrade.log 2>&1
-        fi
-        rm -f "$tempfile"
+    if [ $restore -ge 2 ]; then
+        python2 -c 'from ipapython.certdb import update_ipa_nssdb; update_ipa_nssdb()' >/var/log/ipaupgrade.log 2>&1
     fi
 fi
 
@@ -1032,8 +1046,8 @@ fi
 %attr(0755,root,root) %{_libexecdir}/ipa/oddjob/org.freeipa.server.conncheck
 %config(noreplace) %{_sysconfdir}/dbus-1/system.d/org.freeipa.server.conf
 %config(noreplace) %{_sysconfdir}/oddjobd.conf.d/ipa-server.conf
-%dir %{_libdir}/ipa/certmonger
-%attr(755,root,root) %{_libdir}/ipa/certmonger/*
+%dir %{_libexecdir}/ipa/certmonger
+%attr(755,root,root) %{_libexecdir}/ipa/certmonger/*
 # NOTE: systemd specific section
 %attr(644,root,root) %{_unitdir}/ipa.service
 %attr(644,root,root) %{_unitdir}/ipa-otpd.socket
@@ -1227,7 +1241,7 @@ fi
 %ghost %{_libdir}/krb5/plugins/libkrb5/winbind_krb5_locator.so
 %{_sysconfdir}/dbus-1/system.d/oddjob-ipa-trust.conf
 %{_sysconfdir}/oddjobd.conf.d/oddjobd-ipa-trust.conf
-%%attr(755,root,root) %{_libexecdir}/ipa/com.redhat.idm.trust-fetch-domains
+%%attr(755,root,root) %{_libexecdir}/ipa/oddjob/com.redhat.idm.trust-fetch-domains
 
 %endif # ONLY_CLIENT
 
@@ -1256,6 +1270,21 @@ fi
 %license COPYING
 %dir %{python_sitelib}/ipaclient
 %{python_sitelib}/ipaclient/*.py*
+%{python_sitelib}/ipaclient-*.egg-info
+
+
+%if 0%{?with_python3}
+
+%files -n python3-ipaclient
+%defattr(-,root,root,-)
+%doc README Contributors.txt
+%license COPYING
+%dir %{python3_sitelib}/ipaclient
+%{python3_sitelib}/ipaclient/*.py
+%{python3_sitelib}/ipaclient/__pycache__/*.py*
+%{python3_sitelib}/ipaclient-*.egg-info
+
+%endif # with_python3
 
 
 %files client-common
@@ -1308,14 +1337,10 @@ fi
 %{python_sitelib}/ipalib/*
 %dir %{python_sitelib}/ipaplatform
 %{python_sitelib}/ipaplatform/*
-%attr(0644,root,root) %{python_sitearch}/default_encoding_utf8.so
-%attr(0644,root,root) %{python_sitearch}/_ipap11helper.so
 %{python_sitelib}/ipapython-*.egg-info
 %{python_sitelib}/ipalib-*.egg-info
 %{python_sitelib}/freeipa-*.egg-info
 %{python_sitelib}/ipaplatform-*.egg-info
-%{python_sitearch}/python_default_encoding-*.egg-info
-%{python_sitearch}/_ipap11helper-*.egg-info
 
 
 %files common -f %{gettext_domain}.lang
@@ -1337,8 +1362,6 @@ fi
 %{python3_sitelib}/ipapython-*.egg-info
 %{python3_sitelib}/ipalib-*.egg-info
 %{python3_sitelib}/ipaplatform-*.egg-info
-%attr(0644,root,root) %{python3_sitearch}/_ipap11helper.cpython-*.so
-%{python3_sitearch}/_ipap11helper-*.egg-info
 
 %endif # with_python3
 

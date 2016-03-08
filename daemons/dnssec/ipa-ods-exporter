@@ -32,6 +32,7 @@ import systemd.daemon
 import systemd.journal
 import sqlite3
 import time
+import traceback
 
 import ipalib
 from ipapython.dn import DN
@@ -55,6 +56,14 @@ ODS_DB_LOCK_PATH = "%s%s" % (paths.OPENDNSSEC_KASP_DB, '.our_lock')
 
 SECRETKEY_WRAPPING_MECH = 'rsaPkcsOaep'
 PRIVKEY_WRAPPING_MECH = 'aesKeyWrapPad'
+
+# Constants from OpenDNSSEC's enforcer/ksm/include/ksm/ksm.h
+KSM_STATE_PUBLISH    = 2
+KSM_STATE_READY      = 3
+KSM_STATE_ACTIVE     = 4
+KSM_STATE_RETIRE     = 5
+KSM_STATE_DEAD       = 6
+KSM_STATE_KEYPUBLISH = 10
 
 # DNSKEY flag constants
 dnskey_flag_by_value = {
@@ -121,6 +130,77 @@ def sql2ldap_keyid(sql_keyid):
     #uri += '%'.join(sql_keyid[i:i+2] for i in range(0, len(sql_keyid), 2))
     return {"idnsSecKeyRef": uri}
 
+def ods2bind_timestamps(key_state, key_type, ods_times):
+    """Transform (timestamps and key states) from ODS to set of BIND timestamps
+    with equivalent meaning. At the same time, remove timestamps
+    for future/planned state transitions to prevent ODS & BIND
+    from desynchronizing.
+
+    OpenDNSSEC database may contain timestamps for state transitions planned
+    in the future, but timestamp itself is not sufficient information because
+    there could be some additional condition which is guaded by OpenDNSSEC
+    itself.
+
+    BIND works directly with timestamps without any additional conditions.
+    This difference causes problem when state transition planned in OpenDNSSEC
+    does not happen as originally planned for some reason.
+
+    At the same time, this difference causes problem when OpenDNSSEC on DNSSEC
+    key master and BIND instances on replicas are not synchronized. This
+    happens when DNSSEC key master is down, or a replication is down. Even
+    a temporary desynchronization could cause DNSSEC validation failures
+    which could have huge impact.
+
+    To prevent this problem, this function removes all timestamps corresponding
+    to future state transitions. As a result, BIND will not do state transition
+    until it happens in OpenDNSSEC first and until the change is replicated.
+
+    Also, timestamp mapping depends on key type and is not 1:1.
+    For detailed description of the mapping please see
+    https://fedorahosted.org/bind-dyndb-ldap/wiki/BIND9/Design/DNSSEC/OpenDNSSEC2BINDKeyStates
+    """
+    bind_times = {}
+    # idnsSecKeyCreated is equivalent to SQL column 'created'
+    bind_times['idnsSecKeyCreated'] = ods_times['idnsSecKeyCreated']
+
+    # set of key states where publishing in DNS zone is desired is taken from
+    # opendnssec/enforcer/ksm/ksm_request.c:KsmRequestIssueKeys()
+    # TODO: support for RFC 5011, requires OpenDNSSEC v1.4.8+
+    if ('idnsSecKeyPublish' in ods_times and
+        key_state in {KSM_STATE_PUBLISH, KSM_STATE_READY, KSM_STATE_ACTIVE,
+                      KSM_STATE_RETIRE, KSM_STATE_KEYPUBLISH}):
+        bind_times['idnsSecKeyPublish'] = ods_times['idnsSecKeyPublish']
+
+    # ZSK and KSK handling differs in enforcerd, see
+    # opendnssec/enforcer/enforcerd/enforcer.c:commKeyConfig()
+    if key_type == 'ZSK':
+        # idnsSecKeyActivate cannot be set before the key reaches ACTIVE state
+        if ('idnsSecKeyActivate' in ods_times and
+            key_state in {KSM_STATE_ACTIVE, KSM_STATE_RETIRE, KSM_STATE_DEAD}):
+                bind_times['idnsSecKeyActivate'] = ods_times['idnsSecKeyActivate']
+
+        # idnsSecKeyInactive cannot be set before the key reaches RETIRE state
+        if ('idnsSecKeyInactive' in ods_times and
+            key_state in {KSM_STATE_RETIRE, KSM_STATE_DEAD}):
+                bind_times['idnsSecKeyInactive'] = ods_times['idnsSecKeyInactive']
+
+    elif key_type == 'KSK':
+        # KSK is special: it is used for signing as long as it is in zone
+        if ('idnsSecKeyPublish' in ods_times and
+            key_state in {KSM_STATE_PUBLISH, KSM_STATE_READY, KSM_STATE_ACTIVE,
+                          KSM_STATE_RETIRE, KSM_STATE_KEYPUBLISH}):
+            bind_times['idnsSecKeyActivate'] = ods_times['idnsSecKeyPublish']
+        # idnsSecKeyInactive is ignored for KSK on purpose
+
+    else:
+        assert False, "unsupported key type %s" % key_type
+
+    # idnsSecKeyDelete is relevant only in DEAD state
+    if 'idnsSecKeyDelete' in ods_times and key_state == KSM_STATE_DEAD:
+        bind_times['idnsSecKeyDelete'] = ods_times['idnsSecKeyDelete']
+
+    return bind_times
+
 class ods_db_lock(object):
     def __enter__(self):
         self.f = open(ODS_DB_LOCK_PATH, 'w')
@@ -147,7 +227,9 @@ def get_ldap_zone(ldap, dns_base, name):
         except ipalib.errors.NotFound:
             continue
 
-    assert ldap_zone is not None, 'DNS zone "%s" should exist in LDAP' % name
+    if ldap_zone is None:
+        raise ipalib.errors.NotFound(
+            reason='DNS zone "%s" not found in LDAP' % name)
 
     return ldap_zone
 
@@ -171,24 +253,30 @@ def get_ods_keys(zone_name):
     assert len(rows) == 1, "exactly one DNS zone should exist in ODS DB"
     zone_id = rows[0][0]
 
-    # get all keys for given zone ID
-    cur = db.execute("SELECT kp.HSMkey_id, kp.generate, kp.algorithm, dnsk.publish, dnsk.active, dnsk.retire, dnsk.dead, dnsk.keytype "
-             "FROM keypairs AS kp JOIN dnsseckeys AS dnsk ON kp.id = dnsk.keypair_id "
-             "WHERE dnsk.zone_id = ?", (zone_id,))
+    # get relevant keys for given zone ID:
+    # ignore keys which were generated but not used yet
+    # key state check is using constants from
+    # OpenDNSSEC's enforcer/ksm/include/ksm/ksm.h
+    # WARNING! OpenDNSSEC version 1 and 2 are using different constants!
+    cur = db.execute("SELECT kp.HSMkey_id, kp.generate, kp.algorithm, "
+                     "dnsk.publish, dnsk.active, dnsk.retire, dnsk.dead, "
+                     "dnsk.keytype, dnsk.state "
+                     "FROM keypairs AS kp "
+                     "JOIN dnsseckeys AS dnsk ON kp.id = dnsk.keypair_id "
+                     "WHERE dnsk.zone_id = ?", (zone_id,))
     keys = {}
     for row in cur:
-        key_data = sql2datetimes(row)
-        if 'idnsSecKeyDelete' in key_data \
-            and key_data['idnsSecKeyDelete'] > datetime.now():
-                continue  # ignore deleted keys
-
-        key_data.update(sql2ldap_flags(row['keytype']))
+        key_data = sql2ldap_flags(row['keytype'])
         assert key_data.get('idnsSecKeyZONE', None) == 'TRUE', \
                 'unexpected key type 0x%x' % row['keytype']
         if key_data.get('idnsSecKeySEP', 'FALSE') == 'TRUE':
             key_type = 'KSK'
         else:
             key_type = 'ZSK'
+
+        # transform key state to timestamps for BIND with equivalent semantics
+        ods_times = sql2datetimes(row)
+        key_data.update(ods2bind_timestamps(row['state'], key_type, ods_times))
 
         key_data.update(sql2ldap_algorithm(row['algorithm']))
         key_id = "%s-%s-%s" % (key_type,
@@ -222,7 +310,7 @@ def ldap2master_replica_keys_sync(log, ldapkeydb, localhsm):
     log.info("new replica keys in LDAP: %s", hex_set(new_replica_keys))
     for key_id in new_replica_keys:
         new_key_ldap = ldapkeydb.replica_pubkeys_wrap[key_id]
-        log.error('label=%s,  id=%s, data=%s',
+        log.debug('label=%s, id=%s, data=%s',
                 new_key_ldap['ipk11label'],
                 hexlify(new_key_ldap['ipk11id']),
                 hexlify(new_key_ldap['ipapublickey']))
@@ -301,7 +389,10 @@ def master2ldap_master_keys_sync(log, ldapkeydb, localhsm):
     ldapkeydb.flush()
 
 def master2ldap_zone_keys_sync(log, ldapkeydb, localhsm):
-    # synchroniza zone keys
+    """add and update zone key material from local HSM to LDAP
+
+    No key material will be removed, only new keys will be added or updated.
+    Key removal is hanled by master2ldap_zone_keys_purge()."""
     log = log.getChild('master2ldap_zone_keys')
     keypairs_ldap = ldapkeydb.zone_keypairs
     log.debug("zone keys in LDAP: %s", hex_set(keypairs_ldap))
@@ -310,10 +401,10 @@ def master2ldap_zone_keys_sync(log, ldapkeydb, localhsm):
     privkeys_local = localhsm.zone_privkeys
     log.debug("zone keys in local HSM: %s", hex_set(privkeys_local))
 
-    assert set(pubkeys_local) == set(privkeys_local), \
-            "IDs of private and public keys for DNS zones in local HSM does " \
-            "not match to key pairs: %s vs. %s" % \
-            (hex_set(pubkeys_local), hex_set(privkeys_local))
+    assert set(pubkeys_local) == set(privkeys_local), (
+            "IDs of private and public keys for DNS zones in local HSM does "
+            "not match to key pairs: %s vs. %s" %
+            (hex_set(pubkeys_local), hex_set(privkeys_local)))
 
     new_keys = set(pubkeys_local) - set(keypairs_ldap)
     log.debug("new zone keys in local HSM: %s", hex_set(new_keys))
@@ -334,6 +425,29 @@ def master2ldap_zone_keys_sync(log, ldapkeydb, localhsm):
     sync_set_metadata_2ldap(log, privkeys_local, keypairs_ldap)
     ldapkeydb.flush()
 
+def master2ldap_zone_keys_purge(log, ldapkeydb, localhsm):
+    """purge removed key material from LDAP (but not metadata)
+
+    Keys which are present in LDAP but not in local HSM will be removed.
+    Key metadata must be removed first so references to removed key material
+    are removed before actually removing the keys."""
+    keypairs_ldap = ldapkeydb.zone_keypairs
+    log.debug("zone keys in LDAP: %s", hex_set(keypairs_ldap))
+
+    pubkeys_local = localhsm.zone_pubkeys
+    privkeys_local = localhsm.zone_privkeys
+    log.debug("zone keys in local HSM: %s", hex_set(privkeys_local))
+    assert set(pubkeys_local) == set(privkeys_local), \
+            "IDs of private and public keys for DNS zones in local HSM does " \
+            "not match to key pairs: %s vs. %s" % \
+            (hex_set(pubkeys_local), hex_set(privkeys_local))
+
+    deleted_key_ids = set(keypairs_ldap) - set(pubkeys_local)
+    log.debug("zone keys deleted from local HSM but present in LDAP: %s",
+            hex_set(deleted_key_ids))
+    for zkey_id in deleted_key_ids:
+        keypairs_ldap[zkey_id].schedule_deletion()
+    ldapkeydb.flush()
 
 def hex_set(s):
     out = set()
@@ -369,25 +483,37 @@ def parse_command(cmd):
     if cmd == 'ipa-hsm-update':
         return (0,
                 'HSM synchronization finished, skipping zone synchronization.',
-                None)
+                None,
+                cmd)
 
     elif cmd == 'ipa-full-update':
         return (None,
                 'Synchronization of all zones was finished.',
-                None)
+                None,
+                cmd)
 
-    elif not cmd.startswith('update '):
+    elif cmd.startswith('ldap-cleanup '):
+        zone_name = cmd2ods_zone_name(cmd)
+        return (None,
+                'Zone "%s" metadata will be removed from LDAP.\n' % zone_name,
+                zone_name,
+                'ldap-cleanup')
+
+    elif cmd.startswith('update '):
+        zone_name = cmd2ods_zone_name(cmd)
+        return (None,
+                'Zone "%s" metadata will be updated in LDAP.\n' % zone_name,
+                zone_name,
+                'update')
+
+    else:
         return (0,
                 'Command "%s" is not supported by IPA; '
                 'HSM synchronization was finished and the command '
                 'will be ignored.' % cmd,
+                None,
                 None)
 
-    else:
-        zone_name = cmd2ods_zone_name(cmd)
-        return (None,
-                'Zone was "%s" updated.\n' % zone_name,
-                zone_name)
 
 def send_systemd_reply(conn, reply):
         # Reply & close connection early.
@@ -398,13 +524,18 @@ def send_systemd_reply(conn, reply):
 
 def cmd2ods_zone_name(cmd):
     # ODS stores zone name without trailing period
-    zone_name = cmd[7:].strip()
+    zone_name = cmd.split(' ', 1)[1].strip()
     if len(zone_name) > 1 and zone_name[-1] == '.':
         zone_name = zone_name[:-1]
 
     return zone_name
 
 def sync_zone(log, ldap, dns_dn, zone_name):
+    """synchronize metadata about zone keys for single DNS zone
+
+    Key material has to be synchronized elsewhere.
+    Keep in mind that keys could be shared among multiple zones!"""
+    log.getChild("%s.%s" % (__name__, zone_name))
     log.debug('synchronizing zone "%s"', zone_name)
     ods_keys = get_ods_keys(zone_name)
     ods_keys_id = set(ods_keys.keys())
@@ -437,36 +568,55 @@ def sync_zone(log, ldap, dns_dn, zone_name):
     ldap_keys_id = set(ldap_keys.keys())
 
     new_keys_id = ods_keys_id - ldap_keys_id
-    log.info('new keys from ODS: %s', new_keys_id)
+    log.info('new key metadata from ODS: %s', new_keys_id)
     for key_id in new_keys_id:
         cn = "cn=%s" % key_id
         key_dn = DN(cn, keys_dn)
-        log.debug('adding key "%s" to LDAP', key_dn)
+        log.debug('adding key metadata "%s" to LDAP', key_dn)
         ldap_key = ldap.make_entry(key_dn,
                                    objectClass=['idnsSecKey'],
                                    **ods_keys[key_id])
         ldap.add_entry(ldap_key)
 
     deleted_keys_id = ldap_keys_id - ods_keys_id
-    log.info('deleted keys in LDAP: %s', deleted_keys_id)
+    log.info('deleted key metadata in LDAP: %s', deleted_keys_id)
     for key_id in deleted_keys_id:
         cn = "cn=%s" % key_id
         key_dn = DN(cn, keys_dn)
-        log.debug('deleting key "%s" from LDAP', key_dn)
+        log.debug('deleting key metadata "%s" from LDAP', key_dn)
         ldap.delete_entry(key_dn)
 
     update_keys_id = ldap_keys_id.intersection(ods_keys_id)
-    log.info('keys in LDAP & ODS: %s', update_keys_id)
+    log.info('key metadata in LDAP & ODS: %s', update_keys_id)
     for key_id in update_keys_id:
         ldap_key = ldap_keys[key_id]
         ods_key = ods_keys[key_id]
-        log.debug('updating key "%s" in LDAP', ldap_key.dn)
+        log.debug('updating key metadata "%s" in LDAP', ldap_key.dn)
         ldap_key.update(ods_key)
         try:
             ldap.update_entry(ldap_key)
         except ipalib.errors.EmptyModlist:
             continue
 
+def cleanup_ldap_zone(log, ldap, dns_dn, zone_name):
+    """delete all key metadata about zone keys for single DNS zone
+
+    Key material has to be synchronized elsewhere.
+    Keep in mind that keys could be shared among multiple zones!"""
+    log = log.getChild("%s.%s" % (__name__, zone_name))
+    log.debug('cleaning up key metadata from zone "%s"', zone_name)
+
+    try:
+        ldap_zone = get_ldap_zone(ldap, dns_dn, zone_name)
+        ldap_keys = get_ldap_keys(ldap, ldap_zone.dn)
+    except ipalib.errors.NotFound as ex:
+        # zone or cn=keys container does not exist, we are done
+        log.debug(str(ex))
+        return
+
+    for ldap_key in ldap_keys:
+        log.debug('deleting key metadata "%s"', ldap_key.dn)
+        ldap.delete_entry(ldap_key)
 
 log = logging.getLogger('root')
 # this service is usually socket-activated
@@ -508,7 +658,7 @@ ldap.gssapi_bind()
 log.debug('Connected')
 
 
-### DNSSEC master: key synchronization
+### DNSSEC master: key material upload & synchronization (but not deletion)
 ldapkeydb = LdapKeyDB(log, ldap, DN(('cn', 'keys'), ('cn', 'sec'),
                                     ipalib.api.env.container_dns,
                                     ipalib.api.env.basedn))
@@ -520,7 +670,7 @@ master2ldap_master_keys_sync(log, ldapkeydb, localhsm)
 master2ldap_zone_keys_sync(log, ldapkeydb, localhsm)
 
 
-### DNSSEC master: DNSSEC key metadata upload
+### DNSSEC master: DNSSEC key metadata upload & synchronization & deletion
 # command receive is delayed so the command will stay in socket queue until
 # the problem with LDAP server or HSM is fixed
 try:
@@ -538,7 +688,7 @@ except KeyError as e:
     conn = None
     cmd = sys.argv[1]
 
-exitcode, msg, zone_name = parse_command(cmd)
+exitcode, msg, zone_name, cmd = parse_command(cmd)
 
 if exitcode is not None:
     if conn:
@@ -568,14 +718,23 @@ try:
 
     if zone_name is not None:
         # only one zone should be processed
-        sync_zone(log, ldap, dns_dn, zone_name)
+        if cmd == 'update':
+            sync_zone(log, ldap, dns_dn, zone_name)
+        elif cmd == 'ldap-cleanup':
+            cleanup_ldap_zone(log, ldap, dns_dn, zone_name)
     else:
         # process all zones
         for zone_row in db.execute("SELECT name FROM zones"):
             sync_zone(log, ldap, dns_dn, zone_row['name'])
 
+    ### DNSSEC master: DNSSEC key material purging
+    # references to old key material were removed above in sync_zone()
+    # so now we can purge old key material from LDAP
+    master2ldap_zone_keys_purge(log, ldapkeydb, localhsm)
+
 except Exception as ex:
-    msg = "ipa-ods-exporter exception: %s" % ex
+    msg = "ipa-ods-exporter exception: %s" % traceback.format_exc(ex)
+    log.exception(ex)
     raise ex
 
 finally:

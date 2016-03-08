@@ -131,7 +131,7 @@ def load_certificate(data, datatype=PEM, dbdir=None):
     initialize_nss_database(dbdir=dbdir)
 
     if six.PY2:
-        return nss.Certificate(buffer(data))
+        return nss.Certificate(buffer(data))  # pylint: disable=buffer-builtin
     else:
         # In python 3 , `bytes` has the buffer interface
         return nss.Certificate(data)
@@ -273,6 +273,8 @@ def make_pem(data):
     Convert a raw base64-encoded blob into something that looks like a PE
     file with lines split to 64 characters and proper headers.
     """
+    if isinstance(data, bytes):
+        data = data.decode('ascii')
     pemcert = '\r\n'.join([data[x:x+64] for x in range(0, len(data), 64)])
     return '-----BEGIN CERTIFICATE-----\n' + \
     pemcert + \

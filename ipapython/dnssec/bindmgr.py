@@ -58,6 +58,8 @@ class BINDMgr(object):
         return dt.strftime(time_bindfmt)
 
     def dates2params(self, ldap_attrs):
+        """Convert LDAP timestamps to list of parameters suitable
+        for dnssec-keyfromlabel utility"""
         attr2param = {'idnsseckeypublish': '-P',
                 'idnsseckeyactivate': '-A',
                 'idnsseckeyinactive': '-I',
@@ -65,10 +67,12 @@ class BINDMgr(object):
 
         params = []
         for attr, param in attr2param.items():
+            params.append(param)
             if attr in ldap_attrs:
-                params.append(param)
                 assert len(ldap_attrs[attr]) == 1, 'Timestamp %s is expected to be single-valued' % attr
                 params.append(self.time_ldap2bindfmt(ldap_attrs[attr][0]))
+            else:
+                params.append('none')
 
         return params
 
@@ -188,10 +192,20 @@ class BINDMgr(object):
 
         self.notify_zone(zone)
 
-    def sync(self):
-        """Synchronize list of zones in LDAP with BIND."""
+    def sync(self, dnssec_zones):
+        """Synchronize list of zones in LDAP with BIND.
+
+        dnssec_zones lists zones which should be processed. All other zones
+        will be ignored even though they were modified using ldap_event().
+
+        This filter is useful in cases where LDAP contains DNS zones which
+        have old metadata objects and DNSSEC disabled. Such zones must be
+        ignored to prevent errors while calling dnssec-keyfromlabel or rndc.
+        """
         self.log.debug('Key metadata in LDAP: %s' % self.ldap_keys)
-        for zone in self.modified_zones:
+        self.log.debug('Zones modified but skipped during bindmgr.sync: %s',
+                       self.modified_zones - dnssec_zones)
+        for zone in self.modified_zones.intersection(dnssec_zones):
             self.sync_zone(zone)
 
         self.modified_zones = set()

@@ -543,7 +543,7 @@ class DsInstance(service.Service):
             ipautil.run(args)
             root_logger.debug("completed creating ds instance")
         except ipautil.CalledProcessError as e:
-            root_logger.critical("failed to create ds instance %s" % e)
+            raise RuntimeError("failed to create ds instance %s" % e)
 
         # check for open port 389 from now on
         self.open_ports.append(389)
@@ -969,6 +969,13 @@ class DsInstance(service.Service):
             dsdb = certs.CertDB(self.realm, nssdir=dirname)
             dsdb.untrack_server_cert(self.nickname)
 
+    def start_tracking_certificates(self, serverid):
+        dirname = config_dirname(serverid)[:-1]
+        dsdb = certs.CertDB(self.realm, nssdir=dirname)
+        dsdb.track_server_cert(self.nickname, self.principal,
+                               dsdb.passwd_fname,
+                               'restart_dirsrv %s' % serverid)
+
     # we could probably move this function into the service.Service
     # class - it's very generic - all we need is a way to get an
     # instance of a particular Service
@@ -1055,17 +1062,20 @@ class DsInstance(service.Service):
         """
         Add sidgen directory server plugin configuration if it does not already exist.
         """
-        self._ldap_mod('ipa-sidgen-conf.ldif', self.sub_dict)
+        self.add_sidgen_plugin(self.sub_dict['SUFFIX'])
 
-    def add_sidgen_plugin(self):
+    def add_sidgen_plugin(self, suffix):
         """
         Add sidgen plugin configuration only if it does not already exist.
         """
+        if not self.admin_conn:
+            self.ldap_connect()
+
         dn = DN('cn=IPA SIDGEN,cn=plugins,cn=config')
         try:
             self.admin_conn.get_entry(dn)
         except errors.NotFound:
-            self._add_sidgen_plugin()
+            self._ldap_mod('ipa-sidgen-conf.ldif', dict(SUFFIX=suffix))
         else:
             root_logger.debug("sidgen plugin is already configured")
 
@@ -1073,17 +1083,20 @@ class DsInstance(service.Service):
         """
         Add directory server configuration for the extdom extended operation.
         """
-        self._ldap_mod('ipa-extdom-extop-conf.ldif', self.sub_dict)
+        self.add_extdom_plugin(self.sub_dict['SUFFIX'])
 
-    def add_extdom_plugin(self):
+    def add_extdom_plugin(self, suffix):
         """
         Add extdom configuration if it does not already exist.
         """
+        if not self.admin_conn:
+            self.ldap_connect()
+
         dn = DN('cn=ipa_extdom_extop,cn=plugins,cn=config')
         try:
             self.admin_conn.get_entry(dn)
         except errors.NotFound:
-            self._add_extdom_plugin()
+            self._ldap_mod('ipa-extdom-extop-conf.ldif', dict(SUFFIX=suffix))
         else:
             root_logger.debug("extdom plugin is already configured")
 
@@ -1249,3 +1262,107 @@ class DsInstance(service.Service):
 
         # check for open secure port 636 from now on
         self.open_ports.append(636)
+
+    def update_dna_shared_config(self, method="SASL/GSSAPI", protocol="LDAP"):
+
+        dna_bind_method = "dnaRemoteBindMethod"
+        dna_conn_protocol = "dnaRemoteConnProtocol"
+        dna_plugin = DN(('cn', 'Distributed Numeric Assignment Plugin'),
+                        ('cn', 'plugins'),
+                        ('cn', 'config'))
+        dna_config_base = DN(('cn', 'posix IDs'), dna_plugin)
+
+        if not self.admin_conn:
+            self.ldap_connect()
+        conn = self.admin_conn
+
+        # Check the plugin is enabled else it is useless to update
+        # the shared entry
+        try:
+            entry = conn.get_entry(dna_plugin)
+            if entry.single_value.get('nsslapd-pluginenabled') == 'off':
+                return
+        except errors.NotFound:
+            root_logger.error("Could not find DNA plugin entry: %s" %
+                              dna_config_base)
+            return
+
+        try:
+            entry = conn.get_entry(dna_config_base)
+        except errors.NotFound:
+            root_logger.error("Could not find DNA config entry: %s" %
+                              dna_config_base)
+            return
+
+        sharedcfgdn = entry.single_value.get("dnaSharedCfgDN")
+        if sharedcfgdn is not None:
+            sharedcfgdn = DN(sharedcfgdn)
+        else:
+            root_logger.error(
+                "Could not find DNA shared config DN in entry: %s" %
+                dna_config_base)
+            return
+
+        #
+        # Update the shared config entry related to that host
+        #
+        # If the shared config entry already exists (like upgrade)
+        # the update occurs immediately without sleep.
+        #
+        # If the shared config entry does not exist (fresh install)
+        # DS server waits for 30s after its startup to create it.
+        # Startup likely occurred few sec before this function is
+        # called so this loop will wait for 30s max.
+        #
+        # In case the server is not able to create the entry
+        # The loop gives a grace period of 60s before logging
+        # the failure to update the shared config entry and return
+        #
+        max_wait = 30
+        for i in range(0, max_wait + 1):
+            try:
+                entries = conn.get_entries(
+                    sharedcfgdn, scope=ldap.SCOPE_ONELEVEL,
+                    filter='dnaHostname=%s' % self.fqdn
+                )
+                break
+            except errors.NotFound:
+                root_logger.debug(
+                    "Unable to find DNA shared config entry for "
+                    "dnaHostname=%s (under %s) so far. Retry in 2 sec." %
+                    (self.fqdn, sharedcfgdn)
+                )
+                time.sleep(2)
+        else:
+            root_logger.error(
+                "Could not get dnaHostname entries in {} seconds".format(
+                    max_wait * 2)
+            )
+            return
+
+        # If there are several entries, all of them will be updated
+        # just log a debug msg. This is likely the result of #5510
+        if len(entries) != 1:
+            root_logger.debug(
+                "%d entries dnaHostname=%s under %s. One expected" %
+                (len(entries), self.fqdn, sharedcfgdn)
+            )
+
+        # time to set the bind method and the protocol in the
+        # shared config entries
+        for entry in entries:
+            mod = []
+            if entry.single_value.get(dna_bind_method) != method:
+                mod.append((ldap.MOD_REPLACE, dna_bind_method, method))
+
+            if entry.single_value.get(dna_conn_protocol) != method:
+                mod.append((ldap.MOD_REPLACE, dna_conn_protocol, protocol))
+
+            if mod:
+                try:
+                    conn.modify_s(entry.dn, mod)
+                except Exception as e:
+                    root_logger.error(
+                        "Failed to set SASL/GSSAPI bind method/protocol "
+                        "in entry {}: {}".format(entry, e)
+                    )

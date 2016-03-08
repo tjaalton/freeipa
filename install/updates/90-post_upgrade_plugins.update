@@ -5,6 +5,8 @@
 plugin: update_ca_topology
 plugin: update_dnszones
 plugin: update_dns_limits
+plugin: update_sigden_extdom_broken_config
+plugin: update_sids
 plugin: update_default_range
 plugin: update_default_trust_view
 plugin: update_ca_renewal_master
@@ -17,5 +19,6 @@ plugin: update_upload_cacrt
 plugin: update_master_to_dnsforwardzones
 plugin: update_managed_post
 plugin: update_managed_permissions
+plugin: update_read_replication_agreements_permission
 plugin: update_idrange_baserid
 plugin: update_passync_privilege_update

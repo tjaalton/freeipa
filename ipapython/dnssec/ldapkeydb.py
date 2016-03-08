@@ -2,8 +2,12 @@
 # Copyright (C) 2014  FreeIPA Contributors see COPYING for license
 #
 
+from __future__ import print_function
+
 from binascii import hexlify
 import collections
+import logging
+from pprint import pprint
 import sys
 import time
 
@@ -11,11 +15,15 @@ import ipalib
 from ipapython.dn import DN
 from ipapython import ipaldap
 from ipapython import ipautil
+from ipapython import ipa_log_manager
 from ipaplatform.paths import paths
 
-from ipapython.dnssec.abshsm import (attrs_name2id, attrs_id2name, AbstractHSM,
-                                     bool_attr_names, populate_pkcs11_metadata)
-import _ipap11helper
+from ipapython.dnssec.abshsm import (
+    attrs_name2id,
+    AbstractHSM,
+    bool_attr_names,
+    populate_pkcs11_metadata)
+from ipapython import p11helper as _ipap11helper
 import uuid
 
 def uri_escape(val):
@@ -103,41 +111,61 @@ def get_default_attrs(object_classes):
         result.update(defaults[cls])
     return result
 
+
 class Key(collections.MutableMapping):
     """abstraction to hide LDAP entry weirdnesses:
         - non-normalized attribute names
         - boolean attributes returned as strings
+        - planned entry deletion prevents subsequent use of the instance
     """
     def __init__(self, entry, ldap, ldapkeydb):
         self.entry = entry
+        self._delentry = None  # indicates that object was deleted
         self.ldap = ldap
         self.ldapkeydb = ldapkeydb
         self.log = ldap.log.getChild(__name__)
 
+    def __assert_not_deleted(self):
+        assert self.entry and not self._delentry, (
+            "attempt to use to-be-deleted entry %s detected"
+            % self._delentry.dn)
+
     def __getitem__(self, key):
+        self.__assert_not_deleted()
         val = self.entry.single_value[key]
         if key.lower() in bool_attr_names:
             val = ldap_bool(val)
         return val
 
     def __setitem__(self, key, value):
+        self.__assert_not_deleted()
         self.entry[key] = value
 
     def __delitem__(self, key):
+        self.__assert_not_deleted()
         del self.entry[key]
 
     def __iter__(self):
         """generates list of ipa names of all PKCS#11 attributes present in the object"""
+        self.__assert_not_deleted()
         for ipa_name in list(self.entry.keys()):
             lowercase = ipa_name.lower()
             if lowercase in attrs_name2id:
                 yield lowercase
 
     def __len__(self):
+        self.__assert_not_deleted()
         return len(self.entry)
 
-    def __str__(self):
-        return str(self.entry)
+    def __repr__(self):
+        if self._delentry:
+            return 'deleted entry: %s' % repr(self._delentry)
+
+        sanitized = dict(self.entry)
+        for attr in ['ipaPrivateKey', 'ipaPublicKey', 'ipk11publickeyinfo']:
+            if attr in sanitized:
+                del sanitized[attr]
+        return repr(sanitized)
 
     def _cleanup_key(self):
         """remove default values from LDAP entry"""
@@ -146,6 +174,49 @@ class Key(collections.MutableMapping):
         for attr in default_attrs:
             if self.get(attr, empty) == default_attrs[attr]:
                 del self[attr]
+
+    def _update_key(self):
+        """remove default values from LDAP entry and write back changes"""
+        if self._delentry:
+            self._delete_key()
+            return
+
+        self._cleanup_key()
+
+        try:
+            self.ldap.update_entry(self.entry)
+        except ipalib.errors.EmptyModlist:
+            pass
+
+    def _delete_key(self):
+        """remove key metadata entry from LDAP
+
+        After calling this, the python object is no longer valid and all
+        subsequent method calls on it will fail.
+        """
+        assert not self.entry, (
+            "Key._delete_key() called before Key.schedule_deletion()")
+        assert self._delentry, "Key._delete_key() called more than once"
+        self.log.debug('deleting key id 0x%s DN %s from LDAP',
+                       hexlify(self._delentry.single_value['ipk11id']),
+                       self._delentry.dn)
+        self.ldap.delete_entry(self._delentry)
+        self._delentry = None
+        self.ldap = None
+        self.ldapkeydb = None
+
+    def schedule_deletion(self):
+        """schedule key deletion from LDAP
+
+        Calling schedule_deletion() will make this object incompatible with
+        normal Key. After that the object must not be read or modified.
+        Key metadata will be actually deleted when LdapKeyDB.flush() is called.
+        """
+        assert not self._delentry, (
+            "Key.schedule_deletion() called more than once")
+        self._delentry = self.entry
+        self.entry = None
+
 
 class ReplicaKey(Key):
     # TODO: object class assert
@@ -182,7 +253,6 @@ class MasterKey(Key):
         # TODO: replace this with 'autogenerate' to prevent collisions
         uuid_rdn = DN('ipk11UniqueId=%s' % uuid.uuid1())
         entry_dn = DN(uuid_rdn, self.ldapkeydb.base_dn)
-        # TODO: add ipaWrappingMech attribute
         entry = self.ldap.make_entry(entry_dn,
                    objectClass=['ipaSecretKeyObject', 'ipk11Object'],
                    ipaSecretKey=data,
@@ -223,7 +293,7 @@ class LdapKeyDB(AbstractHSM):
             for attr in default_attrs:
                 key.setdefault(attr, default_attrs[attr])
 
-            assert 'ipk11id' in o, 'key is missing ipk11Id in %s' % key.entry.dn
+            assert 'ipk11id' in key, 'key is missing ipk11Id in %s' % key.entry.dn
             key_id = key['ipk11id']
             assert key_id not in keys, 'duplicate ipk11Id=0x%s in "%s" and "%s"' % (hexlify(key_id), key.entry.dn, keys[key_id].entry.dn)
             assert 'ipk11label' in key, 'key "%s" is missing ipk11Label' % key.entry.dn
@@ -234,21 +304,12 @@ class LdapKeyDB(AbstractHSM):
         self._update_keys()
         return keys
 
-    def _update_key(self, key):
-        """remove default values from LDAP entry and write back changes"""
-        key._cleanup_key()
-
-        try:
-            self.ldap.update_entry(key.entry)
-        except ipalib.errors.EmptyModlist:
-            pass
-
     def _update_keys(self):
         for cache in [self.cache_masterkeys, self.cache_replica_pubkeys_wrap,
-                self.cache_zone_keypairs]:
+                      self.cache_zone_keypairs]:
             if cache:
                 for key in cache.values():
-                    self._update_key(key)
+                    key._update_key()
 
     def flush(self):
         """write back content of caches to LDAP"""
@@ -349,3 +410,46 @@ class LdapKeyDB(AbstractHSM):
                 '(&(objectClass=ipk11PrivateKey)(objectClass=ipaPrivateKeyObject)(objectClass=ipk11PublicKey)(objectClass=ipaPublicKeyObject))'))
 
         return self.cache_zone_keypairs
+
+if __name__ == '__main__':
+    # this is debugging mode
+    # print information we think are useful to stdout
+    # other garbage goes via logger to stderr
+    ipa_log_manager.standard_logging_setup(debug=True)
+    log = ipa_log_manager.root_logger
+
+    # IPA framework initialization
+    ipalib.api.bootstrap(in_server=True, log=None)  # no logging to file
+    ipalib.api.finalize()
+
+    # LDAP initialization
+    dns_dn = DN(ipalib.api.env.container_dns, ipalib.api.env.basedn)
+    ldap = ipaldap.LDAPClient(ipalib.api.env.ldap_uri)
+    log.debug('Connecting to LDAP')
+    # GSSAPI will be used, used has to be kinited already
+    ldap.gssapi_bind()
+    log.debug('Connected')
+
+    ldapkeydb = LdapKeyDB(log, ldap, DN(('cn', 'keys'), ('cn', 'sec'),
+                          ipalib.api.env.container_dns,
+                          ipalib.api.env.basedn))
+
+    print('replica public keys: CKA_WRAP = TRUE')
+    print('====================================')
+    for pubkey_id, pubkey in ldapkeydb.replica_pubkeys_wrap.items():
+        print(hexlify(pubkey_id))
+        pprint(pubkey)
+
+    print('')
+    print('master keys')
+    print('===========')
+    for mkey_id, mkey in ldapkeydb.master_keys.items():
+        print(hexlify(mkey_id))
+        pprint(mkey)
+
+    print('')
+    print('zone key pairs')
+    print('==============')
+    for key_id, key in ldapkeydb.zone_keypairs.items():
+        print(hexlify(key_id))
+        pprint(key)

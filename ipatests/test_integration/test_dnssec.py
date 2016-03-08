@@ -100,6 +100,7 @@ class TestInstallDNSSECLast(IntegrationTest):
         args = [
             "ipa",
             "dnszone-add", test_zone,
+            "--skip-overlap-check",
             "--dnssec", "true",
         ]
         self.master.run_command(args)
@@ -119,6 +120,7 @@ class TestInstallDNSSECLast(IntegrationTest):
         args = [
             "ipa",
             "dnszone-add", test_zone_repl,
+            "--skip-overlap-check",
             "--dnssec", "true",
         ]
         self.replicas[0].run_command(args)
@@ -268,11 +270,19 @@ class TestInstallDNSSECFirst(IntegrationTest):
 
     def test_sign_root_zone(self):
         args = [
-            "ipa", "dnszone-add", root_zone, "--dnssec", "true"
+            "ipa", "dnszone-add", root_zone, "--dnssec", "true",
+            "--skip-overlap-check",
         ]
         self.master.run_command(args)
 
-        # make BIND happy, and delegate zone which contains A record of master
+        # make BIND happy: add the glue record and delegate zone
+        args = [
+            "ipa", "dnsrecord-add", root_zone, self.master.hostname,
+            "--a-rec=" + self.master.ip
+        ]
+        self.master.run_command(args)
+        time.sleep(10)  # sleep a bit until data are provided by bind-dyndb-ldap
+
         args = [
             "ipa", "dnsrecord-add", root_zone, self.master.domain.name,
             "--ns-rec=" + self.master.hostname
@@ -297,9 +307,17 @@ class TestInstallDNSSECFirst(IntegrationTest):
 
         # add test zone
         args = [
-            "ipa", "dnszone-add", example_test_zone, "--dnssec", "true"
+            "ipa", "dnszone-add", example_test_zone, "--dnssec", "true",
+            "--skip-overlap-check",
         ]
 
+        self.master.run_command(args)
+
+        # delegation
+        args = [
+            "ipa", "dnsrecord-add", root_zone, example_test_zone,
+            "--ns-rec=" + self.master.hostname
+        ]
         self.master.run_command(args)
 
         # wait until zone is signed
@@ -433,7 +451,8 @@ class TestMigrateDNSSECMaster(IntegrationTest):
 
         # add test zone
         args = [
-            "ipa", "dnszone-add", example_test_zone, "--dnssec", "true"
+            "ipa", "dnszone-add", example_test_zone, "--dnssec", "true",
+            "--skip-overlap-check",
         ]
 
         self.master.run_command(args)
@@ -490,7 +509,8 @@ class TestMigrateDNSSECMaster(IntegrationTest):
 
         # add test zone
         args = [
-            "ipa", "dnszone-add", example2_test_zone, "--dnssec", "true"
+            "ipa", "dnszone-add", example2_test_zone, "--dnssec", "true",
+            "--skip-overlap-check",
         ]
         self.replicas[0].run_command(args)
 
@@ -522,7 +542,8 @@ class TestMigrateDNSSECMaster(IntegrationTest):
 
         # add new zone to new replica
         args = [
-            "ipa", "dnszone-add", example3_test_zone, "--dnssec", "true"
+            "ipa", "dnszone-add", example3_test_zone, "--dnssec", "true",
+            "--skip-overlap-check",
         ]
         self.replicas[1].run_command(args)
 

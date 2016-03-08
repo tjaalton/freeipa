@@ -350,9 +350,9 @@ def _reverse_zone_name(netstr):
     net = netaddr.IPNetwork(netstr)
     items = net.ip.reverse_dns.split('.')
     if net.version == 4:
-        return u'.'.join(items[4 - net.prefixlen / 8:])
+        return u'.'.join(items[4 - net.prefixlen // 8:])
     elif net.version == 6:
-        return u'.'.join(items[32 - net.prefixlen / 4:])
+        return u'.'.join(items[32 - net.prefixlen // 4:])
     else:
         return None
 
@@ -784,9 +784,6 @@ class DNSRecord(Str):
 
     def _rule_validatedns(self, _, value):
         if not self.validatedns:
-            return
-
-        if value is None:
             return
 
         if value is None:
@@ -3417,7 +3414,7 @@ class dnsrecord(LDAPObject):
         resolver = dns.resolver.Resolver()
         resolver.set_flags(0)  # disable recursion (for NS RR checks)
         max_attempts = int(self.api.env['wait_for_dns'])
-        warn_attempts = max_attempts / 2
+        warn_attempts = max_attempts // 2
         period = 1  # second
         attempt = 0
         log_fn = self.log.debug
@@ -4255,14 +4252,12 @@ class dns_is_enabled(Command):
         dns_enabled = False
 
         try:
-            ent = ldap.find_entries(filter=self.filter, base_dn=self.base_dn)
-            if len(ent):
-                dns_enabled = True
-        except Exception as e:
-            pass
+            ldap.find_entries(filter=self.filter, base_dn=self.base_dn)
+            dns_enabled = True
+        except errors.EmptyResult:
+            dns_enabled = False
 
         return dict(result=dns_enabled, value=pkey_to_value(None, options))
-
 
 
 @register()

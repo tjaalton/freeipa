@@ -15,7 +15,9 @@ import socket
 import sys
 import tempfile
 
-from ipapython import certmonger, ipaldap, ipautil, sysrestore
+import six
+
+from ipapython import ipaldap, ipautil, sysrestore
 from ipapython.dn import DN
 from ipapython.install import common, core
 from ipapython.install.common import step
@@ -40,6 +42,9 @@ from subprocess import CalledProcessError
 from binascii import hexlify
 
 from .common import BaseServer
+
+if six.PY3:
+    unicode = str
 
 DIRMAN_DN = DN(('cn', 'directory manager'))
 
@@ -336,7 +341,7 @@ def configure_certmonger():
     messagebus = services.knownservices.messagebus
     try:
         messagebus.start()
-    except Exception, e:
+    except Exception as e:
         print("Messagebus service unavailable: %s" % str(e))
         sys.exit(3)
 
@@ -345,13 +350,13 @@ def configure_certmonger():
     cmonger = services.knownservices.certmonger
     try:
         cmonger.restart()
-    except Exception, e:
+    except Exception as e:
         print("Certmonger service unavailable: %s" % str(e))
         sys.exit(3)
 
     try:
         cmonger.enable()
-    except Exception, e:
+    except Exception as e:
         print("Failed to enable Certmonger: %s" % str(e))
         sys.exit(3)
 
@@ -444,6 +449,49 @@ def promote_sssd(host_name):
             root_logger.warning("SSSD service restart was unsuccessful.")
 
 
+def promote_openldap_conf(hostname, master):
+    """
+    Reset the URI directive in openldap-client configuration file to point to
+    newly promoted replica. If this directive was set by third party, then
+    replace the added comment with the one pointing to replica
+
+    :param hostname: replica FQDN
+    :param master: FQDN of remote master
+    """
+
+    ldap_conf = paths.OPENLDAP_LDAP_CONF
+
+    ldap_change_conf = ipaclient.ipachangeconf.IPAChangeConf(
+        "IPA replica installer")
+    ldap_change_conf.setOptionAssignment((" ", "\t"))
+
+    new_opts = []
+
+    with open(ldap_conf, 'r') as f:
+        old_opts = ldap_change_conf.parse(f)
+
+        for opt in old_opts:
+            if opt['type'] == 'comment' and master in opt['value']:
+                continue
+            elif (opt['type'] == 'option' and opt['name'] == 'URI' and
+                    master in opt['value']):
+                continue
+            new_opts.append(opt)
+
+    change_opts = [
+        {'action': 'addifnotset',
+         'name': 'URI',
+         'type': 'option',
+         'value': 'ldaps://' + hostname}
+    ]
+
+    try:
+        ldap_change_conf.newConf(ldap_conf, new_opts)
+        ldap_change_conf.changeConf(ldap_conf, change_opts)
+    except Exception as e:
+        root_logger.info("Failed to update {}: {}".format(ldap_conf, e))
+
+
 @common_cleanup
 def install_check(installer):
     options = installer
@@ -498,6 +546,8 @@ def install_check(installer):
     config.setup_ca = options.setup_ca
     config.setup_kra = options.setup_kra
 
+    ca_enabled = ipautil.file_exists(config.dir + "/cacert.p12")
+
     # Create the management framework config file
     # Note: We must do this before bootstraping and finalizing ipalib.api
     old_umask = os.umask(0o22)   # must be readable for httpd
@@ -513,7 +563,7 @@ def install_check(installer):
                  ipautil.format_netloc(config.host_name))
         fd.write("ldap_uri=ldapi://%%2fvar%%2frun%%2fslapd-%s.socket\n" %
                  installutils.realm_to_serverid(config.realm_name))
-        if ipautil.file_exists(config.dir + "/cacert.p12"):
+        if ca_enabled:
             fd.write("enable_ra=True\n")
             fd.write("ra_plugin=dogtag\n")
             fd.write("dogtag_version=10\n")
@@ -538,6 +588,33 @@ def install_check(installer):
     if not ipautil.file_exists(cafile):
         raise RuntimeError("CA cert file is not available. Please run "
                            "ipa-replica-prepare to create a new replica file.")
+
+    for pkcs12_name, pin_name in (('dscert.p12', 'dirsrv_pin.txt'),
+                                  ('httpcert.p12', 'http_pin.txt')):
+        pkcs12_info = make_pkcs12_info(config.dir, pkcs12_name, pin_name)
+        tmp_db_dir = tempfile.mkdtemp('ipa')
+        try:
+            tmp_db = certs.CertDB(config.realm_name,
+                                  nssdir=tmp_db_dir,
+                                  subject_base=config.subject_base)
+            if ca_enabled:
+                trust_flags = 'CT,C,C'
+            else:
+                trust_flags = None
+            tmp_db.create_from_pkcs12(pkcs12_info[0], pkcs12_info[1],
+                                      ca_file=cafile,
+                                      trust_flags=trust_flags)
+            if not tmp_db.find_server_certs():
+                raise RuntimeError(
+                    "Could not find a suitable server cert in import in %s" %
+                    pkcs12_info[0])
+        except Exception as e:
+            root_logger.error('%s', e)
+            raise RuntimeError(
+                "Server cert is not valid. Please run ipa-replica-prepare to "
+                "create a new replica file.")
+        finally:
+            shutil.rmtree(tmp_db_dir)
 
     ldapuri = 'ldaps://%s' % ipautil.format_netloc(config.master_host_name)
     remote_api = create_api(mode=None)
@@ -640,6 +717,16 @@ def install_check(installer):
             except RuntimeError as e:
                 print(str(e))
                 sys.exit(1)
+
+        if options.setup_dns:
+            dns.install_check(False, remote_api, True, options,
+                              config.host_name)
+            config.ips = dns.ip_addresses
+        else:
+            config.ips = installutils.get_server_ip_address(
+                config.host_name, not installer.interactive, False,
+                options.ip_addresses)
+
     except errors.ACIError:
         sys.exit("\nThe password provided is incorrect for LDAP server "
                  "%s" % config.master_host_name)
@@ -651,14 +738,6 @@ def install_check(installer):
             replman.conn.unbind()
         if conn.isconnected():
             conn.disconnect()
-
-    if options.setup_dns:
-        dns.install_check(False, True, options, config.host_name)
-        config.ips = dns.ip_addresses
-    else:
-        config.ips = installutils.get_server_ip_address(
-            config.host_name, not installer.interactive, False,
-            options.ip_addresses)
 
     # installer needs to update hosts file when DNS subsystem will be
     # installed or custom addresses are used
@@ -803,6 +882,10 @@ def install(installer):
 
     ds.replica_populate()
 
+    # update DNA shared config entry is done as far as possible
+    # from restart to avoid waiting for its creation
+    ds.update_dna_shared_config()
+
     # Everything installed properly, activate ipa service.
     services.knownservices.ipa.enable()
 
@@ -894,7 +977,7 @@ def promote_check(installer):
     if not options.no_ntp:
         try:
             ipaclient.ntpconf.check_timedate_services()
-        except ipaclient.ntpconf.NTPConflictingService, e:
+        except ipaclient.ntpconf.NTPConflictingService as e:
             print("WARNING: conflicting time&date synchronization service '%s'"
                   " will" % e.conflicting_service)
             print("be disabled in favor of ntpd")
@@ -1163,6 +1246,15 @@ def promote_check(installer):
             except RuntimeError as e:
                 print(str(e))
                 sys.exit(1)
+
+        if options.setup_dns:
+            dns.install_check(False, remote_api, True, options,
+                              config.host_name)
+        else:
+            config.ips = installutils.get_server_ip_address(
+                config.host_name, not installer.interactive,
+                False, options.ip_addresses)
+
     except errors.ACIError:
         sys.exit("\nInsufficient privileges to promote the server.")
     except errors.LDAPError:
@@ -1173,13 +1265,6 @@ def promote_check(installer):
             replman.conn.unbind()
         if conn.isconnected():
             conn.disconnect()
-
-    if options.setup_dns:
-        dns.install_check(False, True, options, config.host_name)
-    else:
-        config.ips = installutils.get_server_ip_address(
-            config.host_name, not installer.interactive,
-            False, options.ip_addresses)
 
     # check connection
     if not options.skip_conncheck:
@@ -1295,13 +1380,23 @@ def promote(installer):
                               'https://%s/ipa/xml' %
                               ipautil.format_netloc(config.host_name)),
             ipaconf.setOption('ldap_uri', ldapi_uri),
-            ipaconf.setOption('mode', 'production'),
-            ipaconf.setOption('enable_ra', 'True'),
-            ipaconf.setOption('ra_plugin', 'dogtag'),
-            ipaconf.setOption('dogtag_version', '10')]
+            ipaconf.setOption('mode', 'production')
+        ]
 
-        if not options.setup_ca:
-            gopts.append(ipaconf.setOption('ca_host', config.ca_host_name))
+        if installer._ca_enabled:
+            gopts.extend([
+                ipaconf.setOption('enable_ra', 'True'),
+                ipaconf.setOption('ra_plugin', 'dogtag'),
+                ipaconf.setOption('dogtag_version', '10')
+            ])
+
+            if not options.setup_ca:
+                gopts.append(ipaconf.setOption('ca_host', config.ca_host_name))
+        else:
+            gopts.extend([
+                ipaconf.setOption('enable_ra', 'False'),
+                ipaconf.setOption('ra_plugin', 'None')
+            ])
 
         opts = [ipaconf.setSection('global', gopts)]
 
@@ -1367,9 +1462,14 @@ def promote(installer):
 
     ds.replica_populate()
 
+    # update DNA shared config entry is done as far as possible
+    # from restart to avoid waiting for its creation
+    ds.update_dna_shared_config()
+
     custodia.import_dm_password(config.master_host_name)
 
     promote_sssd(config.host_name)
+    promote_openldap_conf(config.host_name, config.master_host_name)
 
     # Switch API so that it uses the new servr configuration
     server_api = create_api(mode=None)

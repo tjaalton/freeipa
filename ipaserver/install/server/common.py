@@ -2,8 +2,12 @@
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
 
+from __future__ import print_function
+
 import os
 import sys
+
+import six
 
 from ipapython.dn import DN
 from ipapython.install import common, core
@@ -12,6 +16,9 @@ from ipalib.util import validate_domain_name
 from ipaserver.install import bindinstance
 from ipapython.ipautil import check_zone_overlap
 from ipapython.dnsutil import DNSName
+
+if six.PY3:
+    unicode = str
 
 VALID_SUBJECT_ATTRS = ['st', 'o', 'ou', 'dnqualifier', 'c',
                        'serialnumber', 'l', 'title', 'sn', 'givenname',
@@ -139,7 +146,7 @@ class BaseServerCA(common.Installable, core.Group, core.Composite):
             for rdn in dn:
                 if rdn.attr.lower() not in VALID_SUBJECT_ATTRS:
                     raise ValueError("invalid attribute: \"%s\"" % rdn.attr)
-        except ValueError, e:
+        except ValueError as e:
             raise ValueError("invalid subject base format: %s" % e)
 
     ca_signing_algorithm = Knob(
@@ -244,7 +251,7 @@ class BaseServerDNS(common.Installable, core.Group, core.Composite):
                 encoding = 'utf-8'
             value = value.decode(encoding)
             bindinstance.validate_zonemgr_str(value)
-        except ValueError, e:
+        except ValueError as e:
             # FIXME we can do this in better way
             # https://fedorahosted.org/freeipa/ticket/4804
             # decode to proper stderr encoding
@@ -460,37 +467,6 @@ class BaseServer(common.Installable, common.Interactive, core.Composite):
 
         # Automatically disable pkinit w/ dogtag until that is supported
         self.no_pkinit = True
-
-        self.external_ca = self.ca.external_ca
-        self.external_ca_type = self.ca.external_ca_type
-        self.external_cert_files = self.ca.external_cert_files
-        self.dirsrv_cert_files = self.ca.dirsrv_cert_files
-        self.http_cert_files = self.ca.http_cert_files
-        self.pkinit_cert_files = self.ca.pkinit_cert_files
-        self.dirsrv_pin = self.ca.dirsrv_pin
-        self.http_pin = self.ca.http_pin
-        self.pkinit_pin = self.ca.pkinit_pin
-        self.dirsrv_cert_name = self.ca.dirsrv_cert_name
-        self.http_cert_name = self.ca.http_cert_name
-        self.pkinit_cert_name = self.ca.pkinit_cert_name
-        self.ca_cert_files = self.ca.ca_cert_files
-        self.subject = self.ca.subject
-        self.ca_signing_algorithm = self.ca.ca_signing_algorithm
-        self.skip_schema_check = self.ca.skip_schema_check
-
-        self.forwarders = self.dns.forwarders
-        self.auto_forwarders = self.dns.auto_forwarders
-        self.no_forwarders = self.dns.no_forwarders
-        self.reverse_zones = self.dns.reverse_zones
-        self.no_reverse = self.dns.no_reverse
-        self.auto_reverse = self.dns.auto_reverse
-        self.allow_zone_overlap = self.dns.allow_zone_overlap
-        self.no_dnssec_validation = self.dns.no_dnssec_validation
-        self.dnssec_master = self.dns.dnssec_master
-        self.disable_dnssec_master = self.dns.disable_dnssec_master
-        self.kasp_db_file = self.dns.kasp_db_file
-        self.force = self.dns.force
-        self.zonemgr = self.dns.zonemgr
 
         self.unattended = not self.interactive
 

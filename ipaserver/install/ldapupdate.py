@@ -33,6 +33,7 @@ import fnmatch
 import re
 
 import ldap
+import six
 
 from ipaserver.install import installutils
 from ipapython import ipautil, ipaldap
@@ -43,7 +44,9 @@ from ipaplatform.paths import paths
 from ipaplatform import services
 from ipapython.dn import DN
 from ipapython.ipa_log_manager import *
-from ipapython.ipautil import wait_for_open_socket
+
+if six.PY3:
+    unicode = str
 
 UPDATES_DIR=paths.UPDATES_DIR
 UPDATE_SEARCH_TIME_LIMIT = 30  # seconds
@@ -430,6 +433,10 @@ class LDAPUpdate:
                                 "incorrect (%s)" % (v, data_source_name,
                                                     lcount, logical_line, e)
                             )
+                else:
+                    for i, v in enumerate(value):
+                        if isinstance(v, unicode):
+                            value[i] = v.encode('utf-8')
 
                 if action != 'replace':
                     value = value[0]
@@ -938,5 +945,4 @@ class LDAPUpdate:
     def restart_ds(self):
         dirsrv = services.knownservices.dirsrv
         self.log.debug('Restarting directory server to apply updates')
-        dirsrv.restart()
-        wait_for_open_socket(self.socket_name)
+        dirsrv.restart(ldapi=self.ldapi)

@@ -73,7 +73,10 @@ named_conf_include_template = "include \"%(path)s\";\n"
 
 
 def create_reverse():
-    return ipautil.user_input("Do you want to configure the reverse zone?", True)
+    return ipautil.user_input(
+        "Do you want to search for missing reverse zones?",
+        True
+    )
 
 def named_conf_exists():
     try:
@@ -442,7 +445,8 @@ def check_reverse_zones(ip_addresses, reverse_zones, options, unattended,
                         search_reverse_zones=False):
     checked_reverse_zones = []
 
-    if not options.no_reverse and not reverse_zones:
+    if (not options.no_reverse and not reverse_zones
+            and not options.auto_reverse):
         if unattended:
             options.no_reverse = True
         else:
@@ -460,7 +464,7 @@ def check_reverse_zones(ip_addresses, reverse_zones, options, unattended,
                 ipautil.check_zone_overlap(rz)
             except ValueError as e:
                 msg = "Reverse zone %s will not be used: %s" % (rz, e)
-                if options.unattended:
+                if unattended:
                     sys.exit(msg)
                 else:
                     root_logger.warning(msg)

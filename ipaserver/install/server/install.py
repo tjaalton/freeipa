@@ -4,6 +4,7 @@
 
 from __future__ import print_function
 
+import gssapi
 import os
 import pickle
 import pwd
@@ -27,6 +28,7 @@ from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 from ipalib import api, create_api, constants, errors, x509
+from ipalib.krb_utils import KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN
 from ipalib.constants import CACERT
 from ipalib.util import validate_domain_name
 import ipaclient.ntpconf
@@ -291,20 +293,51 @@ def common_cleanup(func):
 
 
 def check_master_deleted(api, masters, interactive):
+    """
+    Determine whether the IPA master was removed from the domain level 1
+    topology. The function first tries to locally lookup the master host entry
+    and fetches host prinicipal from DS. Then we attempt to acquire host TGT,
+    contact the other masters one at a time and query for the existence of the
+    host entry for our IPA master.
+
+    :param api: instance of API object
+    :param masters: list of masters to contact
+    :param interactive: whether run in interactive mode. The user will be
+        prompted for action if the removal status cannot be determined
+    :return: True if the master is not part of the topology anymore as
+        determined by the following conditions:
+            * the host entry does not exist in local DS
+            * request for host TGT fails due to missing/invalid/revoked creds
+            * GSSAPI connection to remote DS fails on invalid authentication
+            * if we are the only master
+        False otherwise
+    """
     try:
         host_princ = api.Command.host_show(
             api.env.host)['result']['krbprincipalname'][0]
-    except Exception as e:
-        root_logger.warning(
-            "Failed to get host principal name: {0}".format(e)
+    except errors.NotFound:
+        root_logger.debug(
+            "Host entry for {} already deleted".format(api.env.host)
         )
+        return True
+    except Exception as e:
+        root_logger.warning("Failed to get host principal name: {0}".format(e))
         return False
 
     ccache_path = os.path.join('/', 'tmp', 'krb5cc_host')
     with ipautil.private_ccache(ccache_path):
+        # attempt to get host TGT. This can fail if the master contacts remote
+        # KDCs on other masters that have already cleared our master's
+        # principal. In that case return True
         try:
             ipautil.kinit_keytab(host_princ, paths.KRB5_KEYTAB, ccache_path)
-        except Exception as e:
+        except gssapi.exceptions.GSSError as e:
+            min_code = e.min_code  # pylint: disable=no-member
+            if min_code == KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN:
+                root_logger.debug("Host principal not found, assuming that "
+                                  "master is removed from topology")
+                return True
+
             root_logger.error(
                 "Kerberos authentication as '{0}' failed: {1}".format(
                     host_princ, e
@@ -444,9 +477,7 @@ def install_check(installer):
             sys.exit("Directory Manager password required")
         try:
             cache_vars = read_cache(dm_password)
-            for name, value in cache_vars.items():
-                if name not in options.__dict__:
-                    options.__dict__[name] = value
+            options.__dict__.update(cache_vars)
             if cache_vars.get('external_ca', False):
                 options.external_ca = False
                 options.interactive = False
@@ -706,7 +737,7 @@ def install_check(installer):
             sys.exit(1)
 
     if options.setup_dns:
-        dns.install_check(False, False, options, host_name)
+        dns.install_check(False, api, False, options, host_name)
         ip_addresses = dns.ip_addresses
     else:
         ip_addresses = get_server_ip_address(host_name,
@@ -867,7 +898,8 @@ def install(installer):
             options.admin_password = admin_password
             options.host_name = host_name
             options.reverse_zones = dns.reverse_zones
-            cache_vars = {n: getattr(options, n) for o, n in installer.knobs()}
+            cache_vars = {n: options.__dict__[n] for o, n in installer.knobs()
+                          if n in options.__dict__}
             write_cache(cache_vars)
 
         ca.install_step_0(False, None, options)
@@ -968,6 +1000,12 @@ def install(installer):
     # Restart httpd to pick up the new IPA configuration
     service.print_msg("Restarting the web server")
     http.restart()
+
+    # update DNA shared config entry is done as far as possible
+    # from restart to avoid waiting for its creation
+    # as kra.install restarts DS, it is better to update now
+    # the DNA share config else we will have to wait 30s
+    ds.update_dna_shared_config()
 
     if setup_kra:
         kra.install(api, None, options)
@@ -1097,8 +1135,18 @@ def uninstall_check(installer):
         msg = ("\nWARNING: Failed to connect to Directory Server to find "
                "information about replication agreements. Uninstallation "
                "will continue despite the possible existing replication "
-               "agreements.\n\n")
+               "agreements.\n\n"
+               "If this server is the last instance of CA, KRA, or DNSSEC "
+               "master, uninstallation may result in data loss.\n\n"
+        )
         print(textwrap.fill(msg, width=80, replace_whitespace=False))
+
+        if (installer.interactive and not user_input(
+                "Are you sure you want to continue with the uninstall "
+                "procedure?", False)):
+            print("")
+            print("Aborting uninstall operation.")
+            sys.exit(1)
     else:
         dns.uninstall_check(options)
 

@@ -25,7 +25,6 @@
 from __future__ import print_function
 
 import os
-import sys
 import time
 import dbus
 import shlex
@@ -319,8 +318,11 @@ def request_cert(nssdb, nickname, subject, principal, passwd_fname=None):
         if result[0]:
             request = _cm_dbus_object(cm.bus, cm, result[1], DBUS_CM_REQUEST_IF,
                                       DBUS_CM_IF, True)
-    except TypeError:
-        root_logger.error('Failed to get create new request.')
+        else:
+            raise RuntimeError('add_request() returned False')
+    except Exception as e:
+        root_logger.error('Failed to create a new request: {error}'
+                          .format(error=e))
         raise
     return request.obj_if.get_nickname()
 
@@ -357,8 +359,11 @@ def start_tracking(nickname, secdir, password_file=None, command=None):
         if result[0]:
             request = _cm_dbus_object(cm.bus, cm, result[1], DBUS_CM_REQUEST_IF,
                                       DBUS_CM_IF, True)
-    except TypeError as e:
-        root_logger.error('Failed to add new request.')
+        else:
+            raise RuntimeError('add_request() returned False')
+    except Exception as e:
+        root_logger.error('Failed to add new request: {error}'
+                          .format(error=e))
         raise
     return request.prop_if.Get(DBUS_CM_REQUEST_IF, 'nickname')
 
@@ -492,19 +497,11 @@ def dogtag_start_tracking(ca, nickname, pin, pinfile, secdir, pre_command,
         params['KEY_PIN_FILE'] = os.path.abspath(pinfile)
     if pre_command:
         if not os.path.isabs(pre_command):
-            if sys.maxsize > 2**32:
-                libpath = 'lib64'
-            else:
-                libpath = 'lib'
-            pre_command = certmonger_cmd_template % (libpath, pre_command)
+            pre_command = certmonger_cmd_template % (pre_command)
         params['cert-presave-command'] = pre_command
     if post_command:
         if not os.path.isabs(post_command):
-            if sys.maxsize > 2**32:
-                libpath = 'lib64'
-            else:
-                libpath = 'lib'
-            post_command = certmonger_cmd_template % (libpath, post_command)
+            post_command = certmonger_cmd_template % (post_command)
         params['cert-postsave-command'] = post_command
     if profile:
         params['ca-profile'] = profile

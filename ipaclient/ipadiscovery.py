@@ -21,13 +21,15 @@ import socket
 import os
 import tempfile
 
+import six
+
 from ipapython.ipa_log_manager import root_logger
 from dns import resolver, rdatatype
 from dns.exception import DNSException
 from ipalib import errors
 from ipapython import ipaldap
 from ipaplatform.paths import paths
-from ipapython.ipautil import valid_ip, get_ipa_basedn, realm_to_suffix
+from ipapython.ipautil import valid_ip, realm_to_suffix
 from ipapython.dn import DN
 
 NOT_FQDN = -1
@@ -38,6 +40,8 @@ NO_ACCESS_TO_LDAP = -5
 NO_TLS_LDAP = -6
 BAD_HOST_CONFIG = -10
 UNKNOWN_ERROR = -15
+
+IPA_BASEDN_INFO = 'ipa v2.0'
 
 error_names = {
     0: 'Success',
@@ -50,6 +54,46 @@ error_names = {
     BAD_HOST_CONFIG: 'BAD_HOST_CONFIG',
     UNKNOWN_ERROR: 'UNKNOWN_ERROR',
 }
+
+def get_ipa_basedn(conn):
+    """
+    Get base DN of IPA suffix in given LDAP server.
+
+    None is returned if the suffix is not found
+
+    :param conn: Bound LDAPClient that will be used for searching
+    """
+    entry = conn.get_entry(
+        DN(), attrs_list=['defaultnamingcontext', 'namingcontexts'])
+
+    contexts = [c.decode('utf-8') for c in entry.raw['namingcontexts']]
+    if 'defaultnamingcontext' in entry:
+        # If there is a defaultNamingContext examine that one first
+        [default] = entry.raw['defaultnamingcontext']
+        default = default.decode('utf-8')
+        if default in contexts:
+            contexts.remove(default)
+        contexts.insert(0, default)
+    for context in contexts:
+        root_logger.debug("Check if naming context '%s' is for IPA" % context)
+        try:
+            [entry] = conn.get_entries(
+                DN(context), conn.SCOPE_BASE, "(info=IPA*)")
+        except errors.NotFound:
+            root_logger.debug("LDAP server did not return info attribute to "
+                              "check for IPA version")
+            continue
+        [info] = entry.raw['info']
+        info = info.decode('utf-8').lower()
+        if info != IPA_BASEDN_INFO:
+            root_logger.debug("Detected IPA server version (%s) did not match the client (%s)" \
+                % (info, IPA_BASEDN_INFO))
+            continue
+        root_logger.debug("Naming context '%s' is a valid IPA context" % context)
+        return DN(context)
+
+    return None
+
 
 class IPADiscovery(object):
 
@@ -383,7 +427,10 @@ class IPADiscovery(object):
 
             for lres in lret:
                 root_logger.debug("Found: %s", lres.dn)
-                lrealms.append(lres.single_value['cn'])
+                [cn] = lres.raw['cn']
+                if six.PY3:
+                    cn = cn.decode('utf-8')
+                lrealms.append(cn)
 
             if trealm:
                 for r in lrealms:
@@ -404,7 +451,7 @@ class IPADiscovery(object):
                     return [0, thost, lrealms[0]]
 
             #we shouldn't get here
-            return [UNKNOWN_ERROR]
+            assert False, "Unknown error in ipadiscovery"
 
         except errors.DatabaseTimeout:
             root_logger.debug("LDAP Error: timeout")

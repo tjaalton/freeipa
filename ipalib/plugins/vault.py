@@ -223,7 +223,7 @@ def validated_read(argname, filename, mode='r', encoding=None):
         raise errors.ValidationError(
             name=argname,
             error=_("Cannot read file '%(filename)s': %(exc)s") % {
-                'filename': filename, 'exc': exc[1]
+                'filename': filename, 'exc': exc.args[1]
                 }
         )
     except UnicodeError as exc:
@@ -1549,7 +1549,7 @@ class vault_archive(PKQuery, Local):
             except OSError as exc:
                 raise errors.ValidationError(name="in", error=_(
                     "Cannot read file '%(filename)s': %(exc)s")
-                    % {'filename': input_file, 'exc': exc[1]})
+                    % {'filename': input_file, 'exc': exc.args[1]})
             if stat.st_size > MAX_VAULT_DATA_SIZE:
                 raise errors.ValidationError(name="in", error=_(
                     "Size of data exceeds the limit. Current vault data size "
@@ -1653,7 +1653,9 @@ class vault_archive(PKQuery, Local):
         session_key = slot.key_gen(mechanism, None, key_length)
 
         # wrap session key with transport certificate
+        # pylint: disable=no-member
         public_key = nss_transport_cert.subject_public_key_info.public_key
+        # pylint: enable=no-member
         wrapped_session_key = nss.pub_wrap_sym_key(mechanism,
                                                    public_key,
                                                    session_key)
@@ -1857,7 +1859,9 @@ class vault_retrieve(PKQuery, Local):
         session_key = slot.key_gen(mechanism, None, key_length)
 
         # wrap session key with transport certificate
+        # pylint: disable=no-member
         public_key = nss_transport_cert.subject_public_key_info.public_key
+        # pylint: enable=no-member
         wrapped_session_key = nss.pub_wrap_sym_key(mechanism,
                                                    public_key,
                                                    session_key)

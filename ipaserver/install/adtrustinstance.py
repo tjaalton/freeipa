@@ -51,7 +51,7 @@ from ipaplatform.tasks import tasks
 if six.PY3:
     unicode = str
 
-ALLOWED_NETBIOS_CHARS = string.ascii_uppercase + string.digits
+ALLOWED_NETBIOS_CHARS = string.ascii_uppercase + string.digits + '-'
 
 UPGRADE_ERROR = """
 Entry %(dn)s does not exist.
@@ -90,13 +90,19 @@ def ipa_smb_conf_exists():
     return False
 
 
-def check_netbios_name(s):
-    # NetBIOS names may not be longer than 15 allowed characters
-    if not s or len(s) > 15 or \
-       ''.join([c for c in s if c not in ALLOWED_NETBIOS_CHARS]):
+def check_netbios_name(name):
+    # Empty NetBIOS name is not allowed
+    if name is None:
         return False
 
-    return True
+    # NetBIOS names may not be longer than 15 allowed characters
+    invalid_netbios_name = any([
+        len(name) > 15,
+        ''.join([c for c in name if c not in ALLOWED_NETBIOS_CHARS])
+    ])
+
+    return not invalid_netbios_name
+
 
 def make_netbios_name(s):
     return ''.join([c for c in s.split('.')[0].upper() \
@@ -514,6 +520,11 @@ class ADTRUSTInstance(service.Service):
         os.write(tmp_fd, conf)
         os.close(tmp_fd)
 
+        # Workaround for: https://fedorahosted.org/freeipa/ticket/5687
+        # We make sure that paths.SMB_CONF file exists, hence touch it
+        with open(paths.SMB_CONF, 'a'):
+            os.utime(paths.SMB_CONF, None)
+
         args = [paths.NET, "conf", "import", tmp_name]
 
         try:
@@ -571,12 +582,7 @@ class ADTRUSTInstance(service.Service):
         """
 
         zone = self.domain_name
-        host, host_domain = self.fqdn.split(".", 1)
-
-        if normalize_zone(zone) == normalize_zone(host_domain):
-            host_in_rr = host
-        else:
-            host_in_rr = normalize_zone(self.fqdn)
+        host_in_rr = normalize_zone(self.fqdn)
 
         priority = 0
 
@@ -707,7 +713,7 @@ class ADTRUSTInstance(service.Service):
                             # this is CIFS service of a different host in our
                             # REALM, we need to remember it to announce via
                             # SRV records for _msdcs
-                            self.cifs_hosts.append(fqdn.split(".")[0])
+                            self.cifs_hosts.append(normalize_zone(fqdn))
 
         except Exception as e:
             root_logger.critical("Checking replicas for cifs principals failed with error '%s'" % e)

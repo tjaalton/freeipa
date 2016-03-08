@@ -32,6 +32,7 @@ if six.PY3:
 # Kerberos error codes
 KRB5_CC_NOTFOUND                = 2529639053 # Matching credential not found
 KRB5_FCC_NOFILE                 = 2529639107 # No credentials cache found
+KRB5KDC_ERR_C_PRINCIPAL_UNKNOWN = 2529638918  # client not found in Kerberos db
 KRB5KDC_ERR_S_PRINCIPAL_UNKNOWN = 2529638919 # Server not found in Kerberos database
 KRB5KRB_AP_ERR_TKT_EXPIRED      = 2529638944 # Ticket expired
 KRB5_FCC_PERM                   = 2529639106 # Credentials cache permissions incorrect
@@ -159,7 +160,7 @@ def get_credentials(name=None, ccache_name=None):
     try:
         return gssapi.Credentials(usage='initiate', name=name, store=store)
     except gssapi.exceptions.GSSError as e:
-        if e.min_code == KRB5_FCC_NOFILE:
+        if e.min_code == KRB5_FCC_NOFILE:  # pylint: disable=no-member
             raise ValueError('"%s", ccache="%s"' % (e.message, ccache_name))
         raise
 

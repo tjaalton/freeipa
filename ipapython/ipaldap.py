@@ -211,7 +211,7 @@ class LDAPEntry(collections.MutableMapping):
 
         Keyword arguments can be used to override values of specific attributes.
         """
-        super(LDAPEntry, self).__init__()
+        super(LDAPEntry, self).__init__()  # pylint: disable=no-member
 
         if isinstance(_conn, LDAPEntry):
             assert _dn is None
@@ -349,11 +349,16 @@ class LDAPEntry(collections.MutableMapping):
             return self._names[name]
 
         if self._conn.schema is not None:
+            if six.PY2:
+                encoded_name = name.encode('utf-8')
+            else:
+                encoded_name = name
             attrtype = self._conn.schema.get_obj(
-                ldap.schema.AttributeType, name.encode('utf-8'))
+                ldap.schema.AttributeType, encoded_name)
             if attrtype is not None:
                 for altname in attrtype.names:
-                    altname = altname.decode('utf-8')
+                    if six.PY2:
+                        altname = altname.decode('utf-8')
                     self._names[altname] = name
 
         self._names[name] = name
@@ -777,8 +782,9 @@ class LDAPClient(object):
         if not self._decode_attrs:
             return bytes
 
-        if isinstance(name_or_oid, unicode):
-            name_or_oid = name_or_oid.encode('utf-8')
+        if six.PY2:
+            if isinstance(name_or_oid, unicode):
+                name_or_oid = name_or_oid.encode('utf-8')
 
         # Is this a special case attribute?
         if name_or_oid in self._SYNTAX_OVERRIDE:

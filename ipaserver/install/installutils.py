@@ -169,7 +169,9 @@ def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
         except socket.gaierror:
             pass
         except socket.error as e:
-            root_logger.debug('socket.gethostbyaddr() error: %d: %s' % (e.errno, e.strerror))
+            root_logger.debug(
+                'socket.gethostbyaddr() error: %d: %s',
+                e.errno, e.strerror)  # pylint: disable=no-member
 
     if no_host_dns:
         print("Warning: skipping DNS resolution of host", host_name)
@@ -206,15 +208,16 @@ def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
             revname = socket.gethostbyaddr(address)[0]
         except Exception as e:
             root_logger.debug('Check failed: %s', e)
-            raise HostReverseLookupError(
+            root_logger.error(
                 "Unable to resolve the IP address %s to a host name, "
-                "check /etc/hosts and DNS name resolution" % address)
-        root_logger.debug('Found reverse name: %s', revname)
-        if revname != host_name:
-            raise HostReverseLookupError(
-                "The host name %s does not match the value %s obtained "
-                "by reverse lookup on IP address %s"
-                % (host_name, revname, address))
+                "check /etc/hosts and DNS name resolution", address)
+        else:
+            root_logger.debug('Found reverse name: %s', revname)
+            if revname != host_name:
+                root_logger.error(
+                    "The host name %s does not match the value %s obtained "
+                    "by reverse lookup on IP address %s", host_name, revname,
+                    address)
         verified.add(address)
 
 
@@ -735,7 +738,10 @@ def run_script(main_function, operation_name, log_file_name=None,
         try:
             return_value = main_function()
         except BaseException as e:
-            if isinstance(e, SystemExit) and (e.code is None or e.code == 0):
+            if (
+                isinstance(e, SystemExit) and
+                (e.code is None or e.code == 0)  # pylint: disable=no-member
+            ):
                 # Not an error after all
                 root_logger.info('The %s command was successful',
                     operation_name)

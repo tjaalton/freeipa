@@ -39,16 +39,9 @@ from six.moves import input
 if six.PY3:
     unicode = str
 
-try:
-    #pylint: disable=F0401
-    import default_encoding_utf8
-except ImportError:
-    # This is a chicken-and-egg problem. The api can't be imported unless
-    # this is already installed and since it is installed with IPA therein
-    # lies the problem. Skip it for now so ipalib can be imported in-tree
-    # even in cases that IPA isn't installed on the dev machine.
-    # Also, under Python 3, default_encoding_utf8 is not built at all.
-    pass
+if six.PY2:
+    reload(sys)                         # pylint: disable=reload-builtin
+    sys.setdefaultencoding('utf-8')     # pylint: disable=no-member
 
 from ipalib import frontend
 from ipalib import backend
@@ -138,24 +131,31 @@ class textui(backend.Backend):
             return 'UTF-8'
         return stream.encoding
 
-    def decode(self, value):
-        """
-        Decode text from stdin.
-        """
-        if type(value) is bytes:
-            encoding = self.__get_encoding(sys.stdin)
-            return value.decode(encoding)
-        elif type(value) in (list, tuple):
-            return tuple(self.decode(v) for v in value)
-        return value
+    if six.PY2:
+        def decode(self, value):
+            """
+            Decode text from stdin.
+            """
+            if type(value) is bytes:
+                encoding = self.__get_encoding(sys.stdin)
+                return value.decode(encoding)
+            elif type(value) in (list, tuple):
+                return tuple(self.decode(v) for v in value)
+            return value
 
-    def encode(self, unicode_text):
-        """
-        Encode text for output to stdout.
-        """
-        assert type(unicode_text) is unicode
-        encoding = self.__get_encoding(sys.stdout)
-        return unicode_text.encode(encoding)
+        def encode(self, unicode_text):
+            """
+            Encode text for output to stdout.
+            """
+            assert type(unicode_text) is unicode
+            encoding = self.__get_encoding(sys.stdout)
+            return unicode_text.encode(encoding)
+    else:
+        def decode(self, value):
+            return value
+
+        def encode(self, value):
+            return value
 
     def choose_number(self, n, singular, plural=None):
         if n == 1 or plural is None:
@@ -1294,14 +1294,14 @@ class cli(backend.Executioner):
                     except IOError as e:
                         raise ValidationError(
                             name=to_cli(p.cli_name),
-                            error='%s: %s:' % (fname, e[1])
+                            error='%s: %s:' % (fname, e.args[1])
                         )
                 elif p.stdin_if_missing:
                     try:
                         raw = sys.stdin.read()
                     except IOError as e:
                         raise ValidationError(
-                            name=to_cli(p.cli_name), error=e[1]
+                            name=to_cli(p.cli_name), error=e.args[1]
                         )
 
                 if raw:

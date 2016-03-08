@@ -333,7 +333,9 @@ def ca_enable_ldap_profile_subsystem(ca):
             separator='=')
 
         ca.restart('pki-tomcat')
-        cainstance.migrate_profiles_to_ldap()
+
+    root_logger.info('[Migrating certificate profiles to LDAP]')
+    cainstance.migrate_profiles_to_ldap()
 
     return needs_update
 
@@ -789,62 +791,84 @@ def named_root_key_include():
     sysupgrade.set_upgrade_state('named.conf', 'root_key_updated', True)
     return True
 
-def certificate_renewal_update(ca):
+
+def certificate_renewal_update(ca, ds, http):
     """
     Update certmonger certificate renewal configuration.
     """
 
+    template = paths.CERTMONGER_COMMAND_TEMPLATE
+    serverid = installutils.realm_to_serverid(api.env.realm)
+    dirsrv_dir = dsinstance.config_dirname(serverid)
+
     # bump version when requests is changed
-    version = 4
+    version = 5
     requests = (
         (
             paths.PKI_TOMCAT_ALIAS_DIR,
             'auditSigningCert cert-pki-ca',
             'dogtag-ipa-ca-renew-agent',
-            'stop_pkicad',
-            'renew_ca_cert',
+            template % 'stop_pkicad',
+            '%s "auditSigningCert cert-pki-ca"' % (template % 'renew_ca_cert'),
             None,
         ),
         (
             paths.PKI_TOMCAT_ALIAS_DIR,
             'ocspSigningCert cert-pki-ca',
             'dogtag-ipa-ca-renew-agent',
-            'stop_pkicad',
-            'renew_ca_cert',
+            template % 'stop_pkicad',
+            '%s "ocspSigningCert cert-pki-ca"' % (template % 'renew_ca_cert'),
             None,
         ),
         (
             paths.PKI_TOMCAT_ALIAS_DIR,
             'subsystemCert cert-pki-ca',
             'dogtag-ipa-ca-renew-agent',
-            'stop_pkicad',
-            'renew_ca_cert',
+            template % 'stop_pkicad',
+            '%s "subsystemCert cert-pki-ca"' % (template % 'renew_ca_cert'),
             None,
         ),
         (
             paths.PKI_TOMCAT_ALIAS_DIR,
             'caSigningCert cert-pki-ca',
             'dogtag-ipa-ca-renew-agent',
-            'stop_pkicad',
-            'renew_ca_cert',
+            template % 'stop_pkicad',
+            '%s "caSigningCert cert-pki-ca"' % (template % 'renew_ca_cert'),
             'ipaCACertRenewal',
         ),
         (
             paths.HTTPD_ALIAS_DIR,
             'ipaCert',
             'dogtag-ipa-ca-renew-agent',
-            'renew_ra_cert_pre',
-            'renew_ra_cert',
+            template % 'renew_ra_cert_pre',
+            template % 'renew_ra_cert',
             None,
         ),
         (
             paths.PKI_TOMCAT_ALIAS_DIR,
             'Server-Cert cert-pki-ca',
             'dogtag-ipa-renew-agent',
-            'stop_pkicad',
-            'renew_ca_cert',
+            template % 'stop_pkicad',
+            '%s "Server-Cert cert-pki-ca"' % (template % 'renew_ca_cert'),
             None,
         ),
+        (
+            paths.HTTPD_ALIAS_DIR,
+            'Server-Cert',
+            'IPA',
+            None,
+            template % 'restart_httpd',
+            None,
+        ),
+        (
+            dirsrv_dir,
+            'Server-Cert',
+            'IPA',
+            None,
+            '%s %s' % (template % 'restart_dirsrv', serverid),
+            None,
+        ),
+
     )
 
     root_logger.info("[Update certmonger certificate renewal configuration to "
@@ -865,23 +889,11 @@ def certificate_renewal_update(ca):
             'cert-nickname': nickname,
             'ca-name': ca_name,
             'template-profile': profile,
+            'cert-presave-command': pre_command,
+            'cert-postsave-command': post_command,
         }
         request_id = certmonger.get_request_id(criteria)
         if request_id is None:
-            break
-
-        val = certmonger.get_request_value(request_id, 'cert-presave-command')
-        if val is not None:
-            val = val.split(' ', 1)[0]
-            val = os.path.basename(val)
-        if pre_command != val:
-            break
-
-        val = certmonger.get_request_value(request_id, 'cert-postsave-command')
-        if val is not None:
-            val = val.split(' ', 1)[0]
-            val = os.path.basename(val)
-        if post_command != val:
             break
     else:
         sysupgrade.set_upgrade_state('dogtag', state, True)
@@ -892,6 +904,8 @@ def certificate_renewal_update(ca):
     # Ok, now we need to stop tracking, then we can start tracking them
     # again with new configuration:
     ca.stop_tracking_certificates()
+    ds.stop_tracking_certificates(serverid)
+    http.stop_tracking_certificates()
 
     if not sysupgrade.get_upgrade_state('dogtag',
                                         'certificate_renewal_update_1'):
@@ -905,6 +919,8 @@ def certificate_renewal_update(ca):
     ca.configure_renewal()
     ca.configure_agent_renewal()
     ca.track_servercert()
+    ds.start_tracking_certificates(serverid)
+    http.start_tracking_certificates()
 
     sysupgrade.set_upgrade_state('dogtag', state, True)
     root_logger.info("Certmonger certificate renewal configuration updated to "
@@ -1343,6 +1359,23 @@ def update_mod_nss_protocol(http):
 
     sysupgrade.set_upgrade_state('nss.conf', 'protocol_updated_tls12', True)
 
+
+def update_mod_nss_cipher_suite(http):
+    root_logger.info('[Updating mod_nss cipher suite]')
+
+    revision = sysupgrade.get_upgrade_state('nss.conf', 'cipher_suite_updated')
+    if revision >= httpinstance.NSS_CIPHER_REVISION:
+        root_logger.debug("Cipher suite already updated")
+        return
+
+    http.set_mod_nss_cipher_suite()
+
+    sysupgrade.set_upgrade_state(
+        'nss.conf',
+        'cipher_suite_updated',
+        httpinstance.NSS_CIPHER_REVISION)
+
+
 def ds_enable_sidgen_extdom_plugins(ds):
     """For AD trust agents, make sure we enable sidgen and extdom plugins
     """
@@ -1352,8 +1385,8 @@ def ds_enable_sidgen_extdom_plugins(ds):
         root_logger.debug('sidgen and extdom plugins are enabled already')
         return
 
-    ds.add_sidgen_plugin()
-    ds.add_extdom_plugin()
+    ds.add_sidgen_plugin(api.env.basedn)
+    ds.add_extdom_plugin(api.env.basedn)
     sysupgrade.set_upgrade_state('ds', 'enable_ds_sidgen_extdom_plugins', True)
 
 def ca_upgrade_schema(ca):
@@ -1463,6 +1496,10 @@ def upgrade_configuration():
             )
         upgrade_pki(ca, fstore)
 
+    certmonger_service = services.knownservices.certmonger
+    if ca.is_configured() and not certmonger_service.is_running():
+        certmonger_service.start()
+
     ca.configure_certmonger_renewal_guard()
 
     update_dbmodules(api.env.realm)
@@ -1475,9 +1512,14 @@ def upgrade_configuration():
         fstore.restore_file(removed_sysconfig_file)
 
     http = httpinstance.HTTPInstance(fstore)
+    http.fqdn = fqdn
+    http.realm = api.env.realm
+    http.principal = "HTTP/%s@%s" % (http.fqdn, http.realm)
     http.configure_selinux_for_httpd()
     http.change_mod_nss_port_from_http()
+
     http.configure_certmonger_renewal_guard()
+
     http.enable_and_start_oddjobd()
 
     ds.configure_dirsrv_ccache()
@@ -1498,9 +1540,11 @@ def upgrade_configuration():
     ds.fqdn = fqdn
     ds.realm = api.env.realm
     ds.suffix = ipautil.realm_to_suffix(api.env.realm)
+    ds.principal = "ldap/%s@%s" % (ds.fqdn, ds.realm)
 
     ds.ldap_connect()
     ds_enable_sidgen_extdom_plugins(ds)
+    ds.update_dna_shared_config()
     ds.ldap_disconnect()
 
     # Now 389-ds is available, run the remaining http tasks
@@ -1510,8 +1554,6 @@ def upgrade_configuration():
              # 389-ds needs to be running
             ds.start()
             http.ldapi = True
-            http.fqdn = fqdn
-            http.realm = api.env.realm
             http.suffix = ipautil.realm_to_suffix(api.env.realm)
             http.ldap_connect()
         httpinstance.create_kdcproxy_user()
@@ -1520,6 +1562,7 @@ def upgrade_configuration():
 
     http.stop()
     update_mod_nss_protocol(http)
+    update_mod_nss_cipher_suite(http)
     fix_trust_flags()
     export_kra_agent_pem()
     http.start()
@@ -1592,7 +1635,7 @@ def upgrade_configuration():
         ca_restart,
         ca_upgrade_schema(ca),
         upgrade_ca_audit_cert_validity(ca),
-        certificate_renewal_update(ca),
+        certificate_renewal_update(ca, ds, http),
         ca_enable_pkix(ca),
         ca_configure_profiles_acl(ca),
     ])
@@ -1628,9 +1671,6 @@ def upgrade_check(options):
     except RuntimeError as e:
         print(unicode(e))
         sys.exit(1)
-
-    if not services.knownservices.certmonger.is_running():
-        raise RuntimeError('Certmonger is not running. Start certmonger and run upgrade again.')
 
     if not options.skip_version_check:
         # check IPA version and data version

@@ -20,6 +20,9 @@
 
 import six
 
+from ipalib.messages import (
+    add_message,
+    BrokenTrust)
 from ipalib.plugable import Registry
 from ipalib.plugins.baseldap import *
 from ipalib.plugins.dns import dns_container_exists
@@ -385,7 +388,7 @@ def add_range(myapi, trustinstance, range_name, dom_sid, *keys, **options):
                 max_id = int(max(max_uid, max_gid)[0])
 
                 base_id = int(info.get('msSFU30OrderNumber')[0])
-                range_size = (1 + (max_id - base_id) / DEFAULT_RANGE_SIZE)\
+                range_size = (1 + (max_id - base_id) // DEFAULT_RANGE_SIZE)\
                              * DEFAULT_RANGE_SIZE
 
     # Second, options given via the CLI options take precedence to discovery
@@ -552,8 +555,11 @@ class trust(LDAPObject):
                 rules=ldap.MATCH_ALL
             )
 
+            # more type of objects can be located in subtree (for example
+            # cross-realm principals). we need this attr do detect trust
+            # entries
             trustfilter = ldap.combine_filters(
-                (trustfilter, "ipaNTSecurityIdentifier=*"),
+                (trustfilter, "ipaNTTrustPartner=*"),
                 rules=ldap.MATCH_ALL
             )
 
@@ -571,6 +577,30 @@ class trust(LDAPObject):
             return result[0].dn
 
         return make_trust_dn(self.env, trust_type, DN(*sdn))
+
+    def warning_if_ad_trust_dom_have_missing_SID(self, result, **options):
+        """Due bug https://fedorahosted.org/freeipa/ticket/5665 there might be
+        AD trust domain without generated SID, warn user about it.
+        """
+        ldap = self.api.Backend.ldap2
+
+        try:
+            entries, truncated = ldap.find_entries(
+                base_dn=DN(self.container_dn, self.api.env.basedn),
+                attrs_list=['cn'],
+                filter='(&(ipaNTTrustPartner=*)'
+                       '(!(ipaNTSecurityIdentifier=*)))',
+            )
+        except errors.NotFound:
+            pass
+        else:
+            for entry in entries:
+                 add_message(
+                    options['version'],
+                    result,
+                    BrokenTrust(domain=entry.single_value['cn'])
+                 )
+
 
 @register()
 class trust_add(LDAPCreate):
@@ -1025,9 +1055,16 @@ class trust_find(LDAPSearch):
     # search needs to be done on a sub-tree scope
     def pre_callback(self, ldap, filters, attrs_list, base_dn, scope, *args, **options):
         # list only trust, not trust domains
-        trust_filter = '(ipaNTSecurityIdentifier=*)'
+        trust_filter = '(ipaNTTrustPartner=*)'
         filter = ldap.combine_filters((filters, trust_filter), rules=ldap.MATCH_ALL)
         return (filter, base_dn, ldap.SCOPE_SUBTREE)
+
+    def execute(self, *args, **options):
+        result = super(trust_find, self).execute(*args, **options)
+
+        self.obj.warning_if_ad_trust_dom_have_missing_SID(result, **options)
+
+        return result
 
     def post_callback(self, ldap, entries, truncated, *args, **options):
         if options.get('pkey_only', False):
@@ -1047,6 +1084,13 @@ class trust_show(LDAPRetrieve):
     __doc__ = _('Display information about a trust.')
     has_output_params = LDAPRetrieve.has_output_params + trust_output_params +\
                         (Str('ipanttrusttype'), Str('ipanttrustdirection'))
+
+    def execute(self, *keys, **options):
+        result = super(trust_show, self).execute(*keys, **options)
+
+        self.obj.warning_if_ad_trust_dom_have_missing_SID(result, **options)
+
+        return result
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
 
