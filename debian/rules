@@ -117,7 +117,6 @@ override_dh_fixperms:
 	dh_fixperms
 	chmod 0700 $(CURDIR)/debian/freeipa-server/etc/ipa/custodia
 	chmod 0700 $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup
-	chmod 0770 $(CURDIR)/debian/freeipa-server-dns/var/cache/bind/data
 
 %:
 	dh $@ --with autoreconf,python2,systemd
