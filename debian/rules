@@ -9,6 +9,7 @@ ONLY_CLIENT=0
 DESTDIR=$(CURDIR)/debian/tmp
 
 export SKIP_API_VERSION_CHECK="yes"
+export SUPPORTED_PLATFORM=debian
 PLATFORM="SUPPORTED_PLATFORM=debian"
 JAVA_STACK_SIZE ?= 8m
 export JAVA_STACK_SIZE
@@ -27,7 +28,7 @@ override_dh_auto_clean:
 	find . -name "*.pyo" -o -name "*.pyc" -type f -exec rm -f "{}" \;
 	find . -name "ltmain.sh" -exec rm -f "{}" \;
 	find . -name "configure" -exec rm -f "{}" \;
-	rm -rf daemons/ipa-version.h freeipa.spec freeipa.egg-info ipa-client/ipa-client.spec version.m4
+	rm -rf daemons/ipa-version.h freeipa.spec freeipa.egg-info version.m4
 	rm -rf ipapython/build RELEASE build
 
 override_dh_autoreconf:
@@ -35,7 +36,7 @@ override_dh_autoreconf:
 	dh_autoreconf; cd ..
 
 override_dh_auto_configure:
-	dh_auto_configure -Dipa-client
+	dh_auto_configure -Dclient
 ifneq ($(ONLY_CLIENT), 1)
 	dh_auto_configure -Ddaemons -- \
 		--libexecdir=/usr/lib \

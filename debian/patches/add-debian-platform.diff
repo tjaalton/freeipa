@@ -586,7 +586,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +knownservices = DebianServices()
 --- /dev/null
 +++ b/ipaplatform/debian/tasks.py
-@@ -0,0 +1,47 @@
+@@ -0,0 +1,52 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -614,6 +614,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +from ipaplatform.base.tasks import *
 +from ipaplatform.redhat.tasks import RedHatTaskNamespace
 +
++BaseTask = BaseTaskNameSpace()
++
 +class DebianTaskNamespace(RedHatTaskNamespace):
 +
 +    def restore_pre_ipa_client_configuration(self, fstore, statestore,
@@ -632,6 +634,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +    def restore_network_configuration(self, fstore, statestore):
 +        return True
++
++    def parse_ipa_version(self, version):
++        return BaseTask.parse_ipa_version(version)
 +
 +tasks = DebianTaskNamespace()
 --- a/ipaplatform/setup.py.in
