@@ -77,6 +77,7 @@ freeipa (4.3.0+git20160302-1) UNRELEASED; urgency=medium
   * rules: Add SKIP_API_VERSION_CHECK, and adjust directories to clean.
   * server-dns: Package is arch:all, so chmod the data dir on postinst
     instead of during build.
+  * control: Add opendnssec to freeipa-server-dns depends.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Sat, 03 Oct 2015 08:56:31 +0300
 

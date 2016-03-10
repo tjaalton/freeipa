@@ -123,6 +123,7 @@ Depends:
  freeipa-server (>= ${source:Version}),
  bind9,
  bind9-dyndb-ldap (>= 8.0-2),
+ opendnssec,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
