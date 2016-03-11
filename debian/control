@@ -267,6 +267,7 @@ Depends:
  gnupg-agent,
  iproute,
  keyutils,
+ python-cffi,
  python-cryptography,
  python-dbus,
  python-dnspython,
