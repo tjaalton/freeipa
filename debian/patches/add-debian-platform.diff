@@ -614,7 +614,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +from ipaplatform.base.tasks import *
 +from ipaplatform.redhat.tasks import RedHatTaskNamespace
 +
-+BaseTask = BaseTaskNameSpace()
++BaseTask = BaseTaskNamespace()
 +
 +class DebianTaskNamespace(RedHatTaskNamespace):
 +
