@@ -389,7 +389,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,196 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -558,7 +558,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    if name == 'krb5kdc':
 +        return DebianSysvService("krb5-kdc")
 +    if name == 'messagebus':
-+        return DebianSysvService("dbus")
++        # no reason to try starting it, and it would return a failure on
++        # ubuntu
++        return True
 +    if name == 'ntpd':
 +        return DebianSysvService("ntp")
 +    if name == 'smb':
