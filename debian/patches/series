@@ -15,3 +15,4 @@ ipaplatform-Move-remaining-user-group-constants-to-i.patch
 fix-dnssec-services.diff
 fix-opendnssec-conf-template.diff
 create-sysconfig-ods.diff
+drop-ipap11helper-imports.diff

@@ -1,0 +1,20 @@
+--- a/daemons/dnssec/ipa-dnskeysync-replica
++++ b/daemons/dnssec/ipa-dnskeysync-replica
+@@ -33,7 +33,6 @@ from ipaplatform.paths import paths
+ from ipapython.dnssec.abshsm import sync_pkcs11_metadata, ldap2p11helper_api_params, wrappingmech_name2id
+ from ipapython.dnssec.ldapkeydb import LdapKeyDB
+ from ipapython.dnssec.localhsm import LocalHSM
+-import _ipap11helper
+ 
+ DAEMONNAME = 'ipa-dnskeysyncd'
+ PRINCIPAL = None  # not initialized yet
+--- a/daemons/dnssec/ipa-ods-exporter
++++ b/daemons/dnssec/ipa-ods-exporter
+@@ -44,7 +44,6 @@ from ipaplatform.paths import paths
+ from ipapython.dnssec.abshsm import sync_pkcs11_metadata, wrappingmech_name2id
+ from ipapython.dnssec.ldapkeydb import LdapKeyDB
+ from ipapython.dnssec.localhsm import LocalHSM
+-import _ipap11helper
+ 
+ DAEMONNAME = 'ipa-ods-exporter'
+ PRINCIPAL = None  # not initialized yet
