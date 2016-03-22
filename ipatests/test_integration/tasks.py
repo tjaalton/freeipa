@@ -224,7 +224,10 @@ def enable_replication_debugging(host):
                      stdin_text=logging_ldif)
 
 
-def install_master(host, setup_dns=True, setup_kra=False, extra_args=()):
+def install_master(host, setup_dns=True, setup_kra=False, extra_args=(),
+                   domain_level=None):
+    if domain_level is None:
+        domain_level = host.config.domain_level
     host.collect_log(paths.IPASERVER_INSTALL_LOG)
     host.collect_log(paths.IPACLIENT_INSTALL_LOG)
     inst = host.domain.realm.replace('.', '-')
@@ -240,7 +243,7 @@ def install_master(host, setup_dns=True, setup_kra=False, extra_args=()):
         '-r', host.domain.realm,
         '-p', host.config.dirman_password,
         '-a', host.config.admin_password,
-        "--domain-level=%i" % host.config.domain_level
+        "--domain-level=%i" % domain_level,
     ]
 
     if setup_dns:
@@ -293,7 +296,6 @@ def master_authoritative_for_client_domain(master, client):
 
 
 def replica_prepare(master, replica):
-    apply_common_fixes(replica)
     fix_apache_semaphores(replica)
     prepare_reverse_zone(master, replica.ip)
     args = ['ipa-replica-prepare',
@@ -309,7 +311,10 @@ def replica_prepare(master, replica):
 
 
 def install_replica(master, replica, setup_ca=True, setup_dns=False,
-                    setup_kra=False, extra_args=()):
+                    setup_kra=False, extra_args=(), domain_level=None):
+    if domain_level is None:
+        domain_level = domainlevel(master)
+    apply_common_fixes(replica)
     replica.collect_log(paths.IPAREPLICA_INSTALL_LOG)
     replica.collect_log(paths.IPAREPLICA_CONNCHECK_LOG)
     allow_sync_ptr(master)
@@ -330,7 +335,7 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
 
     args.extend(extra_args)
 
-    if domainlevel(master) == DOMAIN_LEVEL_0:
+    if domain_level == DOMAIN_LEVEL_0:
         # prepare the replica file on master and put it to replica, AKA "old way"
         replica_prepare(master, replica)
         replica_filename = get_replica_filename(replica)
@@ -339,7 +344,7 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
         # install client on a replica machine and then promote it to replica
         install_client(master, replica)
         fix_apache_semaphores(replica)
-
+        args.extend(['-r', replica.domain.realm])
     replica.run_command(args)
     enable_replication_debugging(replica)
     setup_sssd_debugging(replica)
@@ -976,13 +981,13 @@ def double_circle_topo(master, replicas, site_size=6):
             yield site[1], site_servers[-1]
 
 
-def install_topo(topo, master, replicas, clients,
+def install_topo(topo, master, replicas, clients, domain_level=None,
                  skip_master=False, setup_replica_cas=True):
     """Install IPA servers and clients in the given topology"""
     replicas = list(replicas)
     installed = {master}
     if not skip_master:
-        install_master(master)
+        install_master(master, domain_level=domain_level)
 
     add_a_records_for_hosts_in_master_domain(master)
 
