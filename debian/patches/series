@@ -17,3 +17,4 @@ fix-opendnssec-conf-template.diff
 create-sysconfig-ods.diff
 ipa_restore-Import-only-FQDN-from-ipalib.constants.patch
 Fix-kdc.conf.template-to-use-ipaplatform.paths.patch
+fix-named-conf-template.diff
