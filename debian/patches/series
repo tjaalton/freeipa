@@ -9,12 +9,7 @@ add-debian-platform.diff
 fix-ipa-conf.diff
 fix-kdcproxy-paths.diff
 fix-ipa-otpd-install.diff
-fix-custodia-conf.diff
 fix-replicainstall.diff
-ipaplatform-Move-remaining-user-group-constants-to-i.patch
 fix-dnssec-services.diff
-fix-opendnssec-conf-template.diff
 create-sysconfig-ods.diff
-ipa_restore-Import-only-FQDN-from-ipalib.constants.patch
-Fix-kdc.conf.template-to-use-ipaplatform.paths.patch
 fix-named-conf-template.diff

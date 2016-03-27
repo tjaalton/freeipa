@@ -1,4 +1,4 @@
-freeipa (4.3.0+git20160322-1) UNRELEASED; urgency=medium
+freeipa (4.3.1-1) UNRELEASED; urgency=medium
 
   * New upstream snapshot.
     - refresh patches
@@ -35,8 +35,7 @@ freeipa (4.3.0+git20160322-1) UNRELEASED; urgency=medium
   * Split freeipa-server-dns from server.
   * admintools: Use the new location for bash completions.
   * rules: Fix paths in oddjob configs.
-  * control, rules, fix-ipa-conf.diff, fix-custodia-conf.diff:
-    Add support for custodia.
+  * control, rules, fix-ipa-conf.diff: Add support for custodia.
   * rules: Remove obsolete configure.jar, preferences.html.
   * platform: Fix ipautil.run stdout handling, add support for systemd.
   * control: Bump server and python-ipaserver dependency on python-ldap
@@ -66,8 +65,6 @@ freeipa (4.3.0+git20160322-1) UNRELEASED; urgency=medium
     various bits to use ipaplatform.constants.
   * fix-dnssec-services.diff: Debianize ipa-dnskeysyncd & ipa-ods-
     exporter units.
-  * fix-opendnssec-conf-template.diff: Use ODS_USER/ODS_GROUP constants
-    in the template.
   * control: Add python-systemd to server depends.
   * rules, platform, server.dirs, server.install: Add support for
     DNSSEC.
