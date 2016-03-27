@@ -2,7 +2,7 @@
 set -e
 
 if [ "$1" = configure ]; then
-    chmod 0700 /var/cache/bind/data
+    chmod 0770 /var/cache/bind/data
     chown root:bind /var/cache/bind/data
 fi
 
