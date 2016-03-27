@@ -72,8 +72,6 @@ freeipa (4.3.1-1) UNRELEASED; urgency=medium
     daemons, until opendnssec itself is fixed.
   * control: Bump dep on bind9-dyndb-ldap.
   * rules: Add SKIP_API_VERSION_CHECK, and adjust directories to clean.
-  * server-dns: Package is arch:all, so chmod the data dir on postinst
-    instead of during build.
   * control: Add opendnssec to freeipa-server-dns depends.
   * control: Add python-cffi to python-ipalib depends.
 

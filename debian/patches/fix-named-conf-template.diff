@@ -5,6 +5,19 @@ Description: fix named.conf template
 
 --- a/install/share/bind.named.conf.template
 +++ b/install/share/bind.named.conf.template
+@@ -4,9 +4,9 @@ options {
+ 
+ 	// Put files that named is allowed to write in the data/ directory:
+ 	directory "$NAMED_VAR_DIR"; // the default
+-	dump-file		"data/cache_dump.db";
+-	statistics-file		"data/named_stats.txt";
+-	memstatistics-file	"data/named_mem_stats.txt";
++	dump-file		"cache_dump.db";
++	statistics-file		"named_stats.txt";
++	memstatistics-file	"named_mem_stats.txt";
+ 
+ 	forward first;
+ 	forwarders {$FORWARDERS};
 @@ -30,18 +30,14 @@ options {
   * By default, SELinux policy does not allow named to modify the /var/named directory,
   * so put the default debug log file in data/ :
