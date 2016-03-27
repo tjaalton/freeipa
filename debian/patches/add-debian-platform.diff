@@ -671,59 +671,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
  
          srv_vals = []
          srv_vals.append("0.%s.pool.ntp.org" % os)
---- a/ipaserver/install/ldapupdate.py
-+++ b/ipaserver/install/ldapupdate.py
-@@ -335,9 +335,9 @@ class LDAPUpdate:
-         bits = platform.architecture()[0]
- 
-         if bits == "64bit":
--            return "64"
-+            return "/x86_64-linux-gnu"
-         else:
--            return ""
-+            return "/i386-linux-gnu"
- 
-     def _template_str(self, s):
-         try:
---- a/ipaserver/install/httpinstance.py
-+++ b/ipaserver/install/httpinstance.py
-@@ -183,6 +183,7 @@ class HTTPInstance(service.Service):
-             self.step("create KDC proxy user", create_kdcproxy_user)
-             self.step("create KDC proxy config", self.create_kdcproxy_conf)
-             self.step("enable KDC proxy", self.enable_kdcproxy)
-+        ipautil.run(["/usr/sbin/a2enmod", "nss"], capture_output=True)
-         self.step("restarting httpd", self.__start)
-         self.step("configuring httpd to start on boot", self.__enable)
-         self.step("enabling oddjobd", self.enable_and_start_oddjobd)
-@@ -507,6 +508,8 @@ class HTTPInstance(service.Service):
-             except Exception:
-                 pass
- 
-+        ipautil.run(["/usr/sbin/a2dismod", "nss"], capture_output=True)
-+
-         self.stop_tracking_certificates()
- 
-         helper = self.restore_state('certmonger_ipa_helper')
---- a/init/ipa_memcached.conf
-+++ b/init/ipa_memcached.conf
-@@ -1,5 +1,5 @@
- SOCKET_PATH=/var/run/ipa_memcached/ipa_memcached
--USER=apache
-+USER=www-data
- MAXCONN=1024
- CACHESIZE=64
- OPTIONS=
---- a/init/systemd/ipa_memcached.service
-+++ b/init/systemd/ipa_memcached.service
-@@ -4,7 +4,7 @@ After=network.target
- 
- [Service]
- Type=forking
--EnvironmentFile=/etc/sysconfig/ipa_memcached
-+EnvironmentFile=/etc/default/ipa_memcached
- PIDFile=/var/run/ipa_memcached/ipa_memcached.pid
- ExecStart=/usr/bin/memcached -d -s $SOCKET_PATH -u $USER -m $CACHESIZE -c $MAXCONN -P /var/run/ipa_memcached/ipa_memcached.pid $OPTIONS
- 
 --- /dev/null
 +++ b/ipaplatform/debian/constants.py
 @@ -0,0 +1,31 @@
