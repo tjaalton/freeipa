@@ -93,7 +93,6 @@ ifneq ($(ONLY_CLIENT), 1)
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa-custodia.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
-	install -m 0755 debian/generate-rndc-key.sh $(DESTDIR)/usr/lib/ipa
 
 	for i in $(DESTDIR)/etc/oddjobd.conf.d/ipa-server.conf \
 		$(DESTDIR)/etc/oddjobd.conf.d/oddjobd-ipa-trust.conf; do \

@@ -26,7 +26,6 @@ usr/lib/*/krb5/plugins/kdb/*.so
 usr/lib/certmonger/dogtag-ipa-ca-renew-agent-submit
 usr/lib/certmonger/ipa-server-guard
 usr/lib/ipa/certmonger/*
-usr/lib/ipa/generate-rndc-key.sh
 usr/lib/ipa/ipa-dnskeysync-replica
 usr/lib/ipa/ipa-dnskeysyncd
 usr/lib/ipa/ipa-httpd-kdcproxy

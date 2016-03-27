@@ -238,7 +238,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT = "/usr/lib/certmonger/dogtag-ipa-ca-renew-agent-submit"
 +    DOGTAG_IPA_RENEW_AGENT_SUBMIT = "/usr/lib/certmonger/dogtag-ipa-renew-agent-submit"
 +    IPA_SERVER_GUARD = "/usr/lib/certmonger/ipa-server-guard"
-+    GENERATE_RNDC_KEY = "/usr/lib/ipa/generate-rndc-key.sh"
++    GENERATE_RNDC_KEY = "/bin/true"
 +    IPA_DNSKEYSYNCD_REPLICA = "/usr/lib/ipa/ipa-dnskeysync-replica"
 +    IPA_DNSKEYSYNCD = "/usr/lib/ipa/ipa-dnskeysyncd"
 +    IPA_ODS_EXPORTER = "/usr/lib/ipa/ipa-ods-exporter"
