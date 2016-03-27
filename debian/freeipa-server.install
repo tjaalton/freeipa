@@ -65,6 +65,7 @@ usr/share/ipa/html/*
 usr/share/ipa/ipa-pki-proxy.conf
 usr/share/ipa/ipa-rewrite.conf
 usr/share/ipa/ipa.conf
+usr/share/ipa/ipa-httpd.conf
 usr/share/ipa/kdcproxy.conf
 usr/share/ipa/migration/*
 usr/share/ipa/profiles/*.cfg

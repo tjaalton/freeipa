@@ -1,0 +1,203 @@
+From 9cce757cbdb19e71d314339cd2b822792dde3210 Mon Sep 17 00:00:00 2001
+From: Martin Basti <mbasti@redhat.com>
+Date: Wed, 16 Mar 2016 09:04:42 +0100
+Subject: [PATCH] Configure httpd service from installer instead of directly
+ from RPM
+
+File httpd.service was created by RPM, what causes that httpd service may
+fail due IPA specific configuration even if IPA wasn't installed or was
+uninstalled (without erasing RPMs).
+
+With this patch httpd service is configured by httpd.d/ipa.conf during
+IPA installation and this config is removed by uninstaller, so no
+residual http configuration related to IPA should stay there.
+
+https://fedorahosted.org/freeipa/ticket/5681
+---
+ freeipa.spec.in                                       |  4 ++--
+ install/share/Makefile.am                             |  1 +
+ .../httpd.service => install/share/ipa-httpd.conf     |  2 +-
+ ipaplatform/base/paths.py                             |  2 ++
+ ipaplatform/base/tasks.py                             |  8 ++++++++
+ ipaplatform/redhat/tasks.py                           | 19 +++++++++++++++++++
+ ipaserver/install/httpinstance.py                     |  6 ++++++
+ ipaserver/install/server/upgrade.py                   |  5 +++++
+ 8 files changed, 44 insertions(+), 3 deletions(-)
+ rename init/systemd/httpd.service => install/share/ipa-httpd.conf (82%)
+
+diff --git a/freeipa.spec.in b/freeipa.spec.in
+index 07a239af02dbe7adf36063af25d29394dbc6f647..40276e843ab80678846fabe5ea2e262caea7f94e 100644
+--- a/freeipa.spec.in
++++ b/freeipa.spec.in
+@@ -828,7 +828,6 @@ mkdir -p %{buildroot}%{_unitdir}
+ mkdir -p %{buildroot}%{etc_systemd_dir}
+ install -m 644 init/systemd/ipa.service %{buildroot}%{_unitdir}/ipa.service
+ install -m 644 init/systemd/ipa_memcached.service %{buildroot}%{_unitdir}/ipa_memcached.service
+-install -m 644 init/systemd/httpd.service %{buildroot}%{etc_systemd_dir}/httpd.service
+ install -m 644 init/systemd/ipa-custodia.service %{buildroot}%{_unitdir}/ipa-custodia.service
+ # END
+ mkdir -p %{buildroot}/%{_localstatedir}/lib/ipa/backup
+@@ -1136,7 +1135,7 @@ fi
+ %{_tmpfilesdir}/%{name}.conf
+ %attr(644,root,root) %{_unitdir}/ipa_memcached.service
+ %attr(644,root,root) %{_unitdir}/ipa-custodia.service
+-%attr(644,root,root) %{etc_systemd_dir}/httpd.service
++%ghost %attr(644,root,root) %{etc_systemd_dir}/httpd.d/ipa.conf
+ # END
+ %dir %{_usr}/share/ipa
+ %{_usr}/share/ipa/wsgi.py*
+@@ -1211,6 +1210,7 @@ fi
+ %{_usr}/share/ipa/ipa-rewrite.conf
+ %{_usr}/share/ipa/ipa-pki-proxy.conf
+ %{_usr}/share/ipa/kdcproxy.conf
++%{_usr}/share/ipa/ipa-httpd.conf
+ %ghost %attr(0644,root,apache) %config(noreplace) %{_usr}/share/ipa/html/ca.crt
+ %ghost %attr(0644,root,apache) %{_usr}/share/ipa/html/kerberosauth.xpi
+ %ghost %attr(0644,root,apache) %{_usr}/share/ipa/html/krb.con
+diff --git a/install/share/Makefile.am b/install/share/Makefile.am
+index b4cb8312471a68d8cd855f542478afe10d200c39..16745bab34057bd72b19bd7659a67df0d291b27e 100644
+--- a/install/share/Makefile.am
++++ b/install/share/Makefile.am
+@@ -88,6 +88,7 @@ app_DATA =				\
+ 	kdcproxy.conf			\
+ 	kdcproxy-enable.uldif		\
+ 	kdcproxy-disable.uldif		\
++	ipa-httpd.conf		\
+ 	$(NULL)
+ 
+ EXTRA_DIST =				\
+diff --git a/init/systemd/httpd.service b/install/share/ipa-httpd.conf
+similarity index 82%
+rename from init/systemd/httpd.service
+rename to install/share/ipa-httpd.conf
+index 7ce8f04d8b9bb3663e59d4fdc610af0eb4478178..8292b1c8ec8983f5210f0769f14e01bcedaf9da5 100644
+--- a/init/systemd/httpd.service
++++ b/install/share/ipa-httpd.conf
+@@ -1,4 +1,4 @@
+-.include /usr/lib/systemd/system/httpd.service
++# Do not edit. Created by IPA installer.
+ 
+ [Service]
+ Environment=KRB5CCNAME=/var/run/httpd/ipa/krbcache/krb5ccache
+diff --git a/ipaplatform/base/paths.py b/ipaplatform/base/paths.py
+index e4b8bd76d5f23c226269f1b3880a9aa3e2ebf63d..4075e136b44179c4953d9ff7ace285cbb6e3a1ac 100644
+--- a/ipaplatform/base/paths.py
++++ b/ipaplatform/base/paths.py
+@@ -127,6 +127,8 @@ class BasePathNamespace(object):
+     SYSCONFIG_PKI_TOMCAT = "/etc/sysconfig/pki-tomcat"
+     SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/sysconfig/pki/tomcat/pki-tomcat"
+     ETC_SYSTEMD_SYSTEM_DIR = "/etc/systemd/system/"
++    SYSTEMD_SYSTEM_HTTPD_D_DIR = "/etc/systemd/system/httpd.d/"
++    SYSTEMD_SYSTEM_HTTPD_IPA_CONF = "/etc/systemd/system/httpd.d/ipa.conf"
+     SYSTEMD_CERTMONGER_SERVICE = "/etc/systemd/system/multi-user.target.wants/certmonger.service"
+     SYSTEMD_IPA_SERVICE = "/etc/systemd/system/multi-user.target.wants/ipa.service"
+     SYSTEMD_SSSD_SERVICE = "/etc/systemd/system/multi-user.target.wants/sssd.service"
+diff --git a/ipaplatform/base/tasks.py b/ipaplatform/base/tasks.py
+index 573287c6bf732991946a75c8817899ee6c1842e3..3142120499d76b22a67edb7800ea69a52b0626d1 100644
+--- a/ipaplatform/base/tasks.py
++++ b/ipaplatform/base/tasks.py
+@@ -236,3 +236,11 @@ class BaseTaskNamespace(object):
+         :return: object implementing proper __cmp__ method for version compare
+         """
+         return parse_version(version)
++
++    def configure_httpd_service_ipa_conf(self):
++        """Configure httpd service to work with IPA"""
++        return
++
++    def remove_httpd_service_ipa_conf(self):
++        """Remove configuration of httpd service of IPA"""
++        return
+diff --git a/ipaplatform/redhat/tasks.py b/ipaplatform/redhat/tasks.py
+index 6380486792bf62e3a7e607aba8658b0c519f67f8..092ec6fdd529dcdbf34f0ae53bf29a1af4a5b01c 100644
+--- a/ipaplatform/redhat/tasks.py
++++ b/ipaplatform/redhat/tasks.py
+@@ -30,6 +30,7 @@ import stat
+ import socket
+ import sys
+ import base64
++import shutil
+ from cffi import FFI
+ from ctypes.util import find_library
+ from functools import total_ordering
+@@ -459,5 +460,23 @@ class RedHatTaskNamespace(BaseTaskNamespace):
+         """
+         return IPAVersion(version)
+ 
++    def configure_httpd_service_ipa_conf(self):
++        """Create systemd config for httpd service to work with IPA
++        """
++        if not os.path.exists(paths.SYSTEMD_SYSTEM_HTTPD_D_DIR):
++            os.mkdir(paths.SYSTEMD_SYSTEM_HTTPD_D_DIR, 0o755)
++
++        shutil.copy(
++            os.path.join(ipautil.SHARE_DIR, 'ipa-httpd.conf'),
++            paths.SYSTEMD_SYSTEM_HTTPD_IPA_CONF)
++        os.chmod(paths.SYSTEMD_SYSTEM_HTTPD_IPA_CONF, 0o644)
++        self.restore_context(paths.SYSTEMD_SYSTEM_HTTPD_IPA_CONF)
++
++    def remove_httpd_service_ipa_conf(self):
++        """Remove systemd config for httpd service of IPA"""
++        try:
++            os.unlink(paths.SYSTEMD_SYSTEM_HTTPD_IPA_CONF)
++        except OSError:
++            pass
+ 
+ tasks = RedHatTaskNamespace()
+diff --git a/ipaserver/install/httpinstance.py b/ipaserver/install/httpinstance.py
+index 54aeb8ae79eab0eab2661f52885229c09e0affaa..f784be5af3eae302630c4991b5fa6392f47050d1 100644
+--- a/ipaserver/install/httpinstance.py
++++ b/ipaserver/install/httpinstance.py
+@@ -225,6 +225,8 @@ class HTTPInstance(service.Service):
+             [paths.KDESTROY, '-A'], runas=HTTPD_USER, raiseonerr=False, env={})
+ 
+     def __configure_http(self):
++        self.update_httpd_service_ipa_conf()
++
+         target_fname = paths.HTTPD_IPA_CONF
+         http_txt = ipautil.template_file(ipautil.SHARE_DIR + "ipa.conf", self.sub_dict)
+         self.fstore.backup_file(paths.HTTPD_IPA_CONF)
+@@ -479,6 +481,9 @@ class HTTPInstance(service.Service):
+         except Exception as e:
+             root_logger.critical("Unable to start oddjobd: {0}".format(str(e)))
+ 
++    def update_httpd_service_ipa_conf(self):
++        tasks.configure_httpd_service_ipa_conf()
++
+     def uninstall(self):
+         if self.is_configured():
+             self.print_msg("Unconfiguring web server")
+@@ -533,6 +538,7 @@ class HTTPInstance(service.Service):
+         installutils.remove_file(paths.HTTPD_IPA_PKI_PROXY_CONF)
+         installutils.remove_file(paths.HTTPD_IPA_KDCPROXY_CONF_SYMLINK)
+         installutils.remove_file(paths.HTTPD_IPA_KDCPROXY_CONF)
++        tasks.remove_httpd_service_ipa_conf()
+ 
+         # Restore SELinux boolean states
+         boolean_states = {name: self.restore_state(name)
+diff --git a/ipaserver/install/server/upgrade.py b/ipaserver/install/server/upgrade.py
+index fc9c2eb62193fde594db89e06dacf8109dbbb60a..005a62018a6b6d7e9ac18d956ddee080025ebdc5 100644
+--- a/ipaserver/install/server/upgrade.py
++++ b/ipaserver/install/server/upgrade.py
+@@ -1375,6 +1375,10 @@ def update_mod_nss_cipher_suite(http):
+         'cipher_suite_updated',
+         httpinstance.NSS_CIPHER_REVISION)
+ 
++def update_ipa_httpd_service_conf(http):
++    root_logger.info('[Updating HTTPD service IPA configuration]')
++    http.update_httpd_service_ipa_conf()
++
+ 
+ def ds_enable_sidgen_extdom_plugins(ds):
+     """For AD trust agents, make sure we enable sidgen and extdom plugins
+@@ -1561,6 +1565,7 @@ def upgrade_configuration():
+         http.enable_kdcproxy()
+ 
+     http.stop()
++    update_ipa_httpd_service_conf(http)
+     update_mod_nss_protocol(http)
+     update_mod_nss_cipher_suite(http)
+     fix_trust_flags()
+-- 
+2.5.0
+

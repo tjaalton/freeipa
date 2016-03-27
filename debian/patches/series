@@ -1,4 +1,5 @@
 # upstreamed
+configure-apache-from-installer.diff
 
 # not upstreamable
 work-around-apache-fail.diff

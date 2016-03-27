@@ -1,12 +1,11 @@
---- a/init/systemd/httpd.service
-+++ b/init/systemd/httpd.service
+--- a/install/share/ipa-httpd.conf
++++ b/install/share/ipa-httpd.conf
 @@ -1,7 +1,7 @@
--.include /usr/lib/systemd/system/httpd.service
-+.include /lib/systemd/system/apache2.service
+ # Do not edit. Created by IPA installer.
  
  [Service]
 -Environment=KRB5CCNAME=/var/run/httpd/ipa/krbcache/krb5ccache
-+Environment=KRB5CCNAME=/var/run/apache2/ipa/krbcache/krb5ccache
++Environment=KRB5CCNAME=/run/apache2/ipa/krbcache/krb5ccache
  Environment=KDCPROXY_CONFIG=/etc/ipa/kdcproxy/kdcproxy.conf
 -ExecStartPre=/usr/libexec/ipa/ipa-httpd-kdcproxy
 +ExecStartPre=/usr/lib/ipa/ipa-httpd-kdcproxy
