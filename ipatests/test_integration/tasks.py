@@ -81,7 +81,11 @@ def prepare_host(host):
         host.run_command(['true'], set_env=False)
 
         host.collect_log(env_filename)
-        host.transport.mkdir_recursive(host.config.test_dir)
+        try:
+            host.transport.mkdir_recursive(host.config.test_dir)
+        except IOError:
+            # The folder already exists
+            pass
         host.put_file_contents(env_filename, env_to_script(host.to_env()))
 
 
@@ -1153,3 +1157,25 @@ def uninstall_replica(master, replica):
                         "-p", master.config.dirman_password,
                         replica.hostname], raiseonerr=False)
     uninstall_master(replica)
+
+
+def replicas_cleanup(func):
+    """
+    replicas_cleanup decorator, applied to any test method in integration tests
+    uninstalls all replicas in the topology leaving only master
+    configured
+    """
+    def wrapped(*args):
+        func(*args)
+        for host in args[0].replicas:
+            uninstall_replica(args[0].master, host)
+            uninstall_client(host)
+            result = args[0].master.run_command(
+                ["ipa", "host-del", "--updatedns", host.hostname],
+                raiseonerr=False)
+            # Workaround for 5627
+            if "host not found" in result.stderr_text:
+                args[0].master.run_command(["ipa",
+                                            "host-del",
+                                            host.hostname], raiseonerr=False)
+    return wrapped
