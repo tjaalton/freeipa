@@ -226,6 +226,7 @@ Depends:
  freeipa-client (>= ${source:Version}),
  python-ipalib (>= ${source:Version}),
  python-ipatests (>= ${source:Version}),
+ python-pytest,
  ${misc:Depends},
  ${python:Depends}
 Recommends: python-yaml
@@ -337,6 +338,8 @@ Depends:
  python-paramiko,
  python-paste,
  python-polib,
+ python-pytest-multihost,
+ python-pytest-sourceorder,
  xz-utils,
  ${misc:Depends},
  ${python:Depends}
