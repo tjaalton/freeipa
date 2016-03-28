@@ -1,15 +1,3 @@
---- a/install/share/ipa-httpd.conf
-+++ b/install/share/ipa-httpd.conf
-@@ -1,7 +1,7 @@
- # Do not edit. Created by IPA installer.
- 
- [Service]
--Environment=KRB5CCNAME=/var/run/httpd/ipa/krbcache/krb5ccache
-+Environment=KRB5CCNAME=/run/apache2/ipa/krbcache/krb5ccache
- Environment=KDCPROXY_CONFIG=/etc/ipa/kdcproxy/kdcproxy.conf
--ExecStartPre=/usr/libexec/ipa/ipa-httpd-kdcproxy
-+ExecStartPre=/usr/lib/ipa/ipa-httpd-kdcproxy
- ExecStopPost=-/usr/bin/kdestroy -A
 --- a/install/conf/ipa-kdc-proxy.conf.template
 +++ b/install/conf/ipa-kdc-proxy.conf.template
 @@ -1,24 +1,24 @@

@@ -25,11 +25,9 @@ https://fedorahosted.org/freeipa/ticket/5681
  8 files changed, 44 insertions(+), 3 deletions(-)
  rename init/systemd/httpd.service => install/share/ipa-httpd.conf (82%)
 
-diff --git a/freeipa.spec.in b/freeipa.spec.in
-index 07a239af02dbe7adf36063af25d29394dbc6f647..40276e843ab80678846fabe5ea2e262caea7f94e 100644
 --- a/freeipa.spec.in
 +++ b/freeipa.spec.in
-@@ -828,7 +828,6 @@ mkdir -p %{buildroot}%{_unitdir}
+@@ -832,7 +832,6 @@ mkdir -p %{buildroot}%{_unitdir}
  mkdir -p %{buildroot}%{etc_systemd_dir}
  install -m 644 init/systemd/ipa.service %{buildroot}%{_unitdir}/ipa.service
  install -m 644 init/systemd/ipa_memcached.service %{buildroot}%{_unitdir}/ipa_memcached.service
@@ -37,7 +35,7 @@ index 07a239af02dbe7adf36063af25d29394dbc6f647..40276e843ab80678846fabe5ea2e262c
  install -m 644 init/systemd/ipa-custodia.service %{buildroot}%{_unitdir}/ipa-custodia.service
  # END
  mkdir -p %{buildroot}/%{_localstatedir}/lib/ipa/backup
-@@ -1136,7 +1135,7 @@ fi
+@@ -1143,7 +1142,7 @@ fi
  %{_tmpfilesdir}/%{name}.conf
  %attr(644,root,root) %{_unitdir}/ipa_memcached.service
  %attr(644,root,root) %{_unitdir}/ipa-custodia.service
@@ -46,7 +44,7 @@ index 07a239af02dbe7adf36063af25d29394dbc6f647..40276e843ab80678846fabe5ea2e262c
  # END
  %dir %{_usr}/share/ipa
  %{_usr}/share/ipa/wsgi.py*
-@@ -1211,6 +1210,7 @@ fi
+@@ -1218,6 +1217,7 @@ fi
  %{_usr}/share/ipa/ipa-rewrite.conf
  %{_usr}/share/ipa/ipa-pki-proxy.conf
  %{_usr}/share/ipa/kdcproxy.conf
@@ -54,8 +52,6 @@ index 07a239af02dbe7adf36063af25d29394dbc6f647..40276e843ab80678846fabe5ea2e262c
  %ghost %attr(0644,root,apache) %config(noreplace) %{_usr}/share/ipa/html/ca.crt
  %ghost %attr(0644,root,apache) %{_usr}/share/ipa/html/kerberosauth.xpi
  %ghost %attr(0644,root,apache) %{_usr}/share/ipa/html/krb.con
-diff --git a/install/share/Makefile.am b/install/share/Makefile.am
-index b4cb8312471a68d8cd855f542478afe10d200c39..16745bab34057bd72b19bd7659a67df0d291b27e 100644
 --- a/install/share/Makefile.am
 +++ b/install/share/Makefile.am
 @@ -88,6 +88,7 @@ app_DATA =				\
@@ -66,21 +62,26 @@ index b4cb8312471a68d8cd855f542478afe10d200c39..16745bab34057bd72b19bd7659a67df0
  	$(NULL)
  
  EXTRA_DIST =				\
-diff --git a/init/systemd/httpd.service b/install/share/ipa-httpd.conf
-similarity index 82%
-rename from init/systemd/httpd.service
-rename to install/share/ipa-httpd.conf
-index 7ce8f04d8b9bb3663e59d4fdc610af0eb4478178..8292b1c8ec8983f5210f0769f14e01bcedaf9da5 100644
 --- a/init/systemd/httpd.service
-+++ b/install/share/ipa-httpd.conf
-@@ -1,4 +1,4 @@
++++ /dev/null
+@@ -1,7 +0,0 @@
 -.include /usr/lib/systemd/system/httpd.service
+-
+-[Service]
+-Environment=KRB5CCNAME=/var/run/httpd/ipa/krbcache/krb5ccache
+-Environment=KDCPROXY_CONFIG=/etc/ipa/kdcproxy/kdcproxy.conf
+-ExecStartPre=/usr/libexec/ipa/ipa-httpd-kdcproxy
+-ExecStopPost=-/usr/bin/kdestroy -A
+--- /dev/null
++++ b/install/share/ipa-httpd.conf
+@@ -0,0 +1,7 @@
 +# Do not edit. Created by IPA installer.
- 
- [Service]
- Environment=KRB5CCNAME=/var/run/httpd/ipa/krbcache/krb5ccache
-diff --git a/ipaplatform/base/paths.py b/ipaplatform/base/paths.py
-index e4b8bd76d5f23c226269f1b3880a9aa3e2ebf63d..4075e136b44179c4953d9ff7ace285cbb6e3a1ac 100644
++
++[Service]
++Environment=KRB5CCNAME=/run/apache2/ipa/krbcache/krb5ccache
++Environment=KDCPROXY_CONFIG=/etc/ipa/kdcproxy/kdcproxy.conf
++ExecStartPre=/usr/lib/ipa/ipa-httpd-kdcproxy
++ExecStopPost=-/usr/bin/kdestroy -A
 --- a/ipaplatform/base/paths.py
 +++ b/ipaplatform/base/paths.py
 @@ -127,6 +127,8 @@ class BasePathNamespace(object):
@@ -92,8 +93,6 @@ index e4b8bd76d5f23c226269f1b3880a9aa3e2ebf63d..4075e136b44179c4953d9ff7ace285cb
      SYSTEMD_CERTMONGER_SERVICE = "/etc/systemd/system/multi-user.target.wants/certmonger.service"
      SYSTEMD_IPA_SERVICE = "/etc/systemd/system/multi-user.target.wants/ipa.service"
      SYSTEMD_SSSD_SERVICE = "/etc/systemd/system/multi-user.target.wants/sssd.service"
-diff --git a/ipaplatform/base/tasks.py b/ipaplatform/base/tasks.py
-index 573287c6bf732991946a75c8817899ee6c1842e3..3142120499d76b22a67edb7800ea69a52b0626d1 100644
 --- a/ipaplatform/base/tasks.py
 +++ b/ipaplatform/base/tasks.py
 @@ -236,3 +236,11 @@ class BaseTaskNamespace(object):
@@ -108,8 +107,6 @@ index 573287c6bf732991946a75c8817899ee6c1842e3..3142120499d76b22a67edb7800ea69a5
 +    def remove_httpd_service_ipa_conf(self):
 +        """Remove configuration of httpd service of IPA"""
 +        return
-diff --git a/ipaplatform/redhat/tasks.py b/ipaplatform/redhat/tasks.py
-index 6380486792bf62e3a7e607aba8658b0c519f67f8..092ec6fdd529dcdbf34f0ae53bf29a1af4a5b01c 100644
 --- a/ipaplatform/redhat/tasks.py
 +++ b/ipaplatform/redhat/tasks.py
 @@ -30,6 +30,7 @@ import stat
@@ -120,7 +117,7 @@ index 6380486792bf62e3a7e607aba8658b0c519f67f8..092ec6fdd529dcdbf34f0ae53bf29a1a
  from cffi import FFI
  from ctypes.util import find_library
  from functools import total_ordering
-@@ -459,5 +460,23 @@ class RedHatTaskNamespace(BaseTaskNamespace):
+@@ -460,5 +461,23 @@ class RedHatTaskNamespace(BaseTaskNamesp
          """
          return IPAVersion(version)
  
@@ -144,8 +141,6 @@ index 6380486792bf62e3a7e607aba8658b0c519f67f8..092ec6fdd529dcdbf34f0ae53bf29a1a
 +            pass
  
  tasks = RedHatTaskNamespace()
-diff --git a/ipaserver/install/httpinstance.py b/ipaserver/install/httpinstance.py
-index 54aeb8ae79eab0eab2661f52885229c09e0affaa..f784be5af3eae302630c4991b5fa6392f47050d1 100644
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
 @@ -225,6 +225,8 @@ class HTTPInstance(service.Service):
@@ -167,7 +162,7 @@ index 54aeb8ae79eab0eab2661f52885229c09e0affaa..f784be5af3eae302630c4991b5fa6392
      def uninstall(self):
          if self.is_configured():
              self.print_msg("Unconfiguring web server")
-@@ -533,6 +538,7 @@ class HTTPInstance(service.Service):
+@@ -534,6 +539,7 @@ class HTTPInstance(service.Service):
          installutils.remove_file(paths.HTTPD_IPA_PKI_PROXY_CONF)
          installutils.remove_file(paths.HTTPD_IPA_KDCPROXY_CONF_SYMLINK)
          installutils.remove_file(paths.HTTPD_IPA_KDCPROXY_CONF)
@@ -175,11 +170,9 @@ index 54aeb8ae79eab0eab2661f52885229c09e0affaa..f784be5af3eae302630c4991b5fa6392
  
          # Restore SELinux boolean states
          boolean_states = {name: self.restore_state(name)
-diff --git a/ipaserver/install/server/upgrade.py b/ipaserver/install/server/upgrade.py
-index fc9c2eb62193fde594db89e06dacf8109dbbb60a..005a62018a6b6d7e9ac18d956ddee080025ebdc5 100644
 --- a/ipaserver/install/server/upgrade.py
 +++ b/ipaserver/install/server/upgrade.py
-@@ -1375,6 +1375,10 @@ def update_mod_nss_cipher_suite(http):
+@@ -1376,6 +1376,10 @@ def update_mod_nss_cipher_suite(http):
          'cipher_suite_updated',
          httpinstance.NSS_CIPHER_REVISION)
  
@@ -190,7 +183,7 @@ index fc9c2eb62193fde594db89e06dacf8109dbbb60a..005a62018a6b6d7e9ac18d956ddee080
  
  def ds_enable_sidgen_extdom_plugins(ds):
      """For AD trust agents, make sure we enable sidgen and extdom plugins
-@@ -1561,6 +1565,7 @@ def upgrade_configuration():
+@@ -1562,6 +1566,7 @@ def upgrade_configuration():
          http.enable_kdcproxy()
  
      http.stop()
@@ -198,6 +191,3 @@ index fc9c2eb62193fde594db89e06dacf8109dbbb60a..005a62018a6b6d7e9ac18d956ddee080
      update_mod_nss_protocol(http)
      update_mod_nss_cipher_suite(http)
      fix_trust_flags()
--- 
-2.5.0
-
