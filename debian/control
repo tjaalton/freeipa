@@ -300,8 +300,8 @@ Description: FreeIPA centralized identity framework -- shared Python modules
 Package: python-ipaserver
 Architecture: all
 Section: python
-Breaks: freeipa-server (<< 4.3.0-1), freeipa-server-trust-ad (<< 4.3.0-1)
-Replaces: freeipa-server (<< 4.3.0-1), freeipa-server-trust-ad (<< 4.3.0-1)
+Breaks: freeipa-server (<< 4.3.0-1)
+Replaces: freeipa-server (<< 4.3.0-1)
 Depends:
  freeipa-common (= ${binary:Version}),
  pki-tools (>= 10.2.6-3),
