@@ -1,0 +1,58 @@
+--- a/install/oddjob/etc/dbus-1/system.d/oddjob-ipa-trust.conf
++++ b/install/oddjob/etc/dbus-1/system.d/oddjob-ipa-trust.conf
+@@ -30,7 +30,7 @@
+            send_member="Get"/>
+   </policy>
+ 
+-  <policy user="apache">
++  <policy user="www-data">
+     <allow send_destination="com.redhat.idm.trust"
+            send_path="/"
+            send_interface="com.redhat.idm.trust"
+--- a/install/oddjob/etc/dbus-1/system.d/org.freeipa.server.conf
++++ b/install/oddjob/etc/dbus-1/system.d/org.freeipa.server.conf
+@@ -10,7 +10,7 @@
+     <allow send_destination="org.freeipa.server" send_interface="org.freeipa.server"/>
+   </policy>
+ 
+-  <policy user="apache">
++  <policy user="www-data">
+     <allow send_destination="org.freeipa.server" send_interface="org.freeipa.server"/>
+   </policy>
+ 
+--- a/install/oddjob/etc/oddjobd.conf.d/ipa-server.conf
++++ b/install/oddjob/etc/oddjobd.conf.d/ipa-server.conf
+@@ -2,11 +2,11 @@
+ <oddjobconfig>
+   <service name="org.freeipa.server">
+     <allow user="root"/>
+-    <allow user="apache"/>
++    <allow user="www-data"/>
+     <object name="/">
+       <interface name="org.freeipa.server">
+         <method name="conncheck">
+-          <helper exec="/usr/libexec/ipa/oddjob/org.freeipa.server.conncheck"
++          <helper exec="/usr/lib/ipa/oddjob/org.freeipa.server.conncheck"
+                   arguments="1"
+                   prepend_user_name="no"
+                   argument_passing_method="cmdline"/>
+--- a/install/oddjob/etc/oddjobd.conf.d/oddjobd-ipa-trust.conf
++++ b/install/oddjob/etc/oddjobd.conf.d/oddjobd-ipa-trust.conf
+@@ -2,7 +2,7 @@
+ <oddjobconfig>
+   <service name="com.redhat.idm.trust">
+     <allow user="root"/>
+-    <allow user="apache"/>
++    <allow user="www-data"/>
+     <object name="/">
+       <interface name="org.freedesktop.DBus.Introspectable">
+         <allow min_uid="0" max_uid="0"/>
+@@ -10,7 +10,7 @@
+       </interface>
+       <interface name="com.redhat.idm.trust">
+         <method name="fetch_domains">
+-          <helper exec="/usr/libexec/ipa/oddjob/com.redhat.idm.trust-fetch-domains"
++          <helper exec="/usr/lib/ipa/oddjob/com.redhat.idm.trust-fetch-domains"
+ 		  arguments="1"
+                   argument_passing_method="cmdline"
+ 		  prepend_user_name="no"/>

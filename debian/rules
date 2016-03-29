@@ -94,10 +94,6 @@ ifneq ($(ONLY_CLIENT), 1)
 	install -m 0644 init/systemd/ipa-custodia.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
 
-	for i in $(DESTDIR)/etc/oddjobd.conf.d/ipa-server.conf \
-		$(DESTDIR)/etc/oddjobd.conf.d/oddjobd-ipa-trust.conf; do \
-		sed -i -e"s/libexec.*\//lib\/ipa\/oddjob\//" $$i ; \
-	done
 else
 	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
 endif

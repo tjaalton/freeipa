@@ -17,3 +17,4 @@ fix-dnssec-services.diff
 create-sysconfig-ods.diff
 fix-named-conf-template.diff
 fix-memcached.diff
+fix-oddjobs.diff
