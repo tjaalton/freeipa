@@ -59,7 +59,6 @@ usr/share/ipa/*.template
 usr/share/ipa/*.uldif
 usr/share/ipa/advise/legacy/*.template
 usr/share/ipa/copy-schema-to-ca.py
-usr/share/ipa/ffextension/*
 usr/share/ipa/html/*
 usr/share/ipa/ipa-pki-proxy.conf
 usr/share/ipa/ipa-rewrite.conf

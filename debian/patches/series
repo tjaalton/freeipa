@@ -18,3 +18,4 @@ create-sysconfig-ods.diff
 fix-named-conf-template.diff
 fix-memcached.diff
 fix-oddjobs.diff
+purge-firefox-extension.diff
