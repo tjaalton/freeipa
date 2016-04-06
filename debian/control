@@ -72,7 +72,7 @@ Depends:
  389-ds-base (>= 1.3.4.0),
  acl,
  apache2,
- certmonger (>= 0.78.5-2),
+ certmonger (>= 0.78.6-2),
  custodia,
  fonts-font-awesome,
  freeipa-admintools (= ${source:Version}),
@@ -175,7 +175,7 @@ Package: freeipa-client
 Architecture: any
 Depends:
  bind9utils,
- certmonger (>= 0.78),
+ certmonger (>= 0.78.6-2),
  curl,
  dnsutils,
  freeipa-common (= ${source:Version}),
