@@ -2,13 +2,6 @@
 set -e
 
 if [ "$1" = configure ]; then
-    if [ ! -f /etc/pki/nssdb/cert8.db ]; then
-        tmp=$(mktemp) || exit
-        printf "\n" > $tmp
-        certutil -N -d /etc/pki/nssdb -f $tmp
-        chmod 644 /etc/pki/nssdb/*
-        rm $tmp
-    fi
     if [ ! -f /etc/ipa/nssdb/cert8.db ]; then
         python2 -c 'from ipapython.certdb import create_ipa_nssdb; create_ipa_nssdb()' >/dev/null 2>&1
         tmp=$(mktemp) || exit
