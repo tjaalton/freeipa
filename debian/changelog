@@ -1,83 +1,89 @@
 freeipa (4.3.1-1) UNRELEASED; urgency=medium
 
-  * New upstream snapshot.
-    - refresh patches
+  * New upstream release.
     - drop no-test-lang.diff, obsolete
   * fix-match-hostname.diff, control: Drop the patch and python-openssl
     deps, not needed anymore
-  * *.install: Updated.
-  * control: Add python-cryptography to build-deps and python-freeipa
-    deps.
-  * control: Add libp11-kit-dev to build-deps, p11-kit to server deps.
-  * patches: Drop bits of platform.diff and other patches that are now
-    upstream. Refresh others.
-  * control: Depend on python-gssapi instead of python-kerberos/-krbV.
-  * control: Add libini-config-dev and python-dbus to build-deps,
-    replace wget with curl.
-  * control: Bump libkrb5-dev build-dep.
-  * control: Add pki-base to build-deps and pki-kra to server deps, bump
-    pki-ca version.
-  * control: Drop python-m2crypto from deps, obsolete.
-  * control: Bump sssd deps to 1.13.1.
-  * control: Add python-six to build-deps and python-freeipa deps.
-  * control: Split python stuff from server, client, tests to python-
-    ipa{server,client,tests}, rename python-freeipa to match and move
-    translations to freeipa-common. Mark them Arch:all where possible,
-    and add Breaks/Replaces.
-  * prefix.patch: Fix ipalib install too.
-  * control: Bump certmonger deps, add oddjob to server and oddjob-
-    mkhomedir to client deps.
-  * server.postinst: Use ipa-server-upgrade.
-  * control: Add python-setuptools to python-ipalib deps.
-  * control: Bump 389-ds-base* deps.
+  * rules, platform, server.dirs, server.install:
+    Add support for DNSSEC.
   * control, rules: Add support for kdcproxy.
   * control, server: Migrate to mod-auth-gssapi.
-  * Split freeipa-server-dns from server.
-  * admintools: Use the new location for bash completions.
   * control, rules, fix-ipa-conf.diff: Add support for custodia.
-  * rules: Remove obsolete configure.jar, preferences.html.
-  * platform: Fix ipautil.run stdout handling, add support for systemd.
-  * control: Bump server and python-ipaserver dependency on python-ldap
-    to 2.4.22 to fix a bug on ipa-server-upgrade.
-  * control: Bump server dependency on oddjob to 0.34.3-2.
-  * server.postinst, tmpfile: Create state directories for
-    mod_auth_gssapi.
-  * fix-kdcproxy-paths.diff: Fix paths in kdcproxy configs.
+  * control:
+    - Add python-cryptography to build-deps and python-freeipa deps.
+    - Add libp11-kit-dev to build-deps, p11-kit to server deps.
+    - Depend on python-gssapi instead of python-kerberos/-krbV.
+    - Add libini-config-dev and python-dbus to build-deps, replace wget
+      with curl.
+    - Bump libkrb5-dev build-dep.
+    - Add pki-base to build-deps and pki-kra to server deps, bump pki-ca
+      version.
+    - Drop python-m2crypto from deps, obsolete.
+    - Bump sssd deps to 1.13.1.
+    - Add python-six to build-deps and python-freeipa deps.
+    - Split python stuff from server, client, tests to python-
+      ipa{server,client,tests}, rename python-freeipa to match and move
+      translations to freeipa-common. Mark them Arch:all where possible,
+      and add Breaks/Replaces.
+    - Add oddjob to server and oddjob-mkhomedir to client deps.
+    - Add python-setuptools to python-ipalib deps.
+    - Bump 389-ds-base* deps.
+    - Bump server and python-ipaserver dependency on python-ldap to 2.4.22
+      to fix a bug on ipa-server-upgrade.
+    - Add pki-tools to python-ipaserver deps.
+    - Add zip to python-ipaserver depends.
+    - Add python-systemd to server depends.
+    - Add opendnssec to freeipa-server-dns depends.
+    - Add python-cffi to python-ipalib depends.
+    - Bump dep on bind9-dyndb-ldap.
+    - Bump certmonger dependency to version that has helpers in the correct
+      place.
+  * patches:
+    - prefix.patch: Fix ipalib install too.
+    - Drop bits of platform.diff and other patches that are now upstream.
+    - fix-kdcproxy-paths.diff: Fix paths in kdcproxy configs.
+    - fix-oddjobs.diff: Fix paths and uids in oddjob configs.
+    - fix-replicainstall.diff: Use ldap instead of ldaps for conncheck.
+    - fix-dnssec-services.diff: Debianize ipa-dnskeysyncd & ipa-ods-
+      exporter units.
+    - create-sysconfig-ods.diff: Create an empty file for opendnssec
+      daemons, until opendnssec itself is fixed.
+    - purge-firefox-extension.diff: Clean obsolete kerberosauth.xpi.
+    - enable-mod-nss-during-setup.diff: Split from platform.diff, call
+      a2enmod/a2dismod from httpinstance.py.
+    - fix-memcached.diff: Split from platform.diff, debianize memcached
+      conf & unit.
+    - hack-libarch.diff: Don't use fedora libpaths.
   * add-debian-platform.diff:
     - Update paths.py to include all variables, comment out ones we don't
       modify.
     - Use systemwide certificate store; put ipa-ca.crt in
       /usr/local/share/ca-certificates, and run update-ca-certificates
     - Map smb service to smbd (LP: #1543230)
+    - Don't ship /var/cache/bind/data, fix named.conf a bit.
+    - Use DebianNoService() for dbus.
+    - Add more constants
+  * Split freeipa-server-dns from freeipa-server.
+  * server.postinst: Use ipa-server-upgrade.
+  * admintools: Use the new location for bash completions.
+  * rules: Remove obsolete configure.jar, preferences.html.
+  * platform: Fix ipautil.run stdout handling, add support for systemd.
+  * server.postinst, tmpfile: Create state directories for
+    mod_auth_gssapi.
   * rules, server.install: Install scripts under /usr/lib instead of
     multiarch path to avoid hacking the code too much.
   * fix-ipa-otpd-install.diff, rules, server.install: Put ipa-otpd in
     /usr/lib/ipa instead of directly under multiarch lib path.
   * control, server*.install: Move dirsrv plugins from server-trust-ad
     to server, needed on upgrades even if trust-ad isn't set up.
-  * control: Add pki-tools to python-ipaserver deps.
   * server: Enable mod_proxy_ajp and mod_proxy_http on postinst, disable
     on postrm.
-  * control: Add zip to python-ipaserver depends.
-  * fix-replicainstall.diff: Use ldap instead of ldaps for conncheck.
-  * ipaplatform-Move-remaining-user-group-constants-to-i.patch: Port
-    various bits to use ipaplatform.constants.
-  * fix-dnssec-services.diff: Debianize ipa-dnskeysyncd & ipa-ods-
-    exporter units.
-  * control: Add python-systemd to server depends.
-  * rules, platform, server.dirs, server.install: Add support for
-    DNSSEC.
-  * create-sysconfig-ods.diff: Create an empty file for opendnssec
-    daemons, until opendnssec itself is fixed.
-  * control: Bump dep on bind9-dyndb-ldap.
   * rules: Add SKIP_API_VERSION_CHECK, and adjust directories to clean.
-  * control: Add opendnssec to freeipa-server-dns depends.
-  * control: Add python-cffi to python-ipalib depends.
-  * fix-oddjobs.diff: Fix paths and uids in oddjob configs.
+  * rules: Don't enable systemd units on install.
   * client: Don't create /etc/pki/nssdb on postinst, it's not used
     anymore.
-  * control: Bump certmonger dependency to version that has helpers in
-    the correct place.
+  * platform.diff, rules, server.install: Drop generate-rndc-key.sh, bind
+    already generates the keyfile.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Sat, 03 Oct 2015 08:56:31 +0300
 
