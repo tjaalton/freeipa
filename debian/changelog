@@ -63,7 +63,8 @@ freeipa (4.3.1-1) UNRELEASED; urgency=medium
     - Don't ship /var/cache/bind/data, fix named.conf a bit.
     - Use DebianNoService() for dbus.
     - Add more constants
-  * Split freeipa-server-dns from freeipa-server.
+  * Split freeipa-server-dns from freeipa-server, add -dns to -server
+    Recommends.
   * server.postinst: Use ipa-server-upgrade.
   * admintools: Use the new location for bash completions.
   * rules: Remove obsolete configure.jar, preferences.html.
