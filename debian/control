@@ -72,7 +72,7 @@ Depends:
  389-ds-base (>= 1.3.4.0),
  acl,
  apache2,
- certmonger (>= 0.78.6-2),
+ certmonger (>= 0.78.6-3),
  custodia,
  fonts-font-awesome,
  freeipa-admintools (= ${source:Version}),
@@ -123,8 +123,8 @@ Breaks: freeipa-server (<< 4.3.0-1)
 Replaces: freeipa-server (<< 4.3.0-1)
 Depends:
  freeipa-server (>= ${source:Version}),
- bind9,
- bind9-dyndb-ldap (>= 8.0-2),
+ bind9 (>= 1:9.10.3.dfsg.P4-8),
+ bind9-dyndb-ldap (>= 8.0-4),
  opendnssec,
  ${misc:Depends},
  ${python:Depends},
@@ -177,7 +177,7 @@ Package: freeipa-client
 Architecture: any
 Depends:
  bind9utils,
- certmonger (>= 0.78.6-2),
+ certmonger (>= 0.78.6-3),
  curl,
  dnsutils,
  freeipa-common (= ${source:Version}),
