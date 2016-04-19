@@ -260,7 +260,7 @@ Description: FreeIPA centralized identity framework -- Python modules for ipacli
  This Python module is used by FreeIPA client.
 
 Package: python-ipalib
-Architecture: any
+Architecture: all
 Section: python
 Breaks: python-freeipa
 Replaces: python-freeipa
