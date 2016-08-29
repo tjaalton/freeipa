@@ -20,10 +20,10 @@ Description: Fix paths
 +  GssapiCredStore keytab:/etc/apache2/ipa.keytab
 +  GssapiCredStore client_keytab:/etc/apache2/ipa.keytab
 +  GssapiDelegCcacheDir /var/run/apache2/ipa/clientcaches
+   GssapiDelegCcacheUnique On
    GssapiUseS4U2Proxy on
    GssapiAllowedMech krb5
-   Require valid-user
-@@ -107,7 +107,7 @@ WSGIScriptReloading Off
+@@ -110,7 +110,7 @@ WSGIScriptReloading Off
  # Custodia stuff is redirected to the custodia daemon
  # after authentication
  <Location "/ipa/keys/">
@@ -32,7 +32,7 @@ Description: Fix paths
      RequestHeader set GSS_NAME %{GSS_NAME}s
      RequestHeader set REMOTE_USER %{REMOTE_USER}s
  </Location>
-@@ -141,8 +141,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+@@ -144,8 +144,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  
  #  List explicitly only the fonts we want to serve

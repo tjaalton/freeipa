@@ -16,7 +16,7 @@ Description: fix named.conf template
 +	statistics-file		"named_stats.txt";
 +	memstatistics-file	"named_mem_stats.txt";
  
- 	forward first;
+ 	forward $FORWARD_POLICY;
  	forwarders {$FORWARDERS};
 @@ -30,18 +30,14 @@ options {
   * By default, SELinux policy does not allow named to modify the /var/named directory,

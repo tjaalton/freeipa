@@ -4,20 +4,16 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
 
     Purge firefox extension
 
-diff --git a/freeipa.spec.in b/freeipa.spec.in
-index b0861d8..67152f6 100644
 --- a/freeipa.spec.in
 +++ b/freeipa.spec.in
-@@ -158,7 +158,6 @@ Requires: pki-ca >= 10.2.6-13
- Requires: pki-kra >= 10.2.6-13
+@@ -158,7 +158,6 @@ Requires: pki-ca >= 10.2.6-19
+ Requires: pki-kra >= 10.2.6-19
  Requires(preun): python systemd-units
  Requires(postun): python systemd-units
 -Requires: zip
  Requires: policycoreutils >= 2.1.12-5
  Requires: tar
  Requires(pre): certmonger >= 0.78
-diff --git a/install/Makefile.am b/install/Makefile.am
-index ac52ad3..d13ecb7 100644
 --- a/install/Makefile.am
 +++ b/install/Makefile.am
 @@ -7,7 +7,6 @@ NULL =
@@ -28,9 +24,6 @@ index ac52ad3..d13ecb7 100644
          html			\
          migration		\
          share			\
-diff --git a/install/ffextension/Makefile.am b/install/ffextension/Makefile.am
-deleted file mode 100644
-index 7a72205..0000000
 --- a/install/ffextension/Makefile.am
 +++ /dev/null
 @@ -1,23 +0,0 @@
@@ -57,9 +50,6 @@ index 7a72205..0000000
 -MAINTAINERCLEANFILES =                  \
 -        *~                              \
 -        Makefile.in
-diff --git a/install/ffextension/bootstrap.js b/install/ffextension/bootstrap.js
-deleted file mode 100644
-index 7e2ae57..0000000
 --- a/install/ffextension/bootstrap.js
 +++ /dev/null
 @@ -1,88 +0,0 @@
@@ -152,9 +142,6 @@ index 7e2ae57..0000000
 -function install() {}
 -function uninstall() {}
 \ No newline at end of file
-diff --git a/install/ffextension/chrome.manifest b/install/ffextension/chrome.manifest
-deleted file mode 100644
-index 775d3a3..0000000
 --- a/install/ffextension/chrome.manifest
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -163,9 +150,6 @@ index 775d3a3..0000000
 -overlay chrome://browser/content/browser.xul    resource://kerberosauth/kerberosauth_overlay.xul
 -locale     kerberosauth    en-US   locale/en-US/
 \ No newline at end of file
-diff --git a/install/ffextension/chrome/Makefile.am b/install/ffextension/chrome/Makefile.am
-deleted file mode 100644
-index 10d23a7..0000000
 --- a/install/ffextension/chrome/Makefile.am
 +++ /dev/null
 @@ -1,19 +0,0 @@
@@ -188,9 +172,6 @@ index 10d23a7..0000000
 -MAINTAINERCLEANFILES =                  \
 -        *~                              \
 -        Makefile.in
-diff --git a/install/ffextension/chrome/content/Makefile.am b/install/ffextension/chrome/content/Makefile.am
-deleted file mode 100644
-index 7ff81e5..0000000
 --- a/install/ffextension/chrome/content/Makefile.am
 +++ /dev/null
 @@ -1,17 +0,0 @@
@@ -211,9 +192,6 @@ index 7ff81e5..0000000
 -MAINTAINERCLEANFILES =                  \
 -        *~                              \
 -        Makefile.in
-diff --git a/install/ffextension/chrome/content/kerberosauth.js b/install/ffextension/chrome/content/kerberosauth.js
-deleted file mode 100644
-index c5afde9..0000000
 --- a/install/ffextension/chrome/content/kerberosauth.js
 +++ /dev/null
 @@ -1,197 +0,0 @@
@@ -415,9 +393,6 @@ index c5afde9..0000000
 -    };
 -};
 \ No newline at end of file
-diff --git a/install/ffextension/chrome/content/kerberosauth_overlay.xul b/install/ffextension/chrome/content/kerberosauth_overlay.xul
-deleted file mode 100644
-index acad079..0000000
 --- a/install/ffextension/chrome/content/kerberosauth_overlay.xul
 +++ /dev/null
 @@ -1,9 +0,0 @@
@@ -431,9 +406,6 @@ index acad079..0000000
 -    </script>
 -</overlay>
 \ No newline at end of file
-diff --git a/install/ffextension/install.rdf b/install/ffextension/install.rdf
-deleted file mode 100644
-index d931f19..0000000
 --- a/install/ffextension/install.rdf
 +++ /dev/null
 @@ -1,26 +0,0 @@
@@ -464,9 +436,6 @@ index d931f19..0000000
 -    </Description>
 -</RDF>
 \ No newline at end of file
-diff --git a/install/ffextension/locale/Makefile.am b/install/ffextension/locale/Makefile.am
-deleted file mode 100644
-index 7e64536..0000000
 --- a/install/ffextension/locale/Makefile.am
 +++ /dev/null
 @@ -1,19 +0,0 @@
@@ -489,9 +458,6 @@ index 7e64536..0000000
 -MAINTAINERCLEANFILES =                  \
 -        *~                              \
 -        Makefile.in
-diff --git a/install/ffextension/locale/en-US/Makefile.am b/install/ffextension/locale/en-US/Makefile.am
-deleted file mode 100644
-index d19e8c7..0000000
 --- a/install/ffextension/locale/en-US/Makefile.am
 +++ /dev/null
 @@ -1,16 +0,0 @@
@@ -511,9 +477,6 @@ index d19e8c7..0000000
 -MAINTAINERCLEANFILES =                  \
 -        *~                              \
 -        Makefile.in
-diff --git a/install/ffextension/locale/en-US/kerberosauth.properties b/install/ffextension/locale/en-US/kerberosauth.properties
-deleted file mode 100644
-index b822535..0000000
 --- a/install/ffextension/locale/en-US/kerberosauth.properties
 +++ /dev/null
 @@ -1,4 +0,0 @@
@@ -522,8 +485,6 @@ index b822535..0000000
 -prompt_domain=\n\nDomain: ${domain}
 -prompt_question=\n\nDo you want to configure the browser?
 \ No newline at end of file
-diff --git a/install/share/Makefile.am b/install/share/Makefile.am
-index b4cb831..b666bb2 100644
 --- a/install/share/Makefile.am
 +++ b/install/share/Makefile.am
 @@ -51,7 +51,6 @@ app_DATA =				\
@@ -534,20 +495,15 @@ index b4cb831..b666bb2 100644
  	krbrealm.con.template		\
  	smb.conf.template		\
  	smb.conf.empty			\
-diff --git a/install/share/krb.js.template b/install/share/krb.js.template
-deleted file mode 100644
-index e7ea055..0000000
 --- a/install/share/krb.js.template
 +++ /dev/null
 @@ -1,2 +0,0 @@
 -var IPA_REALM = "$REALM";
 -var IPA_DOMAIN = "$DOMAIN";
 \ No newline at end of file
-diff --git a/ipaplatform/base/paths.py b/ipaplatform/base/paths.py
-index 1b79015..19dffb0 100644
 --- a/ipaplatform/base/paths.py
 +++ b/ipaplatform/base/paths.py
-@@ -180,7 +180,6 @@ class BasePathNamespace(object):
+@@ -183,7 +183,6 @@ class BasePathNamespace(object):
      BIN_TIMEOUT = "/usr/bin/timeout"
      UPDATE_CA_TRUST = "/usr/bin/update-ca-trust"
      BIN_CURL = "/usr/bin/curl"
@@ -555,7 +511,7 @@ index 1b79015..19dffb0 100644
      BIND_LDAP_SO = "/usr/lib/bind/ldap.so"
      BIND_LDAP_DNS_IPA_WORKDIR = "/var/named/dyndb-ldap/ipa/"
      BIND_LDAP_DNS_ZONE_WORKDIR = "/var/named/dyndb-ldap/ipa/master/"
-@@ -223,12 +222,9 @@ class BasePathNamespace(object):
+@@ -226,12 +225,9 @@ class BasePathNamespace(object):
      USERADD = "/usr/sbin/useradd"
      USR_SHARE_IPA_DIR = "/usr/share/ipa/"
      CA_TOPOLOGY_ULDIF = "/usr/share/ipa/ca-topology.uldif"
@@ -568,8 +524,6 @@ index 1b79015..19dffb0 100644
      HTML_KRB5_INI = "/usr/share/ipa/html/krb5.ini"
      HTML_KRBREALM_CON = "/usr/share/ipa/html/krbrealm.con"
      NIS_ULDIF = "/usr/share/ipa/nis.uldif"
-diff --git a/ipaserver/install/httpinstance.py b/ipaserver/install/httpinstance.py
-index b0fbe69..8b2d2ea 100644
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
 @@ -130,7 +130,7 @@ class HTTPInstance(service.Service):
@@ -590,7 +544,7 @@ index b0fbe69..8b2d2ea 100644
          if not self.promote:
              self.step("publish CA cert", self.__publish_ca_cert)
          self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
-@@ -371,42 +369,6 @@ class HTTPInstance(service.Service):
+@@ -375,42 +373,6 @@ class HTTPInstance(service.Service):
          db = certs.CertDB(self.realm, subject_base=self.subject_base)
          self.import_ca_certs(db, self.ca_is_configured)
  
@@ -633,11 +587,9 @@ index b0fbe69..8b2d2ea 100644
      def __publish_ca_cert(self):
          ca_db = certs.CertDB(self.realm)
          ca_db.publish_ca_cert(paths.CA_CRT)
-diff --git a/ipaserver/install/server/replicainstall.py b/ipaserver/install/server/replicainstall.py
-index e3052c1..6d7ccde 100644
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -180,12 +180,10 @@ def install_http(config, auto_redirect, ca_is_configured, promote=False,
+@@ -181,12 +181,10 @@ def install_http(config, auto_redirect,
      http = httpinstance.HTTPInstance()
      http.create_instance(
          config.realm_name, config.host_name, config.domain_name,
@@ -651,11 +603,9 @@ index e3052c1..6d7ccde 100644
      return http
  
  
-diff --git a/ipaserver/install/server/upgrade.py b/ipaserver/install/server/upgrade.py
-index 3e60cfd..622f5f1 100644
 --- a/ipaserver/install/server/upgrade.py
 +++ b/ipaserver/install/server/upgrade.py
-@@ -282,16 +282,6 @@ def cleanup_adtrust(fstore):
+@@ -283,16 +283,6 @@ def cleanup_adtrust(fstore):
              root_logger.debug('Removing %s from backup', backed_up_file)
  
  
@@ -672,7 +622,7 @@ index 3e60cfd..622f5f1 100644
  def ca_configure_profiles_acl(ca):
      root_logger.info('[Authorizing RA Agent to modify profiles]')
  
-@@ -1600,7 +1590,6 @@ def upgrade_configuration():
+@@ -1657,7 +1647,6 @@ def upgrade_configuration():
  
      cleanup_kdc(fstore)
      cleanup_adtrust(fstore)
