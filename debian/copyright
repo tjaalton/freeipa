@@ -1,6 +1,7 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-name: freeipa
 Source: http://freeipa.org/downloads/src/
+Files-Excluded: install/ui/util/uglifyjs/lib/parse-js.js install/ui/util/build/build.js
 
 Files: *
 Copyright: 1999-2011 Red Hat, Inc.
@@ -57,10 +58,17 @@ Copyright: Nicolas Gallagher
 License: MIT
 
 Files: install/ui/src/libs/bootstrap.js
+       debian/missing-sources/bootstrap*.js
 Copyright: 2011-2014 Twitter, Inc.
 License: MIT
 
+Files: install/ui/src/libs/d3.js
+       debian/missing-sources/d3.js
+Copyright: 2010-2015, Michael Bostock
+License: BSD-3-clause
+
 Files: install/ui/src/libs/jquery.js
+       debian/missing-sources/jquery-2.0.3.js
 Copyright: 2005, 2013 jQuery Foundation, Inc.
 License: MIT
 
@@ -69,7 +77,13 @@ Copyright: None
 License: public-domain
  Public Domain.
 
+Files: install/ui/src/libs/patternfly.js
+       debian/missing-sources/patternfly.js
+Copyright: 2013, Red Hat
+License: Apache-2.0
+
 Files: install/ui/src/libs/qrcode.js
+       debian/missing-sources/qrcode.js
 Copyright: 2012, Shim Sangmin
 License: MIT
 
@@ -90,6 +104,7 @@ License: BSD-2-clause
 Files: install/ui/util/build/build.js
        install/ui/util/build/_base/configRhino.js
        install/ui/build/dojo/dojo.js
+       debian/missing-sources/dojo
 Copyright: 2004-2012, The Dojo Foundation
 License: BSD-3-clause or AFL-2.1
 
@@ -337,3 +352,7 @@ License: AFL-2.1
  Permission is hereby granted to copy and distribute this license without
  modification. This license may not be modified without the express written
  permission of its copyright owner.
+
+License: Apache-2.0
+ On Debian machines the full text of the Apache License 2.0 can be found in the
+ file /usr/share/common-licenses/Apache-2.0.

@@ -1,3 +1,11 @@
+freeipa (4.3.1+dfsg1-1) UNRELEASED; urgency=medium
+
+  * copyright, missing-sources, README.source: Exclude minified javascript
+    that the runtime does not need. Add unminified versions of others,
+    update copyright to match. (Closes: #787593)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Mon, 18 Apr 2016 17:40:32 +0300
+
 freeipa (4.3.1-2) experimental; urgency=medium
 
   * control: python-ipalib can be arch:all now.
