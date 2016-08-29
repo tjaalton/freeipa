@@ -1,4 +1,4 @@
-freeipa (4.3.2+dfsg1-1) UNRELEASED; urgency=medium
+freeipa (4.3.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * copyright, missing-sources, README.source: Exclude minified javascript

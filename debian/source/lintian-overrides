@@ -1,6 +1,6 @@
 # lintian fails with javascript files
-source-is-missing install/ui/build/dojo/dojo.js
-source-is-missing install/ui/src/libs/bootstrap.js
-source-is-missing install/ui/src/libs/jquery.js
-source-is-missing install/ui/src/libs/qrcode.js
-source-is-missing install/ui/util/build/build.js
+freeipa source: source-is-missing debian/missing-sources/qrcode.js line length is 602 characters (>512)
+freeipa source: source-is-missing install/ui/build/dojo/dojo.js line length is 32768 characters (>512)
+freeipa source: source-is-missing install/ui/src/libs/jquery.js line length is 32023 characters (>512)
+freeipa source: source-is-missing install/ui/util/build/build.js line length is 32768 characters (>512)
+freeipa source: source-is-missing install/ui/util/uglifyjs/lib/parse-js.js line length is 4927 characters (>512)
