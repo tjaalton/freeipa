@@ -53,8 +53,11 @@ from ipalib.util import (normalize_zonemgr,
                          validate_dnssec_zone_forwarder_step1,
                          validate_dnssec_zone_forwarder_step2,
                          verify_host_resolvable)
-from ipapython.ipautil import CheckedIPAddress, check_zone_overlap
+from ipapython.dn import DN
+from ipapython.ipautil import CheckedIPAddress
+from ipapython.dnsutil import check_zone_overlap
 from ipapython.dnsutil import DNSName
+from ipapython.dnsutil import related_to_auto_empty_zone
 
 if six.PY3:
     unicode = str
@@ -1561,7 +1564,7 @@ def check_ns_rec_resolvable(zone, name, log):
         # this is a DNS name relative to the zone
         name = name.derelativize(zone.make_absolute())
     try:
-        verify_host_resolvable(name, log)
+        verify_host_resolvable(name)
     except errors.DNSNotARecordError:
         raise errors.NotFound(
             reason=_('Nameserver \'%(host)s\' does not have a corresponding '
@@ -1744,9 +1747,11 @@ def _normalize_zone(zone):
     if isinstance(zone, unicode):
         # normalize only non-IDNA zones
         try:
-            return unicode(zone.encode('ascii')).lower()
+            zone.encode('ascii')
         except UnicodeError:
             pass
+        else:
+            return zone.lower()
     return zone
 
 
@@ -1980,6 +1985,20 @@ def _add_warning_fw_zone_is_not_effective(api, result, fwzone, version):
                 fwzone=fwzone, authzone=authoritative_zone,
                 ns_rec=fwzone.relativize(authoritative_zone)
             )
+        )
+
+
+def _add_warning_fw_policy_conflict_aez(result, fwzone, **options):
+    """Warn if forwarding policy conflicts with an automatic empty zone."""
+    fwd_policy = result['result'].get(u'idnsforwardpolicy',
+                                      dnsforwardzone.default_forward_policy)
+    if (
+        fwd_policy != [u'only']
+        and related_to_auto_empty_zone(DNSName(fwzone))
+    ):
+        messages.add_message(
+            options['version'], result,
+            messages.DNSForwardPolicyConflictWithEmptyZone()
         )
 
 
@@ -2785,11 +2804,10 @@ class dnszone_add(DNSZoneBase_add):
         assert isinstance(dn, DN)
 
         # Add entry to realmdomains
-        # except for our own domain, forward zones, reverse zones and root zone
+        # except for our own domain, reverse zones and root zone
         zone = keys[0]
 
         if (zone != DNSName(api.env.domain).make_absolute() and
-                not options.get('idnsforwarders') and
                 not zone.is_reverse() and
                 zone != DNSName.root):
             try:
@@ -4218,7 +4236,7 @@ class dns_resolve(Command):
         query=args[0]
 
         try:
-            verify_host_resolvable(query, self.log)
+            verify_host_resolvable(query)
         except errors.DNSNotARecordError:
             raise errors.NotFound(
                 reason=_('Host \'%(host)s\' not found') % {'host': query}
@@ -4298,6 +4316,9 @@ class dnsconfig(LDAPObject):
             cli_name='zone_refresh',
             label=_('Zone refresh interval'),
         ),
+        Int('ipadnsversion?',  # available only in installer/upgrade
+            label=_('IPA DNS version'),
+        ),
     )
     managed_permissions = {
         'System: Write DNS Configuration': {
@@ -4324,7 +4345,7 @@ class dnsconfig(LDAPObject):
             'ipapermdefaultattr': {
                 'objectclass',
                 'idnsallowsyncptr', 'idnsforwarders', 'idnsforwardpolicy',
-                'idnspersistentsearch', 'idnszonerefresh'
+                'idnspersistentsearch', 'idnszonerefresh', 'ipadnsversion'
             },
             'default_privileges': {'DNS Administrators', 'DNS Servers'},
         },
@@ -4345,10 +4366,16 @@ class dnsconfig(LDAPObject):
             result['summary'] = unicode(_('Global DNS configuration is empty'))
 
 
-
 @register()
 class dnsconfig_mod(LDAPUpdate):
     __doc__ = _('Modify global DNS configuration.')
+
+    def get_options(self):
+        """hide ipadnsversion outside of installer/upgrade"""
+        for option in super(dnsconfig_mod, self).get_options():
+            if option.name == 'ipadnsversion':
+                option = option.clone(include=('installer', 'updates'))
+            yield option
 
     def interactive_prompt_callback(self, kw):
 
@@ -4367,7 +4394,13 @@ class dnsconfig_mod(LDAPUpdate):
         result = super(dnsconfig_mod, self).execute(*keys, **options)
         self.obj.postprocess_result(result)
 
+        # this check makes sense only when resulting forwarders are non-empty
+        if result['result'].get('idnsforwarders'):
+            fwzone = DNSName('.')
+            _add_warning_fw_policy_conflict_aez(result, fwzone, **options)
+
         if forwarders:
+            # forwarders were changed
             for forwarder in forwarders:
                 try:
                     validate_dnssec_global_forwarder(forwarder, log=self.log)
@@ -4405,6 +4438,7 @@ class dnsconfig_show(LDAPRetrieve):
         result = super(dnsconfig_show, self).execute(*keys, **options)
         self.obj.postprocess_result(result)
         return result
+
 
 
 @register()
@@ -4508,6 +4542,7 @@ class dnsforwardzone(DNSZoneBase):
                 )
             )
 
+
 @register()
 class dnsforwardzone_add(DNSZoneBase_add):
     __doc__ = _('Create new DNS forward zone.')
@@ -4538,8 +4573,10 @@ class dnsforwardzone_add(DNSZoneBase_add):
         return dn
 
     def execute(self, *keys, **options):
+        fwzone = keys[-1]
         result = super(dnsforwardzone_add, self).execute(*keys, **options)
         self.obj._warning_fw_zone_is_not_effective(result, *keys, **options)
+        _add_warning_fw_policy_conflict_aez(result, fwzone, **options)
         if options.get('idnsforwarders'):
             self.obj._warning_if_forwarders_do_not_work(
                 result, True, *keys, **options)
@@ -4595,7 +4632,9 @@ class dnsforwardzone_mod(DNSZoneBase_mod):
         return dn
 
     def execute(self, *keys, **options):
+        fwzone = keys[-1]
         result = super(dnsforwardzone_mod, self).execute(*keys, **options)
+        _add_warning_fw_policy_conflict_aez(result, fwzone, **options)
         if options.get('idnsforwarders'):
             self.obj._warning_if_forwarders_do_not_work(result, False, *keys,
                                                         **options)

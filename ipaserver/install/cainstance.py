@@ -43,6 +43,7 @@ import pipes
 from six.moves import urllib
 from six.moves.configparser import ConfigParser, RawConfigParser
 
+import ipalib.constants
 from ipalib import api
 from ipalib import pkcs10, x509
 from ipalib import errors
@@ -62,6 +63,7 @@ from ipapython.ipa_log_manager import log_mgr,\
     standard_logging_setup, root_logger
 
 from ipaserver.install import certs
+from ipaserver.install import bindinstance
 from ipaserver.install import dsinstance
 from ipaserver.install import installutils
 from ipaserver.install import ldapupdate
@@ -78,10 +80,6 @@ try:
 except ImportError:
     import http.client as httplib
 
-
-# When IPA is installed with DNS support, this CNAME should hold all IPA
-# replicas with CA configured
-IPA_CA_RECORD = "ipa-ca"
 
 # We need to reset the template because the CA uses the regular boot
 # information
@@ -311,7 +309,7 @@ class CAInstance(DogtagInstance):
     server_cert_name = 'Server-Cert cert-pki-ca'
 
     def __init__(self, realm=None, ra_db=None, host_name=None,
-                 dm_password=None, ldapi=True):
+                 dm_password=None, ldapi=True, api=api):
         super(CAInstance, self).__init__(
             realm=realm,
             subsystem="CA",
@@ -327,6 +325,7 @@ class CAInstance(DogtagInstance):
         self.cert_file = None
         self.cert_chain_file = None
         self.create_ra_agent_db = True
+        self.api = api
 
         if realm is not None:
             self.canickname = get_ca_nickname(realm)
@@ -1289,7 +1288,15 @@ class CAInstance(DogtagInstance):
 
     def __enable_instance(self):
         basedn = ipautil.realm_to_suffix(self.realm)
-        self.ldap_enable('CA', self.fqdn, None, basedn, ['caRenewalMaster'])
+        self.ldap_enable('CA', self.fqdn, None, basedn)
+
+    def __update_ca_records(self):
+        # Install CA DNS records
+        if bindinstance.dns_container_exists(
+            api.env.host, api.env.basedn, ldapi=True, realm=api.env.realm
+        ):
+            bind = bindinstance.BindInstance(ldapi=True, api=self.api)
+            bind.add_ipa_ca_dns_records(api.env.host, api.env.domain)
 
     def configure_replica(self, master_host, subject_base=None,
                           ca_cert_bundle=None, ca_signing_algorithm=None,
@@ -1359,6 +1366,7 @@ class CAInstance(DogtagInstance):
                   self.__restart_http_instance)
 
         self.step("enabling CA instance", self.__enable_instance)
+        self.step("Updating DNS CA records", self.__update_ca_records)
 
         self.start_creation(runtime=210)
 
@@ -1619,14 +1627,18 @@ def configure_profiles_acl():
     conn.disconnect()
     return updated
 
-def import_included_profiles():
+
+def __get_profile_config(profile_id):
     sub_dict = dict(
         DOMAIN=ipautil.format_netloc(api.env.domain),
-        IPA_CA_RECORD=IPA_CA_RECORD,
+        IPA_CA_RECORD=ipalib.constants.IPA_CA_RECORD,
         CRL_ISSUER='CN=Certificate Authority,o=ipaca',
         SUBJECT_DN_O=dsinstance.DsInstance().find_subject_base(),
     )
+    return ipautil.template_file(
+        '/usr/share/ipa/profiles/{}.cfg'.format(profile_id), sub_dict)
 
+def import_included_profiles():
     server_id = installutils.realm_to_serverid(api.env.realm)
     dogtag_uri = 'ldapi://%%2fvar%%2frun%%2fslapd-%s.socket' % server_id
     conn = ldap2.ldap2(api, ldap_uri=dogtag_uri)
@@ -1663,13 +1675,54 @@ def import_included_profiles():
                 ipacertprofilestoreissued=['TRUE' if store_issued else 'FALSE'],
             )
             conn.add_entry(entry)
-            profile_data = ipautil.template_file(
-                '/usr/share/ipa/profiles/{}.cfg'.format(profile_id), sub_dict)
-            _create_dogtag_profile(profile_id, profile_data)
+
+            # Create the profile, replacing any existing profile of same name
+            profile_data = __get_profile_config(profile_id)
+            _create_dogtag_profile(profile_id, profile_data, overwrite=True)
             root_logger.info("Imported profile '%s'", profile_id)
 
     api.Backend.ra_certprofile.override_port = None
     conn.disconnect()
+
+
+def repair_profile_caIPAserviceCert():
+    """
+    A regression caused replica installation to replace the FreeIPA
+    version of caIPAserviceCert with the version shipped by Dogtag.
+
+    This function detects and repairs occurrences of this problem.
+
+    """
+    api.Backend.ra_certprofile._read_password()
+    api.Backend.ra_certprofile.override_port = 8443
+
+    profile_id = 'caIPAserviceCert'
+
+    with api.Backend.ra_certprofile as profile_api:
+        try:
+            cur_config = profile_api.read_profile(profile_id).splitlines()
+        except errors.RemoteRetrieveError as e:
+            # no profile there to check/repair
+            api.Backend.ra_certprofile.override_port = None
+            return
+
+    indicators = [
+        "policyset.serverCertSet.1.default.params.name="
+            "CN=$request.req_subject_name.cn$, OU=pki-ipa, O=IPA ",
+        "policyset.serverCertSet.9.default.params.crlDistPointsPointName_0="
+            "https://ipa.example.com/ipa/crl/MasterCRL.bin",
+        ]
+    need_repair = all(l in cur_config for l in indicators)
+
+    if need_repair:
+        root_logger.debug(
+            "Detected that profile '{}' has been replaced with "
+            "incorrect version; begin repair.".format(profile_id))
+        _create_dogtag_profile(
+            profile_id, __get_profile_config(profile_id), overwrite=True)
+        root_logger.debug("Repair of profile '{}' complete.".format(profile_id))
+
+    api.Backend.ra_certprofile.override_port = None
 
 
 def migrate_profiles_to_ldap():
@@ -1717,12 +1770,17 @@ def migrate_profiles_to_ldap():
                 profile_data += '\n'
             profile_data += 'profileId={}\n'.format(profile_id)
             profile_data += 'classId={}\n'.format(class_id)
-            _create_dogtag_profile(profile_id, profile_data)
+
+            # Import the profile, but do not replace it if it already exists.
+            # This prevents replicas from replacing IPA-managed profiles with
+            # Dogtag default profiles of same name.
+            #
+            _create_dogtag_profile(profile_id, profile_data, overwrite=False)
 
     api.Backend.ra_certprofile.override_port = None
 
 
-def _create_dogtag_profile(profile_id, profile_data):
+def _create_dogtag_profile(profile_id, profile_data, overwrite):
     with api.Backend.ra_certprofile as profile_api:
         # import the profile
         try:
@@ -1733,9 +1791,8 @@ def _create_dogtag_profile(profile_id, profile_data):
             root_logger.debug("Error migrating '{}': {}".format(
                 profile_id, e))
 
-            # conflicting profile; replace it if we are
-            # installing IPA, but keep it for upgrades
-            if api.env.context == 'installer':
+            # profile already exists
+            if overwrite:
                 try:
                     profile_api.disable_profile(profile_id)
                 except errors.RemoteRetrieveError:

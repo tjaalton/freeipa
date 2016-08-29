@@ -57,7 +57,7 @@ from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 from ipapython import certmonger
-
+from ipapython import dnsutil
 
 if six.PY3:
     unicode = str
@@ -447,23 +447,39 @@ def create_keytab(path, principal):
 
     kadmin("ktadd -k " + path + " " + principal)
 
-def resolve_host(host_name):
+def resolve_ip_addresses_nss(fqdn):
+    """Get list of IP addresses for given host (using NSS/getaddrinfo).
+    :returns:
+        list of IP addresses as UnsafeIPAddress objects
+    """
+    # make sure the name is fully qualified
+    # so search path from resolv.conf does not apply
+    fqdn = str(dnsutil.DNSName(fqdn).make_absolute())
     try:
-        addrinfos = socket.getaddrinfo(host_name, None,
+        addrinfos = socket.getaddrinfo(fqdn, None,
                                        socket.AF_UNSPEC, socket.SOCK_STREAM)
+    except socket.error as ex:
+        if ex.errno == socket.EAI_NODATA or ex.errno == socket.EAI_NONAME:
+            root_logger.debug('Name %s does not have any address: %s',
+                              fqdn, ex)
+            return set()
+        else:
+            raise
 
-        ip_list = []
-
-        for ai in addrinfos:
-            ip = ai[4][0]
-            if ip == "127.0.0.1" or ip == "::1":
-                raise HostnameLocalhost("The hostname resolves to the localhost address")
-
-            ip_list.append(ip)
-
-        return ip_list
-    except socket.error:
-        return []
+    # accept whatever we got from NSS
+    ip_addresses = set()
+    for ai in addrinfos:
+        try:
+            ip = ipautil.UnsafeIPAddress(ai[4][0])
+        except ValueError as ex:
+            # getaddinfo may return link-local address other similar oddities
+            # which are not accepted by CheckedIPAddress - skip these
+            root_logger.warning('Name %s resolved to an unacceptable IP '
+                                'address %s: %s', fqdn, ai[4][0], ex)
+        else:
+            ip_addresses.add(ip)
+    root_logger.debug('Name %s resolved to %s', fqdn, ip_addresses)
+    return ip_addresses
 
 def get_host_name(no_host_dns):
     """
@@ -479,10 +495,9 @@ def get_host_name(no_host_dns):
     return hostname
 
 def get_server_ip_address(host_name, unattended, setup_dns, ip_addresses):
-    # Check we have a public IP that is associated with the hostname
-    try:
-        hostaddr = resolve_host(host_name)
-    except HostnameLocalhost:
+    hostaddr = resolve_ip_addresses_nss(host_name)
+    if hostaddr.intersection(
+            {ipautil.UnsafeIPAddress(ip) for ip in ['127.0.0.1', '::1']}):
         print("The hostname resolves to the localhost address (127.0.0.1/::1)", file=sys.stderr)
         print("Please change your /etc/hosts file so that the hostname", file=sys.stderr)
         print("resolves to the ip address of your network interface.", file=sys.stderr)

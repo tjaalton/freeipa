@@ -14,8 +14,7 @@ from ipapython.install import common, core
 from ipapython.install.core import Knob
 from ipalib.util import validate_domain_name
 from ipaserver.install import bindinstance
-from ipapython.ipautil import check_zone_overlap
-from ipapython.dnsutil import DNSName
+from ipapython.dnsutil import check_zone_overlap
 
 if six.PY3:
     unicode = str
@@ -168,6 +167,11 @@ class BaseServerDNS(common.Installable, core.Group, core.Composite):
         description=("Add a DNS forwarder. This option can be used multiple "
                      "times"),
         cli_name='forwarder',
+    )
+
+    forward_policy = Knob(
+        {'only', 'first'}, None,
+        description=("DNS forwarding policy for global forwarders"),
     )
 
     auto_forwarders = Knob(
@@ -431,6 +435,10 @@ class BaseServer(common.Installable, common.Interactive, core.Composite):
             if self.dns.no_forwarders:
                 raise RuntimeError(
                     "You cannot specify a --no-forwarders option without the "
+                    "--setup-dns option")
+            if self.dns.forward_policy:
+                raise RuntimeError(
+                    "You cannot specify a --forward-policy option without the "
                     "--setup-dns option")
             if self.dns.reverse_zones:
                 raise RuntimeError(

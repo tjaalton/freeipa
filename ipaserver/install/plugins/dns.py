@@ -27,8 +27,127 @@ from ldif import LDIFWriter
 from ipalib import api, errors, util
 from ipalib import Updater
 from ipapython.dn import DN
+from ipapython import dnsutil
 from ipalib.plugins.dns import dns_container_exists
 from ipapython.ipa_log_manager import *
+
+
+class DNSUpdater(Updater):
+    backup_dir = u'/var/lib/ipa/backup/'
+    # override backup_filename in subclass, it will be mangled by strftime
+    backup_filename = None
+
+    def __init__(self, api):
+        super(DNSUpdater, self).__init__(api)
+        backup_path = u'%s%s' % (self.backup_dir, self.backup_filename)
+        self.backup_path = time.strftime(backup_path)
+        self._ldif_writer = None
+        self._saved_privileges = set()  # store privileges only once
+        self.saved_zone_to_privilege = {}
+
+    def version_update_needed(self, target_version):
+        """Test if IPA DNS version is smaller than target version."""
+        assert isinstance(target_version, int)
+
+        try:
+            return int(self.api.Command['dnsconfig_show'](
+                all=True)['result']['ipadnsversion'][0]) < target_version
+        except errors.NotFound:
+            # IPA DNS is not configured
+            return False
+
+    @property
+    def ldif_writer(self):
+        if not self._ldif_writer:
+            self.log.info('Original zones will be saved in LDIF format in '
+                          '%s file' % self.backup_path)
+            self._ldif_writer = LDIFWriter(open(self.backup_path, 'w'))
+        return self._ldif_writer
+
+    def backup_zone(self, zone):
+        """Backup zone object, its records, permissions, and privileges.
+
+        Mapping from zone to privilege (containing zone's permissions)
+        will be stored in saved_zone_to_privilege dict for further usage.
+        """
+        dn = str(zone['dn'])
+        del zone['dn']  # dn shouldn't be as attribute in ldif
+        self.ldif_writer.unparse(dn, zone)
+
+        ldap = self.api.Backend.ldap2
+        if 'managedBy' in zone:
+            permission = ldap.get_entry(DN(zone['managedBy'][0]))
+            self.ldif_writer.unparse(str(permission.dn), dict(permission.raw))
+            for privilege_dn in permission.get('member', []):
+                # privileges can be shared by multiples zones
+                if privilege_dn not in self._saved_privileges:
+                    self._saved_privileges.add(privilege_dn)
+                    privilege = ldap.get_entry(privilege_dn)
+                    self.ldif_writer.unparse(str(privilege.dn),
+                                             dict(privilege.raw))
+
+            # remember privileges referened by permission
+            if 'member' in permission:
+                self.saved_zone_to_privilege[
+                    zone['idnsname'][0]
+                ] = permission['member']
+
+        if 'idnszone' in zone['objectClass']:
+            # raw values are required to store into ldif
+            records = self.api.Command['dnsrecord_find'](zone['idnsname'][0],
+                                                         all=True,
+                                                         raw=True,
+                                                         sizelimit=0)['result']
+            for record in records:
+                if record['idnsname'][0] == u'@':
+                    # zone record was saved before
+                    continue
+                dn = str(record['dn'])
+                del record['dn']
+                self.ldif_writer.unparse(dn, record)
+
+
+class update_ipaconfigstring_dnsversion_to_ipadnsversion(Updater):
+    """
+    IPA <= 4.3.1 used ipaConfigString "DNSVersion 1" on DNS container.
+    This was hard to deal with in API so from IPA 4.3.2 we are using
+    new ipaDNSVersion attribute with integer syntax.
+    Old ipaConfigString is left there for now so if someone accidentally
+    executes upgrade on an old replica again it will not re-upgrade the data.
+    """
+    def execute(self, **options):
+        ldap = self.api.Backend.ldap2
+        dns_container_dn = DN(self.api.env.container_dns, self.api.env.basedn)
+        try:
+            container_entry = ldap.get_entry(dns_container_dn)
+        except errors.NotFound:
+            # DNS container not found, nothing to upgrade
+            return False, []
+
+        if 'ipadnscontainer' in [
+            o.lower() for o in container_entry['objectclass']
+        ]:
+            # version data are already migrated
+            return False, []
+
+        self.log.debug('Migrating DNS ipaConfigString to ipaDNSVersion')
+        container_entry['objectclass'].append('ipadnscontainer')
+        version = 0
+        for config_option in container_entry.get("ipaConfigString", []):
+            matched = re.match("^DNSVersion\s+(?P<version>\d+)$",
+                               config_option, flags=re.I)
+            if matched:
+                version = int(matched.group("version"))
+            else:
+                self.log.error(
+                    'Failed to parse DNS version from ipaConfigString, '
+                    'defaulting to version %s', version)
+        container_entry['ipadnsversion'] = version
+        ldap.update_entry(container_entry)
+        self.log.debug('ipaDNSVersion = %s', version)
+        return False, []
+
+api.register(update_ipaconfigstring_dnsversion_to_ipadnsversion)
 
 
 class update_dnszones(Updater):
@@ -141,7 +260,7 @@ class update_dns_limits(Updater):
 api.register(update_dns_limits)
 
 
-class update_master_to_dnsforwardzones(Updater):
+class update_master_to_dnsforwardzones(DNSUpdater):
     """
     Update all zones to meet requirements in the new FreeIPA versions
 
@@ -149,35 +268,22 @@ class update_master_to_dnsforwardzones(Updater):
     than none, will be tranformed to forward zones.
     Original masters zone will be backed up to ldif file.
 
-    This should be applied only once, and only if original version was lower than 4.0
+    This should be applied only once,
+    and only if original version was lower than 4.0
     """
-    backup_dir = u'/var/lib/ipa/backup/'
-    backup_filename = u'dns-forward-zones-backup-%Y-%m-%d-%H-%M-%S.ldif'
-    backup_path = u'%s%s' % (backup_dir, backup_filename)
+    backup_filename = u'dns-master-to-forward-zones-%Y-%m-%d-%H-%M-%S.ldif'
 
     def execute(self, **options):
         ldap = self.api.Backend.ldap2
         # check LDAP if forwardzones already uses new semantics
-        dns_container_dn = DN(self.api.env.container_dns, self.api.env.basedn)
-        try:
-            container_entry = ldap.get_entry(dns_container_dn)
-        except errors.NotFound:
-            # DNS container not found, nothing to upgrade
+        if not self.version_update_needed(target_version=1):
+            # forwardzones already uses new semantics,
+            # no upgrade is required
             return False, []
-
-        for config_option in container_entry.get("ipaConfigString", []):
-            matched = re.match("^DNSVersion\s+(?P<version>\d+)$",
-                               config_option, flags=re.I)
-            if matched and int(matched.group("version")) >= 1:
-                # forwardzones already uses new semantics,
-                # no upgrade is required
-                return False, []
 
         self.log.debug('Updating forward zones')
         # update the DNSVersion, following upgrade can be executed only once
-        container_entry.setdefault(
-            'ipaConfigString', []).append(u"DNSVersion 1")
-        ldap.update_entry(container_entry)
+        self.api.Command['dnsconfig_mod'](ipadnsversion=1)
 
         # Updater in IPA version from 4.0 to 4.1.2 doesn't work well, this
         # should detect if update in past has been executed, and set proper
@@ -217,77 +323,18 @@ class update_master_to_dnsforwardzones(Updater):
             zones_to_transform.append(zone)
 
         if zones_to_transform:
-            # add time to filename
-            self.backup_path = time.strftime(self.backup_path)
-
-            # DNs of privileges which contain dns managed permissions
-            privileges_to_ldif = set()  # store priviledges only once
-            zone_to_privileges = {}  # zone: [privileges cn]
-
             self.log.info('Zones with specified forwarders with policy different'
                           ' than none will be transformed to forward zones.')
-            self.log.info('Original zones will be saved in LDIF format in '
-                          '%s file' % self.backup_path)
-            try:
-
-                with open(self.backup_path, 'w') as f:
-                    writer = LDIFWriter(f)
-                    for zone in zones_to_transform:
-                        # save backup to ldif
-                        try:
-
-                            dn = str(zone['dn'])
-                            del zone['dn']  # dn shouldn't be as attribute in ldif
-                            writer.unparse(dn, zone)
-
-                            if 'managedBy' in zone:
-                                entry = ldap.get_entry(DN(zone['managedBy'][0]))
-                                for privilege_member_dn in entry.get('member', []):
-                                    privileges_to_ldif.add(privilege_member_dn)
-                                writer.unparse(str(entry.dn), dict(entry.raw))
-
-                                # privileges where permission is used
-                                if entry.get('member'):
-                                    zone_to_privileges[zone['idnsname'][0]] = entry['member']
-
-                            # raw values are required to store into ldif
-                            records = self.api.Command['dnsrecord_find'](
-                                        zone['idnsname'][0],
-                                        all=True,
-                                        raw=True,
-                                        sizelimit=0)['result']
-                            for record in records:
-                                if record['idnsname'][0] == u'@':
-                                    # zone record was saved before
-                                    continue
-                                dn = str(record['dn'])
-                                del record['dn']
-                                writer.unparse(dn, record)
-
-                        except Exception as e:
-                            self.log.error('Unable to backup zone %s' %
-                                           zone['idnsname'][0])
-                            self.log.error(traceback.format_exc())
-                            return False, []
-
-                    for privilege_dn in privileges_to_ldif:
-                        try:
-                            entry = ldap.get_entry(privilege_dn)
-                            writer.unparse(str(entry.dn), dict(entry.raw))
-                        except Exception as e:
-                            self.log.error('Unable to backup privilege %s' %
-                                           privilege_dn)
-                            self.log.error(traceback.format_exc())
-                            return False, []
-
-                    f.close()
-            except Exception:
-                self.log.error('Unable to create backup file')
-                self.log.error(traceback.format_exc())
-                return False, []
-
             # update
             for zone in zones_to_transform:
+                try:
+                    self.backup_zone(zone)
+                except Exception:
+                    self.log.error('Unable to create backup for zone, '
+                                   'terminating zone upgrade')
+                    self.log.error(traceback.format_exc())
+                    return False, []
+
                 # delete master zone
                 try:
                     self.api.Command['dnszone_del'](zone['idnsname'])
@@ -303,7 +350,9 @@ class update_master_to_dnsforwardzones(Updater):
                 try:
                     kw = {
                         'idnsforwarders': zone.get('idnsforwarders', []),
-                        'idnsforwardpolicy': zone.get('idnsforwardpolicy', [u'first'])[0]
+                        'idnsforwardpolicy': zone.get('idnsforwardpolicy',
+                                                      [u'first'])[0],
+                        'skip_overlap_check': True,
                     }
                     self.api.Command['dnsforwardzone_add'](zone['idnsname'][0], **kw)
                 except Exception as e:
@@ -329,9 +378,9 @@ class update_master_to_dnsforwardzones(Updater):
                         continue
 
                     else:
-                        if zone['idnsname'][0] in zone_to_privileges:
+                        if zone['idnsname'][0] in self.saved_zone_to_privilege:
                             privileges = [
-                                dn[0].value for dn in zone_to_privileges[zone['idnsname'][0]]
+                                dn[0].value for dn in self.saved_zone_to_privilege[zone['idnsname'][0]]
                             ]
                             try:
                                 self.api.Command['permission_add_member'](perm_name,
@@ -352,3 +401,97 @@ class update_master_to_dnsforwardzones(Updater):
         return False, []
 
 api.register(update_master_to_dnsforwardzones)
+
+
+class update_dnsforward_emptyzones(DNSUpdater):
+    """
+    Migrate forward policies which conflict with automatic empty zones
+    (RFC 6303) to use forward policy = only.
+
+    BIND ignores conflicting forwarding configuration
+    when forwarding policy != only.
+    bind-dyndb-ldap 9.0+ will do the same so we have to adjust FreeIPA zones
+    accordingly.
+    """
+    backup_filename = u'dns-forwarding-empty-zones-%Y-%m-%d-%H-%M-%S.ldif'
+
+    def update_zones(self):
+        try:
+            fwzones = self.api.Command.dnsforwardzone_find(all=True,
+                                                           raw=True)['result']
+        except errors.NotFound:
+            # No forwardzones found, we are done
+            return
+
+        logged_once = False
+        for zone in fwzones:
+            if not (
+                dnsutil.related_to_auto_empty_zone(
+                    dnsutil.DNSName(zone.get('idnsname')[0]))
+                and zone.get('idnsforwardpolicy', [u'first'])[0] != u'only'
+                and zone.get('idnsforwarders', []) != []
+            ):
+                # this zone does not conflict with automatic empty zone
+                continue
+
+            if not logged_once:
+                self.log.info('Forward policy for zones conflicting with '
+                              'automatic empty zones will be changed to '
+                              '"only"')
+                logged_once = True
+
+            # backup
+            try:
+                self.backup_zone(zone)
+            except Exception:
+                self.log.error('Unable to create backup for zone %s, '
+                               'terminating zone upgrade', zone['idnsname'][0])
+                self.log.error(traceback.format_exc())
+                continue
+
+            # change forward policy
+            try:
+                self.api.Command['dnsforwardzone_mod'](
+                    zone['idnsname'][0],
+                    idnsforwardpolicy=u'only'
+                )
+            except Exception as e:
+                self.log.error('Forward policy update for zone %s failed '
+                               '(%s)' % (zone['idnsname'][0], e))
+                self.log.error(traceback.format_exc())
+                continue
+
+            self.log.debug('Zone %s was sucessfully modified to use '
+                           'forward policy "only"', zone['idnsname'][0])
+
+    def update_global_ldap_forwarder(self):
+        config = self.api.Command['dnsconfig_show'](all=True,
+                                                    raw=True)['result']
+        if (
+            config.get('idnsforwardpolicy', [u'first'])[0] == u'first'
+            and config.get('idnsforwarders', [])
+        ):
+            self.log.info('Global forward policy in LDAP for all servers will '
+                          'be changed to "only" to avoid conflicts with '
+                          'automatic empty zones')
+            self.backup_zone(config)
+            self.api.Command['dnsconfig_mod'](idnsforwardpolicy=u'only')
+
+    def execute(self, **options):
+        # check LDAP if DNS subtree already uses new semantics
+        if not self.version_update_needed(target_version=2):
+            # forwardzones already use new semantics, no upgrade is required
+            return False, []
+
+        self.log.debug('Updating forwarding policies in LDAP '
+                       'to avoid conflicts with automatic empty zones')
+        # update the DNSVersion, following upgrade can be executed only once
+        self.api.Command['dnsconfig_mod'](ipadnsversion=2)
+
+        self.update_zones()
+        if dnsutil.has_empty_zone_addresses(self.api.env.host):
+            self.update_global_ldap_forwarder()
+
+        return False, []
+
+api.register(update_dnsforward_emptyzones)

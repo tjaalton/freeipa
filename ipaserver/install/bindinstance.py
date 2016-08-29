@@ -32,12 +32,14 @@ import six
 
 from ipaserver.install import installutils
 from ipaserver.install import service
-from ipaserver.install.cainstance import IPA_CA_RECORD
+from ipaserver.install import sysupgrade
 from ipapython import sysrestore, ipautil, ipaldap
 from ipapython.ipa_log_manager import *
+from ipapython import dnsutil
 from ipapython.dn import DN
 import ipalib
 from ipalib import api, errors
+from ipalib.constants import IPA_CA_RECORD
 from ipaplatform import services
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
@@ -48,7 +50,7 @@ from ipalib.util import (validate_zonemgr_str, normalize_zonemgr,
                          normalize_zone, get_reverse_zone_default,
                          zone_is_reverse, validate_dnssec_global_forwarder,
                          DNSSECSignatureMissingError, EDNS0UnsupportedError,
-                         UnresolvableRecordError, verify_host_resolvable)
+                         UnresolvableRecordError)
 from ipalib.constants import CACERT
 
 if six.PY3:
@@ -294,7 +296,7 @@ def read_reverse_zone(default, ip_address, allow_zone_overlap=False):
             continue
         if not allow_zone_overlap:
             try:
-                ipautil.check_zone_overlap(zone, raise_on_error=False)
+                dnsutil.check_zone_overlap(zone, raise_on_error=False)
             except ValueError as e:
                 root_logger.error("Reverse zone %s will not be used: %s"
                                   % (zone, e))
@@ -314,7 +316,7 @@ def get_auto_reverse_zones(ip_addresses):
             continue
         default_reverse = get_reverse_zone_default(ip)
         try:
-            ipautil.check_zone_overlap(default_reverse)
+            dnsutil.check_zone_overlap(default_reverse)
         except ValueError:
             root_logger.info("Reverse zone %s for IP address %s already exists"
                              % (default_reverse, ip))
@@ -461,7 +463,7 @@ def check_reverse_zones(ip_addresses, reverse_zones, options, unattended,
         # isn't the zone managed by someone else
         if not options.allow_zone_overlap:
             try:
-                ipautil.check_zone_overlap(rz)
+                dnsutil.check_zone_overlap(rz)
             except ValueError as e:
                 msg = "Reverse zone %s will not be used: %s" % (rz, e)
                 if unattended:
@@ -610,8 +612,9 @@ class BindInstance(service.Service):
 
     suffix = ipautil.dn_attribute_property('_suffix')
 
-    def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders, ntp,
-              reverse_zones, named_user=constants.NAMED_USER, zonemgr=None,
+    def setup(self, fqdn, ip_addresses, realm_name, domain_name, forwarders,
+              forward_policy, ntp, reverse_zones,
+              named_user=constants.NAMED_USER, zonemgr=None,
               ca_configured=None, no_dnssec_validation=False):
         self.named_user = named_user
         self.fqdn = fqdn
@@ -619,6 +622,7 @@ class BindInstance(service.Service):
         self.realm = realm_name
         self.domain = domain_name
         self.forwarders = forwarders
+        self.forward_policy = forward_policy
         self.host = fqdn.split(".")[0]
         self.suffix = ipautil.realm_to_suffix(self.realm)
         self.ntp = ntp
@@ -776,6 +780,7 @@ class BindInstance(service.Service):
             REALM=self.realm,
             SERVER_ID=installutils.realm_to_serverid(self.realm),
             FORWARDERS=fwds,
+            FORWARD_POLICY=self.forward_policy,
             SUFFIX=self.suffix,
             OPTIONAL_NTP=optional_ntp,
             ZONEMGR=self.zonemgr,
@@ -872,14 +877,6 @@ class BindInstance(service.Service):
             add_rr(self.domain, rname, "SRV", rdata, self.dns_backup,
                    api=self.api)
 
-        if not dns_zone_exists(zone, self.api):
-            # check if master hostname is resolvable
-            try:
-                verify_host_resolvable(fqdn, root_logger)
-            except errors.DNSNotARecordError:
-                root_logger.warning("Master FQDN (%s) is not resolvable.",
-                                    fqdn)
-
         # Add forward and reverse records to self
         for addr in addrs:
             try:
@@ -905,7 +902,7 @@ class BindInstance(service.Service):
             if fqdn == self.fqdn:
                 continue
 
-            addrs = installutils.resolve_host(fqdn)
+            addrs = installutils.resolve_ip_addresses_nss(fqdn)
 
             root_logger.debug("Adding DNS records for master %s" % fqdn)
             self.__add_master_records(fqdn, addrs)
@@ -961,7 +958,9 @@ class BindInstance(service.Service):
                 if dns_zone_exists(zone, self.api):
                     addrs = get_fwd_rr(zone, host, api=self.api)
                 else:
-                    addrs = installutils.resolve_host(fqdn)
+                    addrs = dnsutil.resolve_ip_addresses(fqdn)
+                    # hack, will go away with locations
+                    addrs = [str(addr) for addr in addrs]
 
                 self.__add_ipa_ca_records(fqdn, addrs, True)
 
@@ -1031,6 +1030,12 @@ class BindInstance(service.Service):
                                      section=NAMED_SECTION_OPTIONS,
                                      str_val=False)
 
+        # prevent repeated upgrade on new installs
+        sysupgrade.set_upgrade_state(
+            'named.conf',
+            'forward_policy_conflict_with_empty_zones_handled', True
+        )
+
     def __setup_resolv_conf(self):
         if not self.fstore.has_file(RESOLV_CONF):
             self.fstore.backup_file(RESOLV_CONF)
@@ -1077,11 +1082,16 @@ class BindInstance(service.Service):
         self.__add_ipa_ca_record()
 
     def add_ipa_ca_dns_records(self, fqdn, domain_name, ca_configured=True):
+        if not self.api.Backend.ldap2.isconnected():
+            self.api.Backend.ldap2.connect(autobind=True)
+
         host, zone = fqdn.split(".", 1)
         if dns_zone_exists(zone, self.api):
             addrs = get_fwd_rr(zone, host, api=self.api)
         else:
-            addrs = installutils.resolve_host(fqdn)
+            addrs = dnsutil.resolve_ip_addresses(fqdn)
+            # hack, will go away with locations
+            addrs = [str(addr) for addr in addrs]
 
         self.domain = domain_name
 
@@ -1169,7 +1179,9 @@ class BindInstance(service.Service):
         if dns_zone_exists(zone, self.api):
             addrs = get_fwd_rr(zone, host, api=self.api)
         else:
-            addrs = installutils.resolve_host(fqdn)
+            addrs = dnsutil.resolve_ip_addresses(fqdn)
+            # hack, will go away with locations
+            addrs = [str(addr) for addr in addrs]
 
         for addr in addrs:
             del_fwd_rr(domain_name, IPA_CA_RECORD, addr, api=self.api)

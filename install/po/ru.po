@@ -8,23 +8,23 @@
 # Azamat Hackimov <azamat.hackimov@gmail.com>, 2012
 # jdennis <jdennis@redhat.com>, 2011
 # Alex <alexgluck@bk.ru>, 2015. #zanata
+# Martin Bašti <mbasti@redhat.com>, 2016. #zanata
 msgid ""
 msgstr ""
 "Project-Id-Version: ipa\n"
-"Report-Msgid-Bugs-To: https://hosted.fedoraproject.org/projects/freeipa/"
-"newticket\n"
-"POT-Creation-Date: 2015-06-24 13:48+0200\n"
-"MIME-Version: 1.0\n"
-"Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
-"PO-Revision-Date: 2015-08-19 10:07-0400\n"
-"Last-Translator: Alex <alexgluck@bk.ru>\n"
+"Report-Msgid-Bugs-To: https://fedorahosted.org/freeipa/newticket\n"
+"POT-Creation-Date: 2016-05-31 15:43+0200\n"
+"PO-Revision-Date: 2016-06-13 04:55-0400\n"
+"Last-Translator: Martin Bašti <mbasti@redhat.com>\n"
 "Language-Team: Russian (http://www.transifex.com/projects/p/freeipa/language/"
 "ru/)\n"
 "Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
 "%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"X-Generator: Zanata 3.7.3\n"
+"X-Generator: Zanata 3.8.4\n"
 
 #, python-format
 msgid "Enter %(label)s again to verify: "
@@ -691,13 +691,6 @@ msgstr "Отобразить расположения автомонтирова
 msgid "Search for an automount location."
 msgstr "Поиск для расположения автомонтирования."
 
-#, python-format
-msgid "%(count)d automount location matched"
-msgid_plural "%(count)d automount locations matched"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
-
 msgid "Generate automount files for a specific location."
 msgstr "Сгенерировать  файлы автомонтирования для особого расположения."
 
@@ -843,14 +836,8 @@ msgstr ""
 msgid "Time Limit"
 msgstr "Ограничение по времени"
 
-msgid "Time limit of search in seconds"
-msgstr "Ограничение времени поиска в секундах"
-
 msgid "Size Limit"
 msgstr "Ограничение по размеру"
-
-msgid "Maximum number of entries returned"
-msgstr "Максимальное количество совпадений возвращено"
 
 msgid "Kerberos keys available"
 msgstr "Kerberos ключей доступно"
@@ -1067,13 +1054,6 @@ msgstr "Изменён CA ACL \"%(value)s\""
 msgid "Search for CA ACLs."
 msgstr "Поиск по CA ACLs."
 
-#, python-format
-msgid "%(count)d CA ACL matched"
-msgid_plural "%(count)d CA ACLs matched"
-msgstr[0] ""
-msgstr[1] ""
-msgstr[2] ""
-
 msgid "Display the properties of a CA ACL."
 msgstr "Показать свойства of a CA ACL."
 
@@ -1227,10 +1207,6 @@ msgstr "Серийный номер"
 
 msgid "Serial number (hex)"
 msgstr "Серийный номер (hex)"
-
-#, python-format
-msgid "extension %s is forbidden"
-msgstr "расширение %s запрещено"
 
 msgid "RFC822Name does not match any of user's email addresses"
 msgstr "RFC822 Имя не совпадает ни с одним пользователем электронной почты"
@@ -1860,10 +1836,6 @@ msgstr "неверный открытый ключ SSH"
 #, python-format
 msgid "objectclass %s not found"
 msgstr "класс объектов %s не найден"
-
-#, python-format
-msgid "Unable to communicate with CMS (%s)"
-msgstr "Невозможно связаться с CMS (%s)"
 
 msgid "Hardware platform of the host (e.g. Lenovo T61)"
 msgstr "Аппаратная платформа узла (например, Lenovo T61)"

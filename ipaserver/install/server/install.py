@@ -23,7 +23,8 @@ from ipapython.install.common import step
 from ipapython.install.core import Knob
 from ipapython.ipa_log_manager import root_logger
 from ipapython.ipautil import (
-    decrypt_file, format_netloc, ipa_generate_password, run, user_input)
+    decrypt_file, format_netloc, ipa_generate_password, run, user_input,
+    is_fips_enabled)
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
@@ -437,6 +438,10 @@ def install_check(installer):
     external_ca_file = installer._external_ca_file
     http_ca_cert = installer._ca_cert
 
+    if is_fips_enabled():
+        raise RuntimeError(
+            "Installing IPA server in FIPS mode is not supported")
+
     tasks.check_selinux_status()
 
     if options.master_password:
@@ -759,10 +764,11 @@ def install_check(installer):
 
     if options.setup_dns:
         print("BIND DNS server will be configured to serve IPA domain with:")
-        print("Forwarders:    %s" % (
+        print("Forwarders:       %s" % (
             "No forwarders" if not options.forwarders
             else ", ".join([str(ip) for ip in options.forwarders])
         ))
+        print('Forward policy:   %s' % options.forward_policy)
         print("Reverse zone(s):  %s" % (
             "No reverse zone" if options.no_reverse or not dns.reverse_zones
             else ", ".join(str(rz) for rz in dns.reverse_zones)
@@ -992,7 +998,7 @@ def install(installer):
         # Create a BIND instance
         bind = bindinstance.BindInstance(fstore, dm_password)
         bind.setup(host_name, ip_addresses, realm_name,
-                   domain_name, (), not options.no_ntp, (),
+                   domain_name, (), 'first', not options.no_ntp, (),
                    zonemgr=options.zonemgr, ca_configured=setup_ca,
                    no_dnssec_validation=options.no_dnssec_validation)
         bind.create_sample_bind_zone()
@@ -1400,6 +1406,7 @@ class Server(BaseServer):
         int, constants.MAX_DOMAIN_LEVEL,
         description="IPA domain level",
         cli_name='domain-level',
+        deprecated=True,
     )
 
     @domainlevel.validator

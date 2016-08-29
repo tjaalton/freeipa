@@ -45,7 +45,7 @@ try:
     import ipaclient.ntpconf
     from ipapython.ipautil import (
         run, user_input, CalledProcessError, file_exists, dir_exists,
-        realm_to_suffix)
+        realm_to_suffix, is_fips_enabled)
     from ipaplatform.tasks import tasks
     from ipaplatform import services
     from ipaplatform.paths import paths
@@ -54,7 +54,8 @@ try:
     from ipapython.config import IPAOptionParser
     from ipalib import api, errors
     from ipalib import x509, certstore
-    from ipalib.util import verify_host_resolvable
+    from ipalib.util import (
+        normalize_hostname, validate_domain_name, verify_host_resolvable)
     from ipalib.constants import CACERT
     from ipapython.dn import DN
     from ipapython.ssh import SSHPublicKey
@@ -223,6 +224,13 @@ def parse_options():
 
     if (options.server and not options.domain):
         parser.error("--server cannot be used without providing --domain")
+
+    if options.domain:
+        try:
+            validate_domain_name(options.domain)
+        except ValueError as ex:
+            parser.error("invalid domain name: %s" % ex)
+        options.domain = normalize_hostname(options.domain)
 
     if options.force_ntpd and not options.conf_ntp:
         parser.error("--force-ntpd cannot be used together with --no-ntp")
@@ -1750,11 +1758,15 @@ def get_server_connection_interface(server):
 def client_dns(server, hostname, options):
 
     try:
-        verify_host_resolvable(hostname, root_logger)
+        verify_host_resolvable(hostname)
         dns_ok = True
     except errors.DNSNotARecordError:
         root_logger.warning("Hostname (%s) does not have A/AAAA record.",
                             hostname)
+        dns_ok = False
+    except errors.DNSResolverError as ex:
+        root_logger.warning("DNS resolution for hostname %s failed: %s",
+                            hostname, ex)
         dns_ok = False
 
     if (options.dns_updates or options.all_ip_addresses or options.ip_addresses
@@ -3052,6 +3064,9 @@ def main():
 
     if not os.getegid() == 0:
         sys.exit("\nYou must be root to run ipa-client-install.\n")
+    if is_fips_enabled():
+        sys.exit("Installing IPA client in FIPS mode is not supported")
+
     tasks.check_selinux_status()
     logging_setup(options)
     root_logger.debug(

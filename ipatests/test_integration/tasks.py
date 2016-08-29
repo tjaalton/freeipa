@@ -171,6 +171,8 @@ def fix_apache_semaphores(master):
 def unapply_fixes(host):
     restore_files(host)
     restore_hostname(host)
+    # Clean ccache to prevent issues like 5741
+    host.run_command(['kdestroy', '-A'], raiseonerr=False)
 
     # Clean up the test directory
     host.run_command(['rm', '-rvf', host.config.test_dir])
@@ -1062,7 +1064,7 @@ def add_a_records_for_hosts_in_master_domain(master):
         # We don't need to take care of the zone creation since it is master
         # domain
         try:
-            verify_host_resolvable(host.hostname, log)
+            verify_host_resolvable(host.hostname)
             log.debug("The host (%s) is resolvable." % host.domain.name)
         except errors.DNSNotARecordError:
             log.debug("Hostname (%s) does not have A/AAAA record. Adding new one.",

@@ -38,9 +38,8 @@ from ipaserver.install import opendnssecinstance, dnskeysyncinstance
 from ipapython import version, ipaldap
 from ipalib import api, errors, util
 from ipalib.constants import CACERT
-from ipalib.util import (create_topology_graph,
-    get_topology_connection_errors, has_managed_topology)
-from ipapython.ipa_log_manager import *
+from ipalib.util import has_managed_topology, verify_host_resolvable
+from ipapython.ipa_log_manager import root_logger, standard_logging_setup
 from ipapython.dn import DN
 from ipapython.config import IPAOptionParser
 from ipaclient import ipadiscovery
@@ -68,6 +67,14 @@ commands = {
     "dnarange-set":(2, 2, "<master fqdn> <range>", "must provide a master and ID range"),
     "dnanextrange-set":(2, 2, "<master fqdn> <range>", "must provide a master and ID range"),
 }
+
+# tuple of commands that work with ca tree and need Directory Manager password
+dirman_passwd_req_commands = ("list-ruv", "clean-ruv", "abort-clean-ruv",
+                              "clean-dangling-ruv")
+
+
+class NoRUVsFound(Exception):
+    pass
 
 
 def parse_options():
@@ -362,8 +369,9 @@ def get_ruv(realm, host, dirman_passwd, nolookup=False, ca=False):
         else:
             thisrepl = replication.ReplicationManager(realm, host, dirman_passwd)
     except Exception as e:
-        print("Failed to connect to server %s: %s" % (host, e))
-        sys.exit(1)
+        root_logger.debug(traceback.format_exc())
+        raise RuntimeError("Failed to connect to server {host}: {err}"
+                           .format(host=host, err=e))
 
     search_filter = '(&(nsuniqueid=ffffffff-ffffffff-ffffffff-ffffffff)(objectclass=nstombstone))'
     try:
@@ -371,8 +379,8 @@ def get_ruv(realm, host, dirman_passwd, nolookup=False, ca=False):
             thisrepl.db_suffix, thisrepl.conn.SCOPE_SUBTREE, search_filter,
             ['nsds50ruv'])
     except errors.NotFound:
-        print("No RUV records found.")
-        sys.exit(0)
+        root_logger.debug(traceback.format_exc())
+        raise NoRUVsFound("No RUV records found.")
 
     servers = []
     for e in entries:
@@ -389,26 +397,86 @@ def get_ruv(realm, host, dirman_passwd, nolookup=False, ca=False):
 
     return servers
 
+
+def get_ruv_both_suffixes(realm, host, dirman_passwd, verbose, nolookup=False):
+    """
+    Get RUVs for both domain and ipaca suffixes
+    """
+    ruvs = {}
+    fail_gracefully = True
+
+    try:
+        ruvs['ca'] = get_ruv(realm, host, dirman_passwd, nolookup, True)
+    except (NoRUVsFound, RuntimeError) as e:
+        err = "Failed to get CS-RUVs from {host}: {err}".format(host=host,
+                                                                err=e)
+        if isinstance(e, RuntimeError):
+            fail_gracefully = False
+            if verbose:
+                print(err)
+        root_logger.debug(err)
+    try:
+        ruvs['domain'] = get_ruv(realm, host, dirman_passwd, nolookup)
+    except (NoRUVsFound, RuntimeError) as e:
+        err = "Failed to get RUVs from {host}: {err}".format(host=host, err=e)
+        if isinstance(e, RuntimeError):
+            if not fail_gracefully:
+                raise
+            if verbose:
+                print(err)
+        root_logger.debug(err)
+
+    if not ruvs.keys():
+        raise NoRUVsFound("No RUV records found.")
+
+    return ruvs
+
+
 def list_ruv(realm, host, dirman_passwd, verbose, nolookup=False):
     """
     List the Replica Update Vectors on this host to get the available
     replica IDs.
     """
+    try:
+        servers = get_ruv_both_suffixes(realm, host, dirman_passwd,
+                                        verbose, nolookup)
+    except (NoRUVsFound, RuntimeError) as e:
+        print(e)
+        sys.exit(0 if isinstance(e, NoRUVsFound) else 1)
 
-    servers = get_ruv(realm, host, dirman_passwd, nolookup)
-    for (netloc, rid) in servers:
-        print("%s: %s" % (netloc, rid))
+    print('Replica Update Vectors:')
+    if servers.get('domain'):
+        for netloc, rid in servers['domain']:
+            print("\t{name}: {id}".format(name=netloc, id=rid))
+    else:
+        print('\tNo RUVs found.')
+
+    print('Certificate Server Replica Update Vectors:')
+    if servers.get('ca'):
+        for netloc, rid in servers['ca']:
+            print("\t{name}: {id}".format(name=netloc, id=rid))
+    else:
+        print('\tNo CS-RUVs found.')
+
 
 def get_rid_by_host(realm, sourcehost, host, dirman_passwd, nolookup=False):
     """
     Try to determine the RID by host name.
     """
-    servers = get_ruv(realm, sourcehost, dirman_passwd, nolookup)
+    try:
+        servers = get_ruv(realm, sourcehost, dirman_passwd, nolookup)
+    except RuntimeError as e:
+        print(e)
+        sys.exit(1)
+    except NoRUVsFound as e:
+        print(e)
+        servers = []
     for (netloc, rid) in servers:
         if '%s:389' % host == netloc:
             return int(rid)
 
-def clean_ruv(realm, ruv, options, ca=False):
+
+def clean_ruv(realm, ruv, options):
     """
     Given an RID create a CLEANALLRUV task to clean it up.
     """
@@ -417,19 +485,29 @@ def clean_ruv(realm, ruv, options, ca=False):
     except ValueError:
         sys.exit("Replica ID must be an integer: %s" % ruv)
 
-    servers = get_ruv(realm, options.host, options.dirman_passwd,
-                      options.nolookup, ca=ca)
-    found = False
-    for (netloc, rid) in servers:
-        if ruv == int(rid):
-           found = True
-           hostname = netloc
-           break
+    try:
+        servers = get_ruv_both_suffixes(realm, options.host,
+                                        options.dirman_passwd,
+                                        options.verbose,
+                                        options.nolookup)
+    except (NoRUVsFound, RuntimeError) as e:
+        print(e)
+        sys.exit(0 if isinstance(e, NoRUVsFound) else 1)
 
-    if not found:
+    tree_found = None
+    for tree, ruvs in servers.items():
+        for netloc, rid in ruvs:
+            if ruv == int(rid):
+                tree_found = tree
+                hostname = netloc
+                break
+        if tree_found:
+            break
+
+    if not tree_found:
         sys.exit("Replica ID %s not found" % ruv)
 
-    if ca:
+    if tree_found == 'ca':
         print("Clean the Certificate Server Replication Update Vector for %s"
               % hostname)
     else:
@@ -444,7 +522,7 @@ def clean_ruv(realm, ruv, options, ca=False):
         if not ipautil.user_input("Continue to clean?", False):
             sys.exit("Aborted")
 
-    if ca:
+    if tree_found == 'ca':
         thisrepl = replication.get_cs_replication_manager(realm, options.host,
                                                           options.dirman_passwd)
     else:
@@ -452,6 +530,7 @@ def clean_ruv(realm, ruv, options, ca=False):
                                                   options.dirman_passwd)
     thisrepl.cleanallruv(ruv)
     print("Cleanup task created")
+
 
 def abort_clean_ruv(realm, ruv, options):
     """
@@ -462,37 +541,40 @@ def abort_clean_ruv(realm, ruv, options):
     except ValueError:
         sys.exit("Replica ID must be an integer: %s" % ruv)
 
-    servers = get_ruv(realm, options.host, options.dirman_passwd,
-                      options.nolookup)
-    found = False
-    for (netloc, rid) in servers:
-        if ruv == int(rid):
-           found = True
-           hostname = netloc
-           break
+    try:
+        servers = get_ruv_both_suffixes(realm, options.host,
+                                        options.dirman_passwd,
+                                        options.verbose,
+                                        options.nolookup)
+    except (NoRUVsFound, RuntimeError) as e:
+        print(e)
+        sys.exit(0 if isinstance(e, NoRUVsFound) else 1)
 
-    if not found:
-        sys.exit("Replica ID %s not found" % ruv)
+    tree_found = None
+    for tree, ruvs in servers.items():
+        for netloc, rid in ruvs:
+            if ruv == int(rid):
+                tree_found = tree
+                hostname = netloc
+                break
+        if tree_found:
+            break
 
-    servers = get_ruv(realm, options.host, options.dirman_passwd,
-                      options.nolookup)
-    found = False
-    for (netloc, rid) in servers:
-        if ruv == int(rid):
-           found = True
-           hostname = netloc
-           break
-
-    if not found:
+    if not tree_found:
         sys.exit("Replica ID %s not found" % ruv)
 
     print("Aborting the clean Replication Update Vector task for %s" % hostname)
     print()
-    thisrepl = replication.ReplicationManager(realm, options.host,
-                                              options.dirman_passwd)
+    if tree_found == 'ca':
+        thisrepl = replication.get_cs_replication_manager(realm, options.host,
+                                                          options.dirman_passwd)
+    else:
+        thisrepl = replication.ReplicationManager(realm, options.host,
+                                                  options.dirman_passwd)
     thisrepl.abortcleanallruv(ruv, options.force)
 
     print("Cleanup task stopped")
+
 
 def list_clean_ruv(realm, host, dirman_passwd, verbose, nolookup=False):
     """
@@ -541,15 +623,6 @@ def clean_dangling_ruvs(realm, host, options):
     Cleans all RUVs and CS-RUVs that are left in the system from
     uninstalled replicas
     """
-    # get the Directory Manager password
-    if not options.dirman_passwd:
-        options.dirman_passwd = installutils.read_password('Directory Manager',
-                                                           confirm=False,
-                                                           validate=False,
-                                                           retry=False)
-        if options.dirman_passwd is None:
-            sys.exit('Directory Manager password is required')
-
     conn = ipaldap.IPAdmin(host, 636, cacert=CACERT)
     try:
         conn.do_simple_bind(bindpw=options.dirman_passwd)
@@ -604,32 +677,44 @@ def clean_dangling_ruvs(realm, host, options):
                   .format(host=master_cn))
             offlines.add(master_cn)
             continue
-
         try:
-            entry = conn.get_entry(replica_dn)
-            ruv = (master_cn, entry.single_value.get('nsDS5ReplicaID'))
-            # the check whether ruv is already in ruvs is performed by set type
-            ruvs.add(ruv)
-
-            if(master_info['ca']):
-                entry = conn.get_entry(csreplica_dn)
-                csruv = (master_cn, entry.single_value.get('nsDS5ReplicaID'))
-                csruvs.add(csruv)
-
-            # get_ruv returns server names with :port which needs to be split off
-            ruv_list = get_ruv(realm, master_cn, options.dirman_passwd,
-                               options.nolookup)
-            master_info['ruvs'] = set([
-                (re.sub(':\d+', '', x), y)
-                for (x, y) in ruv_list
-                ])
+            try:
+                entry = conn.get_entry(replica_dn)
+                ruv = (master_cn, entry.single_value.get('nsDS5ReplicaID'))
+                # the check whether ruv is already in ruvs is performed
+                # by the set type
+                ruvs.add(ruv)
+            except errors.NotFound:
+                pass
 
             if master_info['ca']:
-                ruv_list = get_ruv(realm, master_cn, options.dirman_passwd,
-                                   options.nolookup, ca=True)
+                try:
+                    entry = conn.get_entry(csreplica_dn)
+                    csruv = (master_cn,
+                             entry.single_value.get('nsDS5ReplicaID'))
+                    csruvs.add(csruv)
+                except errors.NotFound:
+                    pass
+
+            try:
+                ruv_dict = get_ruv_both_suffixes(realm, master_cn,
+                                                 options.dirman_passwd,
+                                                 options.verbose,
+                                                 options.nolookup)
+            except (RuntimeError, NoRUVsFound):
+                continue
+
+            # get_ruv_both_suffixes returns server names with :port
+            # This needs needs to be split off
+            if ruv_dict.get('domain'):
+                master_info['ruvs'] = set([
+                    (re.sub(':\d+', '', x), y)
+                    for (x, y) in ruv_dict['domain']
+                    ])
+            if ruv_dict.get('ca'):
                 master_info['csruvs'] = set([
                     (re.sub(':\d+', '', x), y)
-                    for (x, y) in ruv_list
+                    for (x, y) in ruv_dict['ca']
                     ])
         except Exception as e:
             sys.exit("Failed to obtain information from '{host}': {error}"
@@ -671,10 +756,6 @@ def clean_dangling_ruvs(realm, host, options):
                 print('\t\tid: {id}, hostname: {host}'
                       .format(id=csruv[1], host=csruv[0]))
 
-    # TODO: this can be removed when #5396 is fixed
-    if offlines:
-        sys.exit("ERROR: All replicas need to be online to proceed.")
-
     if not options.force and not ipautil.user_input("Proceed with cleaning?", False):
         sys.exit("Aborted")
 
@@ -689,7 +770,7 @@ def clean_dangling_ruvs(realm, host, options):
         for csruv in master_info['clean_csruv']:
             if csruv[1] not in cleaned:
                 cleaned.add(csruv[1])
-                clean_ruv(realm, csruv[1], options, ca=True)
+                clean_ruv(realm, csruv[1], options)
 
 
 def check_last_link(delrepl, realm, dirman_passwd, force):
@@ -744,10 +825,14 @@ def check_last_link(delrepl, realm, dirman_passwd, force):
 
 
 def enforce_host_existence(host, message=None):
-    if host is not None and not ipautil.host_exists(host):
-        if message is None:
-            message = "Unknown host %s" % host
+    if host is None:
+        return
 
+    try:
+        verify_host_resolvable(host)
+    except errors.DNSNotARecordError as ex:
+        if message is None:
+            message = "Unknown host %s: %s" % (host, ex)
         sys.exit(message)
 
 def ensure_last_services(conn, hostname, masters, options):
@@ -875,10 +960,6 @@ def del_master_managed(realm, hostname, options):
     # 4. Check that we are not leaving the installation without CA and/or DNS
     #    And pick new CA master.
     ensure_last_services(api.Backend.ldap2, hostname, masters, options)
-
-    # Save the RID value before we start deleting
-    rid = get_rid_by_host(realm, options.host, hostname,
-                          options.dirman_passwd, options.nolookup)
 
     # 5. Remove master entry. Topology plugin will remove replication agreements.
     try:
@@ -1566,10 +1647,12 @@ def main():
     if options.dirman_passwd:
         dirman_passwd = options.dirman_passwd
     else:
-        if not test_connection(realm, host, options.nolookup):
+        if (not test_connection(realm, host, options.nolookup) or
+           args[0] in dirman_passwd_req_commands):
             dirman_passwd = installutils.read_password("Directory Manager",
                 confirm=False, validate=False, retry=False)
-            if dirman_passwd is None:
+            if dirman_passwd is None or (
+               not dirman_passwd and args[0] in dirman_passwd_req_commands):
                 sys.exit("Directory Manager password required")
 
     options.dirman_passwd = dirman_passwd

@@ -4,13 +4,13 @@
 
 import base64
 
-from ipalib import api, errors
-
-from ipatests.util import assert_deepequal, raises
-from xmlrpc_test import XMLRPC_test
-from ipapython.dn import DN
-from testcert import get_testcert
 import pytest
+
+from ipalib import api, errors
+from ipapython.dn import DN
+from ipatests.util import assert_deepequal, raises
+from ipatests.test_xmlrpc.xmlrpc_test import XMLRPC_test
+from ipatests.test_xmlrpc.testcert import get_testcert
 
 
 @pytest.mark.tier1
@@ -112,7 +112,7 @@ class CertManipCmdTestBase(XMLRPC_test):
         cls.invalid_b64 = [u'few4w24gvrae54y6463234f']
 
         # malformed certificate
-        cls.malformed_cert = [base64.b64encode('malformed cert')]
+        cls.malformed_cert = [base64.b64encode(b'malformed cert')]
 
         # store entity info for the final test
         cls.entity_attrs = api.Command['%s_show' % cls.entity_class](

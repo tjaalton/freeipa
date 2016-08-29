@@ -24,6 +24,7 @@ from ipapython import ipautil, sysrestore, version, certdb
 from ipapython import ipaldap
 from ipapython.ipa_log_manager import *
 from ipapython import certmonger
+from ipapython import dnsutil
 from ipapython.dn import DN
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
@@ -793,6 +794,50 @@ def named_root_key_include():
     return True
 
 
+def named_update_global_forwarder_policy():
+    bind = bindinstance.BindInstance()
+    if not bindinstance.named_conf_exists() or not bind.is_configured():
+        # DNS service may not be configured
+        root_logger.info('DNS is not configured')
+        return False
+
+    root_logger.info('[Checking global forwarding policy in named.conf '
+                     'to avoid conflicts with automatic empty zones]')
+    if sysupgrade.get_upgrade_state(
+        'named.conf', 'forward_policy_conflict_with_empty_zones_handled'
+    ):
+        # upgrade was done already
+        return False
+
+    sysupgrade.set_upgrade_state(
+        'named.conf',
+        'forward_policy_conflict_with_empty_zones_handled',
+        True
+    )
+    if not dnsutil.has_empty_zone_addresses(api.env.host):
+        # guess: local server does not have IP addresses from private ranges
+        # so hopefully automatic empty zones are not a problem
+        return False
+
+    if bindinstance.named_conf_get_directive(
+            'forward',
+            section=bindinstance.NAMED_SECTION_OPTIONS,
+            str_val=False
+    ) == 'only':
+        return False
+
+    root_logger.info('Global forward policy in named.conf will '
+                     'be changed to "only" to avoid conflicts with '
+                     'automatic empty zones')
+    bindinstance.named_conf_set_directive(
+        'forward',
+        'only',
+        section=bindinstance.NAMED_SECTION_OPTIONS,
+        str_val=False
+    )
+    return True
+
+
 def certificate_renewal_update(ca, ds, http):
     """
     Update certmonger certificate renewal configuration.
@@ -1464,6 +1509,7 @@ def upgrade_configuration():
         sub_dict['SUBJECT_BASE'] = subject_base
 
     ca = cainstance.CAInstance(api.env.realm, certs.NSS_DIR)
+    ca_running = ca.is_running()
 
     with installutils.stopped_service('pki-tomcatd', 'pki-tomcat'):
         # Dogtag must be stopped to be able to backup CS.cfg config
@@ -1496,6 +1542,12 @@ def upgrade_configuration():
                 os.path.join(ipautil.SHARE_DIR, "certmap.conf.template")
             )
         upgrade_pki(ca, fstore)
+
+    # several upgrade steps require running CA.  If CA is configured,
+    # always run ca.start() because we need to wait until CA is really ready
+    # by checking status using http
+    if ca.is_configured():
+        ca.start('pki-tomcat')
 
     certmonger_service = services.knownservices.certmonger
     if ca.is_configured() and not certmonger_service.is_running():
@@ -1616,6 +1668,7 @@ def upgrade_configuration():
                           named_bindkey_file_option(),
                           named_managed_keys_dir_option(),
                           named_root_key_include(),
+                          named_update_global_forwarder_policy(),
                           mask_named_regular(),
                           fix_dyndb_ldap_workdir_permissions(),
                          )
@@ -1658,12 +1711,21 @@ def upgrade_configuration():
     ca_import_included_profiles(ca)
     add_default_caacl(ca)
 
+    if ca.is_configured():
+        cainstance.repair_profile_caIPAserviceCert()
+
     set_sssd_domain_option('ipa_server_mode', 'True')
 
     if ds_running and not ds.is_running():
         ds.start(ds_serverid)
     elif not ds_running and ds.is_running():
         ds.stop(ds_serverid)
+
+    if ca.is_configured():
+        if ca_running and not ca.is_running():
+            ca.start('pki-tomcat')
+        elif not ca_running and ca.is_running():
+            ca.stop('pki-tomcat')
 
 
 def upgrade_check(options):

@@ -51,7 +51,6 @@ from ipapython import ipavalidate
 from ipapython import config
 from ipaplatform.paths import paths
 from ipapython.dn import DN
-from ipapython.dnsutil import DNSName
 
 SHARE_DIR = paths.USR_SHARE_IPA_DIR
 PLUGINS_SHARE_DIR = paths.IPA_PLUGINS
@@ -87,111 +86,132 @@ def get_domain_name():
 
     return domain_name
 
-class CheckedIPAddress(netaddr.IPAddress):
+
+class UnsafeIPAddress(netaddr.IPAddress):
+    """Any valid IP address with or without netmask."""
 
     # Use inet_pton() rather than inet_aton() for IP address parsing. We
     # will use the same function in IPv4/IPv6 conversions + be stricter
     # and don't allow IP addresses such as '1.1.1' in the same time
     netaddr_ip_flags = netaddr.INET_PTON
 
+    def __init__(self, addr):
+        if isinstance(addr, UnsafeIPAddress):
+            self._net = addr._net
+            super(UnsafeIPAddress, self).__init__(addr,
+                                                  flags=self.netaddr_ip_flags)
+            return
+
+        elif isinstance(addr, netaddr.IPAddress):
+            self._net = None  # no information about netmask
+            super(UnsafeIPAddress, self).__init__(addr,
+                                                  flags=self.netaddr_ip_flags)
+            return
+
+        elif isinstance(addr, netaddr.IPNetwork):
+            self._net = addr
+            super(UnsafeIPAddress, self).__init__(self._net.ip,
+                                                  flags=self.netaddr_ip_flags)
+            return
+
+        # option of last resort: parse it as string
+        self._net = None
+        addr = str(addr)
+        try:
+            try:
+                addr = netaddr.IPAddress(addr, flags=self.netaddr_ip_flags)
+            except netaddr.AddrFormatError:
+                # netaddr.IPAddress doesn't handle zone indices in textual
+                # IPv6 addresses. Try removing zone index and parse the
+                # address again.
+                addr, sep, foo = addr.partition('%')
+                if sep != '%':
+                    raise
+                addr = netaddr.IPAddress(addr, flags=self.netaddr_ip_flags)
+                if addr.version != 6:
+                    raise
+        except ValueError:
+            self._net = netaddr.IPNetwork(addr, flags=self.netaddr_ip_flags)
+            addr = self._net.ip
+        super(UnsafeIPAddress, self).__init__(addr,
+                                              flags=self.netaddr_ip_flags)
+
+
+class CheckedIPAddress(UnsafeIPAddress):
+    """IPv4 or IPv6 address with additional constraints.
+
+    Reserved or link-local addresses are never accepted.
+    """
     def __init__(self, addr, match_local=False, parse_netmask=True,
                  allow_network=False, allow_loopback=False,
                  allow_broadcast=False, allow_multicast=False):
+
+        super(CheckedIPAddress, self).__init__(addr)
         if isinstance(addr, CheckedIPAddress):
-            super(CheckedIPAddress, self).__init__(addr, flags=self.netaddr_ip_flags)
             self.prefixlen = addr.prefixlen
-            self.defaultnet = addr.defaultnet
-            self.interface = addr.interface
             return
 
-        net = None
-        iface = None
-        defnet = False
+        if not parse_netmask and self._net:
+            raise ValueError(
+                "netmask and prefix length not allowed here: {}".format(addr))
 
-        if isinstance(addr, netaddr.IPNetwork):
-            net = addr
-            addr = net.ip
-        elif isinstance(addr, netaddr.IPAddress):
-            pass
-        else:
-            try:
-                try:
-                    addr = netaddr.IPAddress(str(addr), flags=self.netaddr_ip_flags)
-                except netaddr.AddrFormatError:
-                    # netaddr.IPAddress doesn't handle zone indices in textual
-                    # IPv6 addresses. Try removing zone index and parse the
-                    # address again.
-                    if not isinstance(addr, six.string_types):
-                        raise
-                    addr, sep, foo = addr.partition('%')
-                    if sep != '%':
-                        raise
-                    addr = netaddr.IPAddress(str(addr), flags=self.netaddr_ip_flags)
-                    if addr.version != 6:
-                        raise
-            except ValueError:
-                net = netaddr.IPNetwork(str(addr), flags=self.netaddr_ip_flags)
-                if not parse_netmask:
-                    raise ValueError("netmask and prefix length not allowed here")
-                addr = net.ip
+        if self.version not in (4, 6):
+            raise ValueError("unsupported IP version {}".format(self.version))
 
-        if addr.version not in (4, 6):
-            raise ValueError("unsupported IP version")
+        if not allow_loopback and self.is_loopback():
+            raise ValueError("cannot use loopback IP address {}".format(addr))
+        if (not self.is_loopback() and self.is_reserved()) \
+                or self in netaddr.ip.IPV4_6TO4:
+            raise ValueError(
+                "cannot use IANA reserved IP address {}".format(addr))
 
-        if not allow_loopback and addr.is_loopback():
-            raise ValueError("cannot use loopback IP address")
-        if (not addr.is_loopback() and addr.is_reserved()) \
-                or addr in netaddr.ip.IPV4_6TO4:
-            raise ValueError("cannot use IANA reserved IP address")
-
-        if addr.is_link_local():
-            raise ValueError("cannot use link-local IP address")
-        if not allow_multicast and addr.is_multicast():
-            raise ValueError("cannot use multicast IP address")
+        if self.is_link_local():
+            raise ValueError(
+                "cannot use link-local IP address {}".format(addr))
+        if not allow_multicast and self.is_multicast():
+            raise ValueError("cannot use multicast IP address {}".format(addr))
 
         if match_local:
-            if addr.version == 4:
+            if self.version == 4:
                 family = 'inet'
-            elif addr.version == 6:
+            elif self.version == 6:
                 family = 'inet6'
 
             result = run(
                 [paths.IP, '-family', family, '-oneline', 'address', 'show'],
                 capture_output=True)
             lines = result.output.split('\n')
+            iface = None
             for line in lines:
                 fields = line.split()
                 if len(fields) < 4:
                     continue
 
                 ifnet = netaddr.IPNetwork(fields[3])
-                if ifnet == net or (net is None and ifnet.ip == addr):
-                    net = ifnet
+                if ifnet == self._net or (self._net is None and ifnet.ip == self):
+                    self._net = ifnet
                     iface = fields[1]
                     break
 
             if iface is None:
-                raise ValueError('No network interface matches the provided IP address and netmask')
+                raise ValueError('no network interface matches the IP address '
+                                 'and netmask {}'.format(addr))
 
-        if net is None:
-            defnet = True
-            if addr.version == 4:
-                net = netaddr.IPNetwork(netaddr.cidr_abbrev_to_verbose(str(addr)))
-            elif addr.version == 6:
-                net = netaddr.IPNetwork(str(addr) + '/64')
+        if self._net is None:
+            if self.version == 4:
+                self._net = netaddr.IPNetwork(
+                    netaddr.cidr_abbrev_to_verbose(str(self)))
+            elif self.version == 6:
+                self._net = netaddr.IPNetwork(str(self) + '/64')
 
-        if not allow_network and  addr == net.network:
-            raise ValueError("cannot use IP network address")
-        if not allow_broadcast and addr.version == 4 and addr == net.broadcast:
-            raise ValueError("cannot use broadcast IP address")
+        if not allow_network and self == self._net.network:
+            raise ValueError("cannot use IP network address {}".format(addr))
+        if not allow_broadcast and (self.version == 4 and
+                                    self == self._net.broadcast):
+            raise ValueError("cannot use broadcast IP address {}".format(addr))
 
-        super(CheckedIPAddress, self).__init__(addr, flags=self.netaddr_ip_flags)
-        self.prefixlen = net.prefixlen
-        self.defaultnet = defnet
-        self.interface = iface
+        self.prefixlen = self._net.prefixlen
 
-    def is_local(self):
-        return self.interface is not None
 
 def valid_ip(addr):
     return netaddr.valid_ipv4(addr) or netaddr.valid_ipv6(addr)
@@ -519,10 +539,14 @@ def dir_exists(filename):
     except:
         return False
 
+
 def install_file(fname, dest):
+    # SELinux: use copy to keep the right context
     if file_exists(dest):
         os.rename(dest, dest + ".orig")
-    shutil.move(fname, dest)
+    shutil.copy(fname, dest)
+    os.remove(fname)
+
 
 def backup_file(fname):
     if file_exists(fname):
@@ -1014,20 +1038,6 @@ def bind_port_responder(port, socket_type=socket.SOCK_STREAM, socket_timeout=Non
         raise last_socket_error # pylint: disable=E0702
 
 
-def host_exists(host):
-    """
-    Resolve the host to see if it exists.
-
-    Returns True/False
-    """
-    try:
-        socket.getaddrinfo(host, 80)
-    except socket.gaierror:
-        return False
-    else:
-        return True
-
-
 def reverse_record_exists(ip_address):
     """
     Checks if IP address have some reverse record somewhere.
@@ -1042,96 +1052,6 @@ def reverse_record_exists(ip_address):
         # really don't care what exception, PTR is simply unresolvable
         return False
     return True
-
-
-def check_zone_overlap(zone, raise_on_error=True):
-    root_logger.info("Checking DNS domain %s, please wait ..." % zone)
-    if not isinstance(zone, DNSName):
-        zone = DNSName(zone).make_absolute()
-
-    # automatic empty zones always exist so checking them is pointless,
-    # do not report them to avoid meaningless error messages
-    if is_auto_empty_zone(zone):
-        return
-
-    try:
-        containing_zone = resolver.zone_for_name(zone)
-    except DNSException as e:
-        msg = ("DNS check for domain %s failed: %s." % (zone, e))
-        if raise_on_error:
-            raise ValueError(msg)
-        else:
-            root_logger.warning(msg)
-            return
-
-    if containing_zone == zone:
-        try:
-            ns = [ans.to_text() for ans in resolver.query(zone, 'NS')]
-        except DNSException as e:
-            root_logger.debug("Failed to resolve nameserver(s) for domain"
-                              " {0}: {1}".format(zone, e))
-            ns = []
-
-        msg = u"DNS zone {0} already exists in DNS".format(zone)
-        if ns:
-            msg += u" and is handled by server(s): {0}".format(', '.join(ns))
-        raise ValueError(msg)
-
-
-def is_auto_empty_zone(zone):
-    assert isinstance(zone, DNSName)
-
-    automatic_empty_zones = [DNSName(aez).make_absolute() for aez in [
-        # RFC 1918
-        "10.IN-ADDR.ARPA", "16.172.IN-ADDR.ARPA", "17.172.IN-ADDR.ARPA",
-        "18.172.IN-ADDR.ARPA", "19.172.IN-ADDR.ARPA", "20.172.IN-ADDR.ARPA",
-        "21.172.IN-ADDR.ARPA", "22.172.IN-ADDR.ARPA", "23.172.IN-ADDR.ARPA",
-        "24.172.IN-ADDR.ARPA", "25.172.IN-ADDR.ARPA", "26.172.IN-ADDR.ARPA",
-        "27.172.IN-ADDR.ARPA", "28.172.IN-ADDR.ARPA", "29.172.IN-ADDR.ARPA",
-        "30.172.IN-ADDR.ARPA", "31.172.IN-ADDR.ARPA", "168.192.IN-ADDR.ARPA",
-        # RFC 6598
-        "64.100.IN-ADDR.ARPA", "65.100.IN-ADDR.ARPA", "66.100.IN-ADDR.ARPA",
-        "67.100.IN-ADDR.ARPA", "68.100.IN-ADDR.ARPA", "69.100.IN-ADDR.ARPA",
-        "70.100.IN-ADDR.ARPA", "71.100.IN-ADDR.ARPA", "72.100.IN-ADDR.ARPA",
-        "73.100.IN-ADDR.ARPA", "74.100.IN-ADDR.ARPA", "75.100.IN-ADDR.ARPA",
-        "76.100.IN-ADDR.ARPA", "77.100.IN-ADDR.ARPA", "78.100.IN-ADDR.ARPA",
-        "79.100.IN-ADDR.ARPA", "80.100.IN-ADDR.ARPA", "81.100.IN-ADDR.ARPA",
-        "82.100.IN-ADDR.ARPA", "83.100.IN-ADDR.ARPA", "84.100.IN-ADDR.ARPA",
-        "85.100.IN-ADDR.ARPA", "86.100.IN-ADDR.ARPA", "87.100.IN-ADDR.ARPA",
-        "88.100.IN-ADDR.ARPA", "89.100.IN-ADDR.ARPA", "90.100.IN-ADDR.ARPA",
-        "91.100.IN-ADDR.ARPA", "92.100.IN-ADDR.ARPA", "93.100.IN-ADDR.ARPA",
-        "94.100.IN-ADDR.ARPA", "95.100.IN-ADDR.ARPA", "96.100.IN-ADDR.ARPA",
-        "97.100.IN-ADDR.ARPA", "98.100.IN-ADDR.ARPA", "99.100.IN-ADDR.ARPA",
-        "100.100.IN-ADDR.ARPA", "101.100.IN-ADDR.ARPA",
-        "102.100.IN-ADDR.ARPA", "103.100.IN-ADDR.ARPA",
-        "104.100.IN-ADDR.ARPA", "105.100.IN-ADDR.ARPA",
-        "106.100.IN-ADDR.ARPA", "107.100.IN-ADDR.ARPA",
-        "108.100.IN-ADDR.ARPA", "109.100.IN-ADDR.ARPA",
-        "110.100.IN-ADDR.ARPA", "111.100.IN-ADDR.ARPA",
-        "112.100.IN-ADDR.ARPA", "113.100.IN-ADDR.ARPA",
-        "114.100.IN-ADDR.ARPA", "115.100.IN-ADDR.ARPA",
-        "116.100.IN-ADDR.ARPA", "117.100.IN-ADDR.ARPA",
-        "118.100.IN-ADDR.ARPA", "119.100.IN-ADDR.ARPA",
-        "120.100.IN-ADDR.ARPA", "121.100.IN-ADDR.ARPA",
-        "122.100.IN-ADDR.ARPA", "123.100.IN-ADDR.ARPA",
-        "124.100.IN-ADDR.ARPA", "125.100.IN-ADDR.ARPA",
-        "126.100.IN-ADDR.ARPA", "127.100.IN-ADDR.ARPA",
-        # RFC 5735 and RFC 5737
-        "0.IN-ADDR.ARPA", "127.IN-ADDR.ARPA", "254.169.IN-ADDR.ARPA",
-        "2.0.192.IN-ADDR.ARPA", "100.51.198.IN-ADDR.ARPA",
-        "113.0.203.IN-ADDR.ARPA", "255.255.255.255.IN-ADDR.ARPA",
-        # Local IPv6 Unicast Addresses
-        "0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.IP6.ARPA",
-        "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.IP6.ARPA",
-        # LOCALLY ASSIGNED LOCAL ADDRESS SCOPE
-        "D.F.IP6.ARPA", "8.E.F.IP6.ARPA", "9.E.F.IP6.ARPA", "A.E.F.IP6.ARPA",
-        "B.E.F.IP6.ARPA",
-        # Example Prefix, RFC 3849.
-        "8.B.D.0.1.0.0.2.IP6.ARPA",
-        # RFC 7534
-        "EMPTY.AS112.ARPA",
-    ]]
-    return zone in automatic_empty_zones
 
 
 def config_replace_variables(filepath, replacevars=dict(), appendvars=dict()):
@@ -1557,3 +1477,22 @@ if six.PY2:
                 type(value).__name__))
 else:
     fsdecode = os.fsdecode  #pylint: disable=no-member
+
+
+def is_fips_enabled():
+    """
+    Checks whether this host is FIPS-enabled.
+
+    Returns a boolean indicating if the host is FIPS-enabled, i.e. if the
+    file /proc/sys/crypto/fips_enabled contains a non-0 value. Otherwise,
+    or if the file /proc/sys/crypto/fips_enabled does not exist,
+    the function returns False.
+    """
+    try:
+        with open(paths.PROC_FIPS_ENABLED, 'r') as f:
+            if f.read().strip() != '0':
+                return True
+    except IOError:
+        # Consider that the host is not fips-enabled if the file does not exist
+        pass
+    return False

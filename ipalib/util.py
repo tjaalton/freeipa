@@ -44,6 +44,7 @@ from ipalib.text import _
 from ipapython.ssh import SSHPublicKey
 from ipapython.dn import DN, RDN
 from ipapython.dnsutil import DNSName
+from ipapython.dnsutil import resolve_ip_addresses
 from ipapython.graph import Graph
 
 if six.PY3:
@@ -66,31 +67,14 @@ def json_serialize(obj):
         return ''
     return json_serialize(obj.__json__())
 
-def verify_host_resolvable(fqdn, log):
-    """
-    See if the hostname has a DNS A/AAAA record.
-    """
-    if not isinstance(fqdn, DNSName):
-        fqdn = DNSName(fqdn)
 
-    fqdn = fqdn.make_absolute()
-    for rdtype in ('A', 'AAAA'):
-        try:
-            answers = resolver.query(fqdn, rdtype)
-            log.debug(
-                'IPA: found %d %s records for %s: %s' % (len(answers),
-                rdtype, fqdn, ' '.join(str(answer) for answer in answers))
-            )
-        except DNSException:
-            log.debug(
-                'IPA: DNS %s record lookup failed for %s' %
-                (rdtype, fqdn)
-            )
-            continue
-        else:
-            return
-    # dns lookup failed in both tries
-    raise errors.DNSNotARecordError()
+def verify_host_resolvable(fqdn):
+    try:
+        if not resolve_ip_addresses(fqdn):
+            raise errors.DNSNotARecordError(hostname=fqdn)
+    except dns.exception.DNSException as ex:
+        # wrap DNSException in a PublicError
+        raise errors.DNSResolverError(exception=ex)
 
 
 def has_soa_or_ns_record(domain):
@@ -860,3 +844,11 @@ def detect_dns_zone_realm_type(api, domain):
 def has_managed_topology(api):
     domainlevel = api.Command['domainlevel_get']().get('result', DOMAIN_LEVEL_0)
     return domainlevel > DOMAIN_LEVEL_0
+
+
+def normalize_hostname(hostname):
+    """Use common fqdn form without the trailing dot"""
+    if hostname.endswith(u'.'):
+        hostname = hostname[:-1]
+    hostname = hostname.lower()
+    return hostname

@@ -118,7 +118,7 @@ def install_check(standalone, api, replica, options, hostname):
         domain = dnsutil.DNSName(util.normalize_zone(api.env.domain))
         print("Checking DNS domain %s, please wait ..." % domain)
         try:
-            ipautil.check_zone_overlap(domain, raise_on_error=False)
+            dnsutil.check_zone_overlap(domain, raise_on_error=False)
         except ValueError as e:
             if options.force or options.allow_zone_overlap:
                 root_logger.warning("%s Please make sure that the domain is "
@@ -129,7 +129,7 @@ def install_check(standalone, api, replica, options, hostname):
 
     for reverse_zone in options.reverse_zones:
         try:
-            ipautil.check_zone_overlap(reverse_zone)
+            dnsutil.check_zone_overlap(reverse_zone)
         except ValueError as e:
             if options.force or options.allow_zone_overlap:
                 root_logger.warning(e.message)
@@ -259,6 +259,17 @@ def install_check(standalone, api, replica, options, hostname):
     ip_addresses = get_server_ip_address(hostname, options.unattended,
                                          True, options.ip_addresses)
 
+    if not options.forward_policy:
+        # user did not specify policy, derive it: default is 'first' but
+        # if any of local IP addresses belongs to private ranges use 'only'
+        options.forward_policy = 'first'
+        for ip in ip_addresses:
+            if dnsutil.inside_auto_empty_zone(dnsutil.DNSName(ip.reverse_dns)):
+                options.forward_policy = 'only'
+                root_logger.debug('IP address %s belongs to a private range, '
+                                  'using forward policy only', ip)
+                break
+
     if options.no_forwarders:
         options.forwarders = []
     elif options.forwarders or options.auto_forwarders:
@@ -318,8 +329,8 @@ def install(standalone, replica, options, api=api):
     bind = bindinstance.BindInstance(fstore, ldapi=True, api=api,
                                      autobind=AUTOBIND_ENABLED)
     bind.setup(api.env.host, ip_addresses, api.env.realm, api.env.domain,
-               options.forwarders, conf_ntp, reverse_zones,
-               zonemgr=options.zonemgr,
+               options.forwarders, options.forward_policy, conf_ntp,
+               reverse_zones, zonemgr=options.zonemgr,
                no_dnssec_validation=options.no_dnssec_validation,
                ca_configured=options.setup_ca)
 

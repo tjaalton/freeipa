@@ -130,8 +130,10 @@ def this_host(request):
     """Fixture for the current master"""
     tracker = HostTracker(name=api.env.host.partition('.')[0],
                           fqdn=api.env.host)
-    # This host is not created/deleted, so don't call make_fixture
     tracker.exists = True
+    # Finalizer ensures that any certificates added to this_host are removed
+    tracker.add_finalizer_certcleanup(request)
+    # This host is not created/deleted, so don't call make_fixture
     return tracker
 
 
@@ -309,8 +311,7 @@ class TestCRUD(XMLRPC_test):
     def test_try_add_not_in_dns(self, host):
         host.ensure_missing()
         command = host.make_create_command(force=False)
-        with raises_exact(errors.DNSNotARecordError(
-                reason=u'Host does not have corresponding DNS A/AAAA record')):
+        with raises_exact(errors.DNSNotARecordError(hostname=host.fqdn)):
             command()
 
     def test_add_host_with_null_password(self, host):
