@@ -4,6 +4,7 @@ freeipa (4.3.2-1) UNRELEASED; urgency=medium
   * copyright, missing-sources, README.source: Exclude minified javascript
     that the runtime does not need. Add unminified versions of others,
     update copyright to match. (Closes: #787593)
+  * source/lintian-overrides: Document minified javascript issues.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 18 Apr 2016 17:40:32 +0300
 
