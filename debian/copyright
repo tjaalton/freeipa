@@ -41,16 +41,6 @@ License: GPL-3+ with OpenSSL exception
  Program may make changes or additions to the list of Approved
  Interfaces.
 
-Files: daemons/ipa-slapi-plugins/ipa-dns/ipa_dns.c
-Copyright: 2001, Sun Microsystems, Inc. Used by permission.
-           2013, Red Hat, Inc.
-License: GPL-2
-
-Files: install/share/05rfc2247.ldif install/share/certmap.conf.template
-Copyright: 2001, Sun Microsystems, Inc.
-           2005, Red Hat, Inc.
-License: GPL-2
-
 Files: install/ui/css/patternfly.css
 Copyright: Nicolas Gallagher
            Jonathan Neal
