@@ -19,3 +19,4 @@ fix-named-conf-template.diff
 fix-memcached.diff
 fix-oddjobs.diff
 purge-firefox-extension.diff
+fix-ipa-otpd-service.diff
