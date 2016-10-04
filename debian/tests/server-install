@@ -1,0 +1,32 @@
+#!/bin/sh
+
+# hack for lxc
+IP=`ip route get 1.1.1.1 | awk '{print $NF; exit}'`
+HOSTNAME=`cat /etc/hosts| grep '127.0.1.1' | awk '{print $NF; exit}'`
+echo "$IP $HOSTNAME.debci $HOSTNAME" >> /etc/hosts
+
+if [ ! -d /etc/systemd/system/pki-tomcatd.target.wants ]; then
+    echo "WHOOPS: Creating /etc/systemd/system/pki-tomcatd.target.wants"
+    mkdir /etc/systemd/system/pki-tomcatd.target.wants
+fi
+if [ ! -d /etc/systemd/system/pki-tomcatd-nuxwdog.target.wants ]; then
+    echo "WHOOPS: Creating /etc/systemd/system/pki-tomcatd-nuxwdog.target.wants"
+    mkdir /etc/systemd/system/pki-tomcatd-nuxwdog.target.wants
+fi
+
+ipa-server-install \
+	-U \
+	-r DEBCI \
+	-n debci \
+	-p Secret123 \
+	-a Secret123 \
+	--ip-address=$IP \
+	--setup-dns \
+	--no-forwarders \
+	--hostname=$HOSTNAME.debci
+
+
+if [ $? != 0 ]; then
+    echo ">>>>> IPASERVER log >>>>>>>"
+    cat /var/log/ipaserver-install.log
+fi
