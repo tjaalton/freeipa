@@ -229,7 +229,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    BIND_LDAP_DNS_ZONE_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/master/"
 +#   USR_LIB_DIRSRV = "/usr/lib/dirsrv"
 +#   LIB_FIREFOX = "/usr/lib/firefox"
-+    LIBSOFTHSM2_SO = "/usr/lib/%s/softhsm/libsofthsm2.so" % MULTIARCH
++    LIBSOFTHSM2_SO = "/usr/lib/softhsm/libsofthsm2.so"
 +    LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
 +#   BIND_LDAP_SO_64 = "/usr/lib64/bind/ldap.so"
 +#   USR_LIB_DIRSRV_64 = "/usr/lib64/dirsrv"
