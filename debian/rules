@@ -117,8 +117,12 @@ override_dh_systemd_enable:
 
 override_dh_fixperms:
 	dh_fixperms
-	chmod 0700 $(CURDIR)/debian/freeipa-server/etc/ipa/custodia
-	chmod 0700 $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup
+
+	# check needed to not fail arch-indep build which doesn't run dh_installdirs
+	if [ -d $(CURDIR)/debian/freeipa-server/etc/ipa/custodia ]; then \
+	    chmod 0700 $(CURDIR)/debian/freeipa-server/etc/ipa/custodia; \
+	    chmod 0700 $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup; \
+	fi
 
 %:
 	dh $@ --with autoreconf,python2,systemd
