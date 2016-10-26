@@ -1,3 +1,10 @@
+freeipa (4.3.2-4) UNRELEASED; urgency=medium
+
+  * freeipa-client.post*: Use /var/log/ipaclient-upgrade.log instead of
+    ipaupgrade.log, and remove it on purge. (Closes: #842071)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Wed, 26 Oct 2016 19:34:44 +0300
+
 freeipa (4.3.2-3) unstable; urgency=medium
 
   * rules: Add a check to override_dh_fixperms so that chmod is not run
