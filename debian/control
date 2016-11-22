@@ -83,7 +83,7 @@ Depends:
  krb5-kdc-ldap,
  krb5-pkinit,
  ldap-utils,
- libapache2-mod-auth-gssapi (>= 1.3.0),
+ libapache2-mod-auth-gssapi (>= 1.4.0),
  libapache2-mod-nss (>= 1.0.10-2~),
  libapache2-mod-wsgi,
  libjs-dojo-core,

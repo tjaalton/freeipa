@@ -2,6 +2,8 @@ freeipa (4.3.2-4) UNRELEASED; urgency=medium
 
   * freeipa-client.post*: Use /var/log/ipaclient-upgrade.log instead of
     ipaupgrade.log, and remove it on purge. (Closes: #842071)
+  * control: Bump dependency on libapache2-mod-auth-gssapi to verify
+    upstream bug #5653 is resolved.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 26 Oct 2016 19:34:44 +0300
 
