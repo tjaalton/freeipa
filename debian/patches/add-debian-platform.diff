@@ -394,7 +394,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,202 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -441,6 +441,8 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +debian_system_units['ods_enforcerd'] = debian_system_units['ods-enforcerd']
 +debian_system_units['ods-signerd'] = 'opendnssec-signer.service'
 +debian_system_units['ods_signerd'] = debian_system_units['ods-signerd']
++debian_system_units['rpcgssd'] = 'rpc-gssd.service'
++debian_system_units['rpcidmapd'] = 'nfs-idmapd.service'
 +
 +# Service classes that implement Debian-specific behaviour
 +
