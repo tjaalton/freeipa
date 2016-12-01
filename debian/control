@@ -102,7 +102,7 @@ Depends:
  python-gssapi,
  python-ldap (>= 2.4.22),
  python-systemd,
- slapi-nis (>= 0.55),
+ slapi-nis (>= 0.56.1),
  softhsm2 (>= 2.1.0-2),
  systemd-sysv,
  ${misc:Depends},
