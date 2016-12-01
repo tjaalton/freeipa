@@ -1,5 +1,4 @@
 # not upstreamable
-work-around-apache-fail.diff
 prefix.patch
 hack-libarch.diff
 enable-mod-nss-during-setup.diff

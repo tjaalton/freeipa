@@ -3,6 +3,8 @@ freeipa (4.4.2-1) UNRELEASED; urgency=medium
   * New upstream release.
   * configure-apache-from-installer.diff: Dropped, upstream.
   * patches: Refreshed.
+  * work-around-apache-fail.diff: Dropped, apache supports systemd now
+    so this should not be needed.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
