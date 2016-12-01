@@ -5,7 +5,7 @@ use the debian layout when installing python modules
 
 --- a/Makefile
 +++ b/Makefile
-@@ -113,9 +113,9 @@ client-install: client client-dirs
+@@ -118,9 +118,9 @@ client-install: client client-dirs
  	cd install/po && $(MAKE) install || exit 1;
  	@for subdir in $(CLIENTPYDIRS); do \
  		if [ "$(DESTDIR)" = "" ]; then \
@@ -17,7 +17,7 @@ use the debian layout when installing python modules
  		fi \
  	done
  
-@@ -198,11 +198,11 @@ server: version-update
+@@ -215,11 +215,11 @@ server: version-update
  
  server-install: server
  	if [ "$(DESTDIR)" = "" ]; then \
@@ -33,7 +33,7 @@ use the debian layout when installing python modules
  	fi
  
  tests: version-update tests-man-autogen
-@@ -213,7 +213,7 @@ tests-install: tests
+@@ -230,7 +230,7 @@ tests-install: tests
  	if [ "$(DESTDIR)" = "" ]; then \
  		cd ipatests; $(PYTHON) setup.py install; \
  	else \

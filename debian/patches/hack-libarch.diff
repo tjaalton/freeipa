@@ -1,6 +1,6 @@
 --- a/ipaserver/install/ldapupdate.py
 +++ b/ipaserver/install/ldapupdate.py
-@@ -335,9 +335,9 @@ class LDAPUpdate:
+@@ -334,9 +334,9 @@ class LDAPUpdate:
          bits = platform.architecture()[0]
  
          if bits == "64bit":
@@ -12,4 +12,3 @@
  
      def _template_str(self, s):
          try:
-

@@ -6,8 +6,8 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
 
 --- a/freeipa.spec.in
 +++ b/freeipa.spec.in
-@@ -158,7 +158,6 @@ Requires: pki-ca >= 10.2.6-19
- Requires: pki-kra >= 10.2.6-19
+@@ -165,7 +165,6 @@ Requires: pki-ca >= 10.3.5-6
+ Requires: pki-kra >= 10.3.5-6
  Requires(preun): python systemd-units
  Requires(postun): python systemd-units
 -Requires: zip
@@ -503,7 +503,7 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
 \ No newline at end of file
 --- a/ipaplatform/base/paths.py
 +++ b/ipaplatform/base/paths.py
-@@ -183,7 +183,6 @@ class BasePathNamespace(object):
+@@ -184,7 +184,6 @@ class BasePathNamespace(object):
      BIN_TIMEOUT = "/usr/bin/timeout"
      UPDATE_CA_TRUST = "/usr/bin/update-ca-trust"
      BIN_CURL = "/usr/bin/curl"
@@ -511,7 +511,7 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
      BIND_LDAP_SO = "/usr/lib/bind/ldap.so"
      BIND_LDAP_DNS_IPA_WORKDIR = "/var/named/dyndb-ldap/ipa/"
      BIND_LDAP_DNS_ZONE_WORKDIR = "/var/named/dyndb-ldap/ipa/master/"
-@@ -226,12 +225,9 @@ class BasePathNamespace(object):
+@@ -231,12 +230,9 @@ class BasePathNamespace(object):
      USERADD = "/usr/sbin/useradd"
      USR_SHARE_IPA_DIR = "/usr/share/ipa/"
      CA_TOPOLOGY_ULDIF = "/usr/share/ipa/ca-topology.uldif"
@@ -544,7 +544,7 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
          if not self.promote:
              self.step("publish CA cert", self.__publish_ca_cert)
          self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
-@@ -375,42 +373,6 @@ class HTTPInstance(service.Service):
+@@ -376,42 +374,6 @@ class HTTPInstance(service.Service):
          db = certs.CertDB(self.realm, subject_base=self.subject_base)
          self.import_ca_certs(db, self.ca_is_configured)
  
@@ -589,7 +589,7 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
          ca_db.publish_ca_cert(paths.CA_CRT)
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -181,12 +181,10 @@ def install_http(config, auto_redirect,
+@@ -186,12 +186,10 @@ def install_http(config, auto_redirect,
      http = httpinstance.HTTPInstance()
      http.create_instance(
          config.realm_name, config.host_name, config.domain_name,
@@ -605,7 +605,7 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
  
 --- a/ipaserver/install/server/upgrade.py
 +++ b/ipaserver/install/server/upgrade.py
-@@ -283,16 +283,6 @@ def cleanup_adtrust(fstore):
+@@ -269,16 +269,6 @@ def cleanup_adtrust(fstore):
              root_logger.debug('Removing %s from backup', backed_up_file)
  
  
@@ -622,11 +622,11 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
  def ca_configure_profiles_acl(ca):
      root_logger.info('[Authorizing RA Agent to modify profiles]')
  
-@@ -1657,7 +1647,6 @@ def upgrade_configuration():
+@@ -1716,7 +1706,6 @@ def upgrade_configuration():
  
      cleanup_kdc(fstore)
      cleanup_adtrust(fstore)
 -    setup_firefox_extension(fstore)
-     add_ca_dns_records()
  
-     # Any of the following functions returns True iff the named.conf file
+     bind = bindinstance.BindInstance(fstore)
+     if bind.is_configured() and not bind.is_running():

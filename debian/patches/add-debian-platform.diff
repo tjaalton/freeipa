@@ -654,7 +654,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +tasks = DebianTaskNamespace()
 --- a/ipaplatform/setup.py.in
 +++ b/ipaplatform/setup.py.in
-@@ -67,6 +67,7 @@ def setup_package():
+@@ -66,6 +66,7 @@ def setup_package():
              package_dir = {'ipaplatform': ''},
              packages = ["ipaplatform",
                          "ipaplatform.base",
@@ -664,7 +664,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
                          "ipaplatform.rhel"],
 --- a/ipaserver/install/ntpinstance.py
 +++ b/ipaserver/install/ntpinstance.py
-@@ -50,6 +50,8 @@ class NTPInstance(service.Service):
+@@ -70,6 +70,8 @@ class NTPInstance(service.Service):
              os = "fedora"
          elif ipautil.file_exists(paths.ETC_REDHAT_RELEASE):
              os = "rhel"

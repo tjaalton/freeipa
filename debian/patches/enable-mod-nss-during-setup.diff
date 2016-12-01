@@ -8,7 +8,7 @@
          self.step("restarting httpd", self.__start)
          self.step("configuring httpd to start on boot", self.__enable)
          self.step("enabling oddjobd", self.enable_and_start_oddjobd)
-@@ -507,6 +508,8 @@ class HTTPInstance(service.Service):
+@@ -508,6 +509,8 @@ class HTTPInstance(service.Service):
              except Exception:
                  pass
  
@@ -17,4 +17,3 @@
          self.stop_tracking_certificates()
  
          helper = self.restore_state('certmonger_ipa_helper')
-

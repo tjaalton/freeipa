@@ -13,7 +13,7 @@ Description: service apache2 restart fails on sid, so don't do that
          self.backup_state("enabled", self.is_enabled())
 --- a/install/tools/ipa-dns-install
 +++ b/install/tools/ipa-dns-install
-@@ -142,7 +142,8 @@ def main():
+@@ -153,7 +153,8 @@ def main():
      fstore = sysrestore.FileStore(paths.SYSRESTORE)
      http = httpinstance.HTTPInstance(fstore)
      service.print_msg("Restarting the web server")
@@ -25,7 +25,7 @@ Description: service apache2 restart fails on sid, so don't do that
      ipautil.run(['ipactl', 'start', '--ignore-service-failures'],
 --- a/ipaserver/install/server/install.py
 +++ b/ipaserver/install/server/install.py
-@@ -999,7 +999,8 @@ def install(installer):
+@@ -877,7 +877,8 @@ def install(installer):
  
      # Restart httpd to pick up the new IPA configuration
      service.print_msg("Restarting the web server")
@@ -37,7 +37,7 @@ Description: service apache2 restart fails on sid, so don't do that
      # from restart to avoid waiting for its creation
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -856,7 +856,8 @@ def install(installer):
+@@ -881,7 +881,8 @@ def install(installer):
  
      # Restart httpd to pick up the new IPA configuration
      service.print_msg("Restarting the web server")

@@ -10,7 +10,7 @@ Description: Fix paths
  
  
  # Configure mod_wsgi handler for /ipa
-@@ -62,9 +62,9 @@ WSGIScriptReloading Off
+@@ -63,9 +63,9 @@ WSGIScriptReloading Off
  <Location "/ipa">
    AuthType GSSAPI
    AuthName "Kerberos Login"
@@ -23,7 +23,7 @@ Description: Fix paths
    GssapiDelegCcacheUnique On
    GssapiUseS4U2Proxy on
    GssapiAllowedMech krb5
-@@ -110,7 +110,7 @@ WSGIScriptReloading Off
+@@ -111,7 +111,7 @@ WSGIScriptReloading Off
  # Custodia stuff is redirected to the custodia daemon
  # after authentication
  <Location "/ipa/keys/">
@@ -32,7 +32,7 @@ Description: Fix paths
      RequestHeader set GSS_NAME %{GSS_NAME}s
      RequestHeader set REMOTE_USER %{REMOTE_USER}s
  </Location>
-@@ -144,8 +144,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+@@ -145,8 +145,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  
  #  List explicitly only the fonts we want to serve
