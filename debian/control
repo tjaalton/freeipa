@@ -42,6 +42,7 @@ Build-Depends:
  python-ldap (>= 2.4.15),
  python-lesscpy,
  python-libipa-hbac,
+ python-libsss-nss-idmap,
  python-lxml,
  python-memcache,
  python-netaddr,

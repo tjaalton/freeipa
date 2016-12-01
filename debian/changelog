@@ -16,6 +16,7 @@ freeipa (4.4.2-1) UNRELEASED; urgency=medium
     #2008.
   * control: Bump bind9-dyndb-ldap depends to 10, upstream #2008.
   * control: Depend on slapi-nis 0.56.1.
+  * control: Add python-libsss-nss-idmap to build-depends.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
