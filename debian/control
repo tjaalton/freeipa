@@ -125,7 +125,7 @@ Replaces: freeipa-server (<< 4.3.0-1)
 Depends:
  freeipa-server (>= ${source:Version}),
  bind9 (>= 1:9.10.3.dfsg.P4-8),
- bind9-dyndb-ldap (>= 8.0-4),
+ bind9-dyndb-ldap (>= 10),
  opendnssec (>= 1:1.4.9-2),
  ${misc:Depends},
  ${python:Depends},
