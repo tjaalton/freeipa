@@ -31,6 +31,7 @@ usr/lib/ipa/ipa-dnskeysyncd
 usr/lib/ipa/ipa-httpd-kdcproxy
 usr/lib/ipa/ipa-ods-exporter
 usr/lib/ipa/ipa-otpd
+usr/lib/ipa/ipa-pki-retrieve-key
 usr/lib/ipa/oddjob/org.freeipa.server.conncheck
 usr/sbin/ipa-advise
 usr/sbin/ipa-backup
@@ -63,10 +64,10 @@ usr/share/ipa/html/*
 usr/share/ipa/ipa-pki-proxy.conf
 usr/share/ipa/ipa-rewrite.conf
 usr/share/ipa/ipa.conf
-usr/share/ipa/ipa-httpd.conf
 usr/share/ipa/kdcproxy.conf
 usr/share/ipa/migration/*
 usr/share/ipa/profiles/*.cfg
+usr/share/ipa/schema.d/*
 usr/share/ipa/ui/*
 usr/share/ipa/updates/*
 usr/share/ipa/wsgi.py
