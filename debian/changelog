@@ -1,4 +1,4 @@
-freeipa (4.3.2-4) UNRELEASED; urgency=medium
+freeipa (4.3.2-4) unstable; urgency=medium
 
   * freeipa-client.post*: Use /var/log/ipaclient-upgrade.log instead of
     ipaupgrade.log, and remove it on purge. (Closes: #842071)
@@ -7,7 +7,7 @@ freeipa (4.3.2-4) UNRELEASED; urgency=medium
   * platform: Add Debian mapping for rpcgssd and rpcidmapd service
     files. (LP: #1645201)
 
- -- Timo Aaltonen <tjaalton@debian.org>  Wed, 26 Oct 2016 19:34:44 +0300
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:12:27 +0200
 
 freeipa (4.3.2-3) unstable; urgency=medium
 
