@@ -1,0 +1,7 @@
+Tests: server-install
+Depends:
+ @,
+Restrictions:
+ allow-stderr,
+ isolation-container,
+ needs-root,

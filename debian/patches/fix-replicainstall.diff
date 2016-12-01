@@ -1,0 +1,11 @@
+--- a/ipaserver/install/server/replicainstall.py
++++ b/ipaserver/install/server/replicainstall.py
+@@ -1073,7 +1073,7 @@ def promote_check(installer):
+         raise RuntimeError("CA cert file is not available! Please reinstall"
+                            "the client and try again.")
+ 
+-    ldapuri = 'ldaps://%s' % ipautil.format_netloc(config.master_host_name)
++    ldapuri = 'ldap://%s' % ipautil.format_netloc(config.master_host_name)
+     remote_api = create_api(mode=None)
+     remote_api.bootstrap(in_server=True, context='installer',
+                          ldap_uri=ldapuri)

@@ -1,0 +1,8 @@
+/etc/ipa/html/browserconfig.html	usr/share/ipa/html/browserconfig.html
+/etc/ipa/html/ffconfig.js		usr/share/ipa/html/ffconfig.js
+/etc/ipa/html/ffconfig_page.js		usr/share/ipa/html/ffconfig_page.js
+/etc/ipa/html/ssbrowser.html		usr/share/ipa/html/ssbrowser.html
+/etc/ipa/html/unauthorized.html		usr/share/ipa/html/unauthorized.html
+/usr/share/javascript/prototype/prototype.js       	/usr/share/ipa/ipagui/static/javascript/prototype.js
+/usr/share/javascript/scriptaculous/effects.js		/usr/share/ipa/ipagui/static/javascript/effects.js
+/usr/share/javascript/scriptaculous/scriptaculous.js	/usr/share/ipa/ipagui/static/javascript/scriptaculous.js

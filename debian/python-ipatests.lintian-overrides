@@ -1,0 +1,2 @@
+# no need to be executable
+python-ipatests: script-not-executable usr/lib/python*/dist-packages/ipatests/test_integration/scripts/caless-create-pki

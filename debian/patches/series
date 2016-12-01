@@ -1,0 +1,22 @@
+# upstreamed
+configure-apache-from-installer.diff
+
+# not upstreamable
+work-around-apache-fail.diff
+prefix.patch
+hack-libarch.diff
+enable-mod-nss-during-setup.diff
+
+# send upstream
+add-debian-platform.diff
+fix-ipa-conf.diff
+fix-kdcproxy-paths.diff
+fix-ipa-otpd-install.diff
+fix-replicainstall.diff
+fix-dnssec-services.diff
+create-sysconfig-ods.diff
+fix-named-conf-template.diff
+fix-memcached.diff
+fix-oddjobs.diff
+purge-firefox-extension.diff
+fix-ipa-otpd-service.diff

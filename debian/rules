@@ -1,0 +1,128 @@
+#!/usr/bin/make -f 
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ONLY_CLIENT=0
+DESTDIR=$(CURDIR)/debian/tmp
+
+export SKIP_API_VERSION_CHECK="yes"
+export SUPPORTED_PLATFORM=debian
+PLATFORM="SUPPORTED_PLATFORM=debian"
+JAVA_STACK_SIZE ?= 8m
+export JAVA_STACK_SIZE
+
+# For maintainer use only, generate a tarball:
+SOURCE = freeipa
+gentarball: UV=$(shell dpkg-parsechangelog|awk '/^Version:/ {print $$2}'|sed 's/-.*$$//')
+gentarball:
+	git archive --format=tar experimental --prefix=$(SOURCE)-$(UV)/ | xz --best > ../$(SOURCE)_$(UV).orig.tar.xz
+
+override_dh_auto_clean:
+	for i in asn1 daemons install ipalib ipapython; do \
+		(cd $$i && [ ! -f Makefile ] || $(MAKE) distclean); \
+		(cd $$i && rm -f COPYING INSTALL depcomp install-sh missing py-compile config.guess config.sub aclocal.m4 config.h.in version.m4); \
+	done
+	find . -name "*.pyo" -o -name "*.pyc" -type f -exec rm -f "{}" \;
+	find . -name "ltmain.sh" -exec rm -f "{}" \;
+	find . -name "configure" -exec rm -f "{}" \;
+	rm -rf daemons/ipa-version.h freeipa.spec freeipa.egg-info version.m4
+	rm -rf ipapython/build RELEASE build
+
+override_dh_autoreconf:
+	make IPA_VERSION_IS_GIT_SNAPSHOT=no version-update
+	dh_autoreconf; cd ..
+
+override_dh_auto_configure:
+	dh_auto_configure -Dclient
+ifneq ($(ONLY_CLIENT), 1)
+	dh_auto_configure -Ddaemons -- \
+		--libexecdir=/usr/lib \
+		--with-openldap \
+		--with-systemdsystemunitdir=/lib/systemd/system
+
+	dh_auto_configure -Dinstall -- \
+		--libexecdir=/usr/lib
+endif
+
+override_dh_auto_build:
+ifneq ($(ONLY_CLIENT), 1)
+	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no all
+#	cd selinux ; make all
+else
+	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client
+endif
+
+# tests would just fail, they need a proper environment with 389 running et al
+override_dh_auto_test:
+
+override_dh_auto_install:
+ifneq ($(ONLY_CLIENT), 1)
+	# Force re-generate of platform support
+	rm -f ipapython/services.py
+	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no install DESTDIR=$(DESTDIR)
+	cd ..
+
+	chmod 755 $(DESTDIR)/usr/lib/ipa/certmonger/*
+
+	mkdir -p $(DESTDIR)/usr/share/bash-completion/completions \
+		 $(DESTDIR)/etc/default \
+		 $(DESTDIR)/etc/ipa/kdcproxy \
+		 $(DESTDIR)/usr/share/ipa/html
+
+	touch $(DESTDIR)/usr/share/ipa/html/ca.crt
+	touch $(DESTDIR)/usr/share/ipa/html/kerberosauth.xpi
+	touch $(DESTDIR)/usr/share/ipa/html/krb.con
+	touch $(DESTDIR)/usr/share/ipa/html/krb.js
+	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
+	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
+
+	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa_memcached
+	install -m 0644 init/ipa-dnskeysyncd.conf $(DESTDIR)/etc/default/ipa-dnskeysyncd
+	install -m 0644 init/ipa-ods-exporter.conf $(DESTDIR)/etc/default/ipa-ods-exporter
+	install -m 0644 install/share/kdcproxy.conf $(DESTDIR)/etc/ipa/kdcproxy/kdcproxy.conf
+	install -m 0755 daemons/dnssec/ipa-dnskeysync-replica $(DESTDIR)/usr/lib/ipa/
+	install -m 0755 daemons/dnssec/ipa-dnskeysyncd $(DESTDIR)/usr/lib/ipa/
+	install -m 0644 daemons/dnssec/ipa-dnskeysyncd.service $(DESTDIR)/lib/systemd/system
+	install -m 0755 daemons/dnssec/ipa-ods-exporter $(DESTDIR)/usr/lib/ipa/
+	install -m 0644 daemons/dnssec/ipa-ods-exporter.service $(DESTDIR)/lib/systemd/system
+	install -m 0644 daemons/dnssec/ipa-ods-exporter.socket $(DESTDIR)/lib/systemd/system
+	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
+	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
+	install -m 0644 init/systemd/ipa-custodia.service $(DESTDIR)/lib/systemd/system
+	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
+
+else
+	make $(PLATFORM) IPA_VERSION_IS_GIT_SNAPSHOT=no client-install DESTDIR=$(DESTDIR)
+endif
+
+	# purge .la files
+	find $(CURDIR)/debian/tmp -name "*.la" -type f -exec rm -f "{}" \;
+	# purge precompiled .pyc/.pyo files
+	find $(CURDIR)/debian/tmp -name '*.py[c,o]' -exec rm '{}' ';'
+	# fix permissions
+	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
+
+override_dh_install:
+	dh_install --fail-missing
+
+override_dh_systemd_enable:
+	dh_systemd_enable -pfreeipa-server --no-enable ipa.service
+	dh_systemd_enable -pfreeipa-server --no-enable ipa_memcached.service
+	dh_systemd_enable -pfreeipa-server --no-enable ipa-dnskeysyncd.service
+	dh_systemd_enable -pfreeipa-server --no-enable ipa-custodia.service
+	dh_systemd_enable -pfreeipa-server --no-enable ipa-ods-exporter.service
+
+override_dh_fixperms:
+	dh_fixperms
+
+	# check needed to not fail arch-indep build which doesn't run dh_installdirs
+	if [ -d $(CURDIR)/debian/freeipa-server/etc/ipa/custodia ]; then \
+	    chmod 0700 $(CURDIR)/debian/freeipa-server/etc/ipa/custodia; \
+	    chmod 0700 $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup; \
+	fi
+
+%:
+	dh $@ --with autoreconf,python2,systemd

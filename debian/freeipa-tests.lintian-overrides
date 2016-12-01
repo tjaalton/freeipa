@@ -1,0 +1,2 @@
+# lintian is just wrong
+freeipa-tests: python-script-but-no-python-dep

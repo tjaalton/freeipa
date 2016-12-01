@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+if [ -e /usr/share/apache2/apache2-maintscript-helper ]; then
+    . /usr/share/apache2/apache2-maintscript-helper
+    if [ -e /etc/apache2/mods-enabled/auth_kerb ]; then
+        apache2_invoke dismod auth_kerb || exit $?
+    fi
+    if [ -e /etc/apache2/mods-enabled/auth_gssapi ]; then
+        apache2_invoke dismod auth_gssapi || exit $?
+    fi
+    if [ -e /etc/apache2/mods-enabled/expires  ]; then
+        apache2_invoke dismod expires || exit $?
+    fi
+    if [ -e /etc/apache2/mods-enabled/headers  ]; then
+        apache2_invoke dismod headers || exit $?
+    fi
+    if [ -e /etc/apache2/mods-enabled/proxy  ]; then
+        apache2_invoke dismod proxy || exit $?
+    fi
+    if [ -e /etc/apache2/mods-enabled/rewrite  ]; then
+        apache2_invoke dismod rewrite || exit $?
+    fi
+fi
+
+#DEBHELPER#

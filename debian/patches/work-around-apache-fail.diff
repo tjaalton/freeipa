@@ -1,0 +1,49 @@
+Description: service apache2 restart fails on sid, so don't do that
+--- a/ipaserver/install/httpinstance.py
++++ b/ipaserver/install/httpinstance.py
+@@ -191,7 +191,8 @@ class HTTPInstance(service.Service):
+ 
+     def __start(self):
+         self.backup_state("running", self.is_running())
+-        self.restart()
++        self.stop()
++        self.start()
+ 
+     def __enable(self):
+         self.backup_state("enabled", self.is_enabled())
+--- a/install/tools/ipa-dns-install
++++ b/install/tools/ipa-dns-install
+@@ -142,7 +142,8 @@ def main():
+     fstore = sysrestore.FileStore(paths.SYSRESTORE)
+     http = httpinstance.HTTPInstance(fstore)
+     service.print_msg("Restarting the web server")
+-    http.restart()
++    http.stop()
++    http.start()
+ 
+     # execute ipactl to refresh services status
+     ipautil.run(['ipactl', 'start', '--ignore-service-failures'],
+--- a/ipaserver/install/server/install.py
++++ b/ipaserver/install/server/install.py
+@@ -999,7 +999,8 @@ def install(installer):
+ 
+     # Restart httpd to pick up the new IPA configuration
+     service.print_msg("Restarting the web server")
+-    http.restart()
++    http.stop()
++    http.start()
+ 
+     # update DNA shared config entry is done as far as possible
+     # from restart to avoid waiting for its creation
+--- a/ipaserver/install/server/replicainstall.py
++++ b/ipaserver/install/server/replicainstall.py
+@@ -856,7 +856,8 @@ def install(installer):
+ 
+     # Restart httpd to pick up the new IPA configuration
+     service.print_msg("Restarting the web server")
+-    http.restart()
++    http.stop()
++    http.start()
+ 
+     # Call client install script
+     service.print_msg("Configuring client side components")

@@ -1,0 +1,6 @@
+usr/bin/ipa-run-tests
+usr/bin/ipa-test-config
+usr/bin/ipa-test-task
+usr/share/man/man1/ipa-run-tests.1*
+usr/share/man/man1/ipa-test-config.1*
+usr/share/man/man1/ipa-test-task.1*
