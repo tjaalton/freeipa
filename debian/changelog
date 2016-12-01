@@ -6,6 +6,8 @@ freeipa (4.4.2-1) UNRELEASED; urgency=medium
   * work-around-apache-fail.diff: Dropped, apache supports systemd now
     so this should not be needed.
   * watch: Use https url.
+  * client.postinst: Use update_ipa_nssdb(), which also removes remnants
+    from /etc/pki/nssdb.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
