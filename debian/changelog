@@ -10,6 +10,7 @@ freeipa (4.4.2-1) UNRELEASED; urgency=medium
     from /etc/pki/nssdb.
   * control: Bump depends on slapi-nis to 0.55.
   * control: Add python-custodia and python-requests to ipalib depends.
+  * control: Use python-netifaces instead of iproute.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
