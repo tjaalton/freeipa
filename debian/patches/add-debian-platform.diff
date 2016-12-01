@@ -31,7 +31,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +"""
 --- /dev/null
 +++ b/ipaplatform/debian/paths.py
-@@ -0,0 +1,360 @@
+@@ -0,0 +1,112 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -63,55 +63,20 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +MULTIARCH = sysconfig.get_config_var('MULTIARCH')
 +
 +class DebianPathNamespace(BasePathNamespace):
-+#   BASH = "/bin/bash"
-+#   BIN_FALSE = "/bin/false"
-+#   BIN_HOSTNAME = "/bin/hostname"
-+#   LS = "/bin/ls"
-+#   SH = "/bin/sh"
-+#   SYSTEMCTL = "/bin/systemctl"
-+#   TAR = "/bin/tar"
-+#   BIN_TRUE = "/bin/true"
-+#   DEV_NULL = "/dev/null"
-+#   DEV_STDIN = "/dev/stdin"
++    BIN_HOSTNAMECTL = "/usr/bin/hostnamectl"
 +    AUTOFS_LDAP_AUTH_CONF = "/etc/autofs_ldap_auth.conf"
-+#   ETC_DIRSRV = "/etc/dirsrv"
-+#   DS_KEYTAB = "/etc/dirsrv/ds.keytab"
-+#   ETC_DIRSRV_SLAPD_INSTANCE_TEMPLATE = "/etc/dirsrv/slapd-%s"
-+#   ETC_FEDORA_RELEASE = "/etc/fedora-release"
-+#   GROUP = "/etc/group"
-+#   ETC_HOSTNAME = "/etc/hostname"
-+#   HOSTS = "/etc/hosts"
 +    ETC_HTTPD_DIR = "/etc/apache2"
 +    HTTPD_ALIAS_DIR = "/etc/apache2/nssdb"
 +    ALIAS_CACERT_ASC = "/etc/apache2/nssdb/cacert.asc"
 +    ALIAS_PWDFILE_TXT = "/etc/apache2/nssdb/pwdfile.txt"
 +    HTTPD_CONF_D_DIR = "/etc/apache2/conf-enabled/"
-+#   HTTPD_IPA_KDCPROXY_CONF = "/etc/ipa/kdcproxy/ipa-kdc-proxy.conf"
 +    HTTPD_IPA_KDCPROXY_CONF_SYMLINK = "/etc/apache2/conf-enabled/ipa-kdc-proxy.conf"
 +    HTTPD_IPA_PKI_PROXY_CONF = "/etc/apache2/conf-enabled/ipa-pki-proxy.conf"
 +    HTTPD_IPA_REWRITE_CONF = "/etc/apache2/conf-available/ipa-rewrite.conf"
 +    HTTPD_IPA_CONF = "/etc/apache2/conf-enabled/ipa.conf"
 +    HTTPD_NSS_CONF = "/etc/apache2/mods-available/nss.conf"
-+#   HTTPD_SSL_CONF = "/etc/httpd/conf.d/ssl.conf"
 +    IPA_KEYTAB = "/etc/apache2/ipa.keytab"
 +    HTTPD_PASSWORD_CONF = "/etc/apache2/password.conf"
-+#   IDMAPD_CONF = "/etc/idmapd.conf"
-+#   ETC_IPA = "/etc/ipa"
-+#   CONNCHECK_CCACHE = "/etc/ipa/.conncheck_ccache"
-+#   IPA_DNS_CCACHE = "/etc/ipa/.dns_ccache"
-+#   IPA_DNS_UPDATE_TXT = "/etc/ipa/.dns_update.txt"
-+#   IPA_CA_CRT = "/etc/ipa/ca.crt"
-+#   IPA_DEFAULT_CONF = "/etc/ipa/default.conf"
-+#   IPA_DNSKEYSYNCD_KEYTAB = "/etc/ipa/dnssec/ipa-dnskeysyncd.keytab"
-+#   IPA_ODS_EXPORTER_KEYTAB = "/etc/ipa/dnssec/ipa-ods-exporter.keytab"
-+#   DNSSEC_SOFTHSM2_CONF = "/etc/ipa/dnssec/softhsm2.conf"
-+#   DNSSEC_SOFTHSM_PIN_SO = "/etc/ipa/dnssec/softhsm_pin_so"
-+#   IPA_NSSDB_DIR = "/etc/ipa/nssdb"
-+#   IPA_NSSDB_PWDFILE_TXT = "/etc/ipa/nssdb/pwdfile.txt"
-+#   KRB5_CONF = "/etc/krb5.conf"
-+#   KRB5_KEYTAB = "/etc/krb5.keytab"
-+#   LDAP_CONF = "/etc/ldap.conf"
-+#   LIBNSS_LDAP_CONF = "/etc/libnss-ldap.conf"
 +    NAMED_CONF = "/etc/bind/named.conf"
 +    NAMED_VAR_DIR = "/var/cache/bind"
 +    NAMED_KEYTAB = "/etc/bind/named.keytab"
@@ -119,122 +84,37 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    NAMED_ROOT_KEY = "/etc/bind/bind.keys"
 +    NAMED_BINDKEYS_FILE = "/etc/bind/bind.keys"
 +    NAMED_MANAGED_KEYS_DIR = "/var/cache/bind/dynamic"
-+#   NSLCD_CONF = "/etc/nslcd.conf"
-+#   NSS_LDAP_CONF = "/etc/nss_ldap.conf"
-+#   NSSWITCH_CONF = "/etc/nsswitch.conf"
-+#   NTP_CONF = "/etc/ntp.conf"
-+#   NTP_STEP_TICKERS = "/etc/ntp/step-tickers"
-+#   ETC_OPENDNSSEC_DIR = "/etc/opendnssec"
-+#   OPENDNSSEC_CONF_FILE = "/etc/opendnssec/conf.xml"
-+#   OPENDNSSEC_KASP_FILE = "/etc/opendnssec/kasp.xml"
-+#   OPENDNSSEC_ZONELIST_FILE = "/etc/opendnssec/zonelist.xml"
 +    OPENLDAP_LDAP_CONF = "/etc/ldap/ldap.conf"
 +    ETC_DEBIAN_VERSION = "/etc/debian_version"
-+#   PAM_LDAP_CONF = "/etc/pam_ldap.conf"
-+#   PASSWD = "/etc/passwd"
-+#   SYSTEMWIDE_IPA_CA_CRT = "/etc/pki/ca-trust/source/anchors/ipa-ca.crt"
 +    IPA_P11_KIT = "/usr/local/share/ca-certificates/ipa-ca.crt"
-+#   NSS_DB_DIR = "/etc/pki/nssdb"
-+#   PKI_TOMCAT = "/etc/pki/pki-tomcat"
-+#   PKI_TOMCAT_ALIAS_DIR = "/etc/pki/pki-tomcat/alias"
-+#   PKI_TOMCAT_PASSWORD_CONF = "/etc/pki/pki-tomcat/password.conf"
-+#   ETC_REDHAT_RELEASE = "/etc/redhat-release"
-+#   RESOLV_CONF = "/etc/resolv.conf"
-+#   SAMBA_KEYTAB = "/etc/samba/samba.keytab"
-+#   SMB_CONF = "/etc/samba/smb.conf"
-+#   LIMITS_CONF = "/etc/security/limits.conf"
-+#   SSH_CONFIG = "/etc/ssh/ssh_config"
-+#   SSHD_CONFIG = "/etc/ssh/sshd_config"
-+#   SSSD_CONF = "/etc/sssd/sssd.conf"
-+#   SSSD_CONF_BKP = "/etc/sssd/sssd.conf.bkp"
-+#   SSSD_CONF_DELETED = "/etc/sssd/sssd.conf.deleted"
 +    ETC_SYSCONFIG_DIR = "/etc/default"
-+#   ETC_SYSCONFIG_AUTHCONFIG = "/etc/sysconfig/authconfig"
 +    SYSCONFIG_AUTOFS = "/etc/default/autofs"
 +    SYSCONFIG_DIRSRV = "/etc/default/dirsrv"
 +    SYSCONFIG_DIRSRV_INSTANCE = "/etc/default/dirsrv-%s"
 +    SYSCONFIG_DIRSRV_SYSTEMD = "/etc/default/dirsrv.systemd"
 +    SYSCONFIG_IPA_DNSKEYSYNCD = "/etc/default/ipa-dnskeysyncd"
 +    SYSCONFIG_IPA_ODS_EXPORTER = "/etc/default/ipa-ods-exporter"
-+#    SYSCONFIG_HTTPD = "/etc/sysconfig/httpd"
 +    SYSCONFIG_KRB5KDC_DIR = "/etc/default/krb5-kdc"
 +    SYSCONFIG_NAMED = "/etc/default/bind9"
-+#   SYSCONFIG_NETWORK = "/etc/sysconfig/network"
-+#   SYSCONFIG_NETWORK_IPABKP = "/etc/sysconfig/network.ipabkp"
 +    SYSCONFIG_NFS = "/etc/default/nfs-common"
 +    SYSCONFIG_NTPD = "/etc/default/ntp"
 +    SYSCONFIG_ODS = "/etc/default/opendnssec"
 +    SYSCONFIG_PKI = "/etc/dogtag/"
 +    SYSCONFIG_PKI_TOMCAT = "/etc/default/pki-tomcat"
 +    SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/dogtag/tomcat/pki-tomcat"
-+#   ETC_SYSTEMD_SYSTEM_DIR = "/etc/systemd/system/"
-+    SYSTEMD_SYSTEM_HTTPD_D_DIR = "/etc/systemd/system/apache2.d/"
-+    SYSTEMD_SYSTEM_HTTPD_IPA_CONF = "/etc/systemd/system/apache2.d/ipa.conf"
-+#   SYSTEMD_CERTMONGER_SERVICE = "/etc/systemd/system/multi-user.target.wants/certmonger.service"
-+#   SYSTEMD_IPA_SERVICE = "/etc/systemd/system/multi-user.target.wants/ipa.service"
-+#   SYSTEMD_SSSD_SERVICE = "/etc/systemd/system/multi-user.target.wants/sssd.service"
-+#   SYSTEMD_PKI_TOMCAT_SERVICE = "/etc/systemd/system/pki-tomcatd.target.wants/pki-tomcatd@pki-tomcat.service"
++    SYSTEMD_SYSTEM_HTTPD_D_DIR = "/etc/systemd/system/apache2.service.d/"
++    SYSTEMD_SYSTEM_HTTPD_IPA_CONF = "/etc/systemd/system/apache2.service.d/ipa.conf"
 +    DNSSEC_TRUSTED_KEY = "/etc/bind/trusted-key.key"
-+#   HOME_DIR = "/home"
-+#   ROOT_IPA_CACHE = "/root/.ipa_cache"
-+#   ROOT_PKI = "/root/.pki"
-+#   DOGTAG_ADMIN_P12 = "/root/ca-agent.p12"
 +    KRA_AGENT_PEM = "/etc/apache2/nssdb/kra-agent.pem"
-+#   CACERT_P12 = "/root/cacert.p12"
-+#   ROOT_IPA_CSR = "/root/ipa.csr"
-+#   NAMED_PID = "/run/named/named.pid"
-+#   IP = "/sbin/ip"
-+#   NOLOGIN = "/sbin/nologin"
-+#   SBIN_REBOOT = "/sbin/reboot"
-+#   SBIN_RESTORECON = "/sbin/restorecon"
 +    SBIN_SERVICE = "/usr/sbin/service"
-+#   TMP = "/tmp"
-+#   TMP_CA_P12 = "/tmp/ca.p12"
-+#   TMP_KRB5CC = "/tmp/krb5cc_%d"
-+#   USR_DIR = "/usr"
 +    CERTMONGER_COMMAND_TEMPLATE = "/usr/lib/ipa/certmonger/%s"
-+#   PKCS12EXPORT = "/usr/bin/PKCS12Export"
-+#   CERTUTIL = "/usr/bin/certutil"
-+#   CHROMIUM_BROWSER = "/usr/bin/chromium-browser"
-+#   DS_NEWINST_PL = "/usr/bin/ds_newinst.pl"
-+#   FIREFOX = "/usr/bin/firefox"
-+#   GETCERT = "/usr/bin/getcert"
-+#   GPG = "/usr/bin/gpg"
-+#   GPG_AGENT = "/usr/bin/gpg-agent"
-+#   IPA_GETCERT = "/usr/bin/ipa-getcert"
-+#   KDESTROY = "/usr/bin/kdestroy"
-+#   KINIT = "/usr/bin/kinit"
-+#   BIN_KVNO = "/usr/bin/kvno"
-+#   LDAPMODIFY = "/usr/bin/ldapmodify"
-+#   LDAPPASSWD = "/usr/bin/ldappasswd"
-+#   NET = "/usr/bin/net"
-+#   BIN_NISDOMAINNAME = "/usr/bin/nisdomainname"
-+#   NSUPDATE = "/usr/bin/nsupdate"
-+#   ODS_KSMUTIL = "/usr/bin/ods-ksmutil"
-+#   ODS_SIGNER = "/usr/sbin/ods-signer"
-+#   OPENSSL = "/usr/bin/openssl"
-+#   PK12UTIL = "/usr/bin/pk12util"
-+#   SETPASSWD = "/usr/bin/setpasswd"
-+#   SIGNTOOL = "/usr/bin/signtool"
-+#   SOFTHSM2_UTIL = "/usr/bin/softhsm2-util"
-+#   SSLGET = "/usr/bin/sslget"
-+#   SSS_SSH_AUTHORIZEDKEYS = "/usr/bin/sss_ssh_authorizedkeys"
-+#   SSS_SSH_KNOWNHOSTSPROXY = "/usr/bin/sss_ssh_knownhostsproxy"
-+#   BIN_TIMEOUT = "/usr/bin/timeout"
 +    UPDATE_CA_TRUST = "/usr/sbin/update-ca-certificates"
-+#   BIN_CURL = "/usr/bin/curl"
-+#   ZIP = "/usr/bin/zip"
 +    BIND_LDAP_SO = "/usr/share/doc/bind9-dyndb-ldap/copyright"
 +    BIND_LDAP_DNS_IPA_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/"
 +    BIND_LDAP_DNS_ZONE_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/master/"
-+#   USR_LIB_DIRSRV = "/usr/lib/dirsrv"
-+#   LIB_FIREFOX = "/usr/lib/firefox"
 +    LIBSOFTHSM2_SO = "/usr/lib/softhsm/libsofthsm2.so"
++    PAM_KRB5_SO = "/usr/lib/%s/security/pam_krb5.so" % MULTIARCH
 +    LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
-+#   BIND_LDAP_SO_64 = "/usr/lib64/bind/ldap.so"
-+#   USR_LIB_DIRSRV_64 = "/usr/lib64/dirsrv"
-+#   LIB64_FIREFOX = "/usr/lib64/firefox"
-+#   LIBSOFTHSM2_SO_64 = "/usr/lib64/pkcs11/libsofthsm2.so"
 +    DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT = "/usr/lib/certmonger/dogtag-ipa-ca-renew-agent-submit"
 +    DOGTAG_IPA_RENEW_AGENT_SUBMIT = "/usr/lib/certmonger/dogtag-ipa-renew-agent-submit"
 +    IPA_SERVER_GUARD = "/usr/lib/certmonger/ipa-server-guard"
@@ -242,45 +122,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    IPA_DNSKEYSYNCD_REPLICA = "/usr/lib/ipa/ipa-dnskeysync-replica"
 +    IPA_DNSKEYSYNCD = "/usr/lib/ipa/ipa-dnskeysyncd"
 +    IPA_ODS_EXPORTER = "/usr/lib/ipa/ipa-ods-exporter"
-+#   DNSSEC_KEYFROMLABEL = "/usr/sbin/dnssec-keyfromlabel-pkcs11"
-+#   GETSEBOOL = "/usr/sbin/getsebool"
-+#   GROUPADD = "/usr/sbin/groupadd"
 +    HTTPD = "/usr/sbin/apache2ctl"
-+#   IPA_CLIENT_INSTALL = "/usr/sbin/ipa-client-install"
-+#   IPA_DNS_INSTALL = "/usr/sbin/ipa-dns-install"
-+#   SBIN_IPA_JOIN = "/usr/sbin/ipa-join"
-+#   IPA_REPLICA_CONNCHECK = "/usr/sbin/ipa-replica-conncheck"
-+#   IPA_RMKEYTAB = "/usr/sbin/ipa-rmkeytab"
-+#   IPACTL = "/usr/sbin/ipactl"
-+#   NAMED = "/usr/sbin/named"
-+#   NAMED_PKCS11 = "/usr/sbin/named-pkcs11"
-+#   NTPD = "/usr/sbin/ntpd"
-+#   PKIDESTROY = "/usr/sbin/pkidestroy"
-+#   PKISPAWN = "/usr/sbin/pkispawn"
 +    REMOVE_DS_PL = "/usr/sbin/remove-ds"
-+#   RESTORECON = "/usr/sbin/restorecon"
-+#   SELINUXENABLED = "/usr/sbin/selinuxenabled"
-+#   SETSEBOOL = "/usr/sbin/setsebool"
 +    SETUP_DS_PL = "/usr/sbin/setup-ds"
-+#   SMBD = "/usr/sbin/smbd"
-+#   USERADD = "/usr/sbin/useradd"
-+#   USR_SHARE_IPA_DIR = "/usr/share/ipa/"
-+#   CA_TOPOLOGY_ULDIF = "/usr/share/ipa/ca-topology.uldif"
-+#   FFEXTENSION = "/usr/share/ipa/ffextension"
-+#   IPA_HTML_DIR = "/usr/share/ipa/html"
-+#   CA_CRT = "/usr/share/ipa/html/ca.crt"
-+#   KERBEROSAUTH_XPI = "/usr/share/ipa/html/kerberosauth.xpi"
-+#   KRB_CON = "/usr/share/ipa/html/krb.con"
-+#   KRB_JS = "/usr/share/ipa/html/krb.js"
-+#   HTML_KRB5_INI = "/usr/share/ipa/html/krb5.ini"
-+#   HTML_KRBREALM_CON = "/usr/share/ipa/html/krbrealm.con"
-+#   NIS_ULDIF = "/usr/share/ipa/nis.uldif"
-+#   IPA_PLUGINS = "/usr/share/ipa/plugins"
-+#   SCHEMA_COMPAT_ULDIF = "/usr/share/ipa/schema_compat.uldif"
-+#   IPA_JS_PLUGINS_DIR = "/usr/share/ipa/ui/js/plugins"
-+#   UPDATES_DIR = "/usr/share/ipa/updates/"
-+#   DICT_WORDS = "/usr/share/dict/words"
-+#   CACHE_IPA_SESSIONS = "/var/cache/ipa/sessions"
 +    VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
 +    VAR_KRB5KDC_K5_REALM = "/var/lib/krb5kdc/.k5."
 +    CACERT_PEM = "/var/lib/krb5kdc/cacert.pem"
@@ -288,105 +132,13 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    KRB5KDC_KADM5_KEYTAB = "/etc/krb5kdc/kadm5.keytab"
 +    KRB5KDC_KDC_CONF = "/etc/krb5kdc/kdc.conf"
 +    KDC_PEM = "/var/lib/krb5kdc/kdc.pem"
-+#   VAR_LIB = "/var/lib"
-+#   AUTHCONFIG_LAST = "/var/lib/authconfig/last"
-+#   VAR_LIB_CERTMONGER_DIR = "/var/lib/certmonger"
-+#   CERTMONGER_CAS_DIR = "/var/lib/certmonger/cas/"
-+#   CERTMONGER_CAS_CA_RENEWAL = "/var/lib/certmonger/cas/ca_renewal"
-+#   CERTMONGER_REQUESTS_DIR = "/var/lib/certmonger/requests/"
-+#   VAR_LIB_DIRSRV = "/var/lib/dirsrv"
-+#   DIRSRV_BOOT_LDIF = "/var/lib/dirsrv/boot.ldif"
-+#   VAR_LIB_DIRSRV_INSTANCE_SCRIPTS_TEMPLATE = "/var/lib/dirsrv/scripts-%s"
-+#   VAR_LIB_SLAPD_INSTANCE_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s"
-+#   SLAPD_INSTANCE_BACKUP_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/bak/%s"
-+#   SLAPD_INSTANCE_DB_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/db/%s"
-+#   SLAPD_INSTANCE_LDIF_DIR_TEMPLATE = "/var/lib/dirsrv/slapd-%s/ldif"
-+#   VAR_LIB_IPA = "/var/lib/ipa"
-+#   IPA_CLIENT_SYSRESTORE = "/var/lib/ipa-client/sysrestore"
-+#   SYSRESTORE_INDEX = "/var/lib/ipa-client/sysrestore/sysrestore.index"
-+#   IPA_BACKUP_DIR = "/var/lib/ipa/backup"
-+#   IPA_DNSSEC_DIR = "/var/lib/ipa/dnssec"
-+#   IPA_KASP_DB_BACKUP = "/var/lib/ipa/ipa-kasp.db.backup"
-+#   DNSSEC_TOKENS_DIR = "/var/lib/ipa/dnssec/tokens"
-+#   DNSSEC_SOFTHSM_PIN = "/var/lib/ipa/dnssec/softhsm_pin"
-+#   IPA_CA_CSR = "/var/lib/ipa/ca.csr"
-+#   PKI_CA_PUBLISH_DIR = "/var/lib/ipa/pki-ca/publish"
-+#   REPLICA_INFO_TEMPLATE = "/var/lib/ipa/replica-info-%s"
-+#   REPLICA_INFO_GPG_TEMPLATE = "/var/lib/ipa/replica-info-%s.gpg"
-+#   SYSRESTORE = "/var/lib/ipa/sysrestore"
-+#   STATEFILE_DIR = "/var/lib/ipa/sysupgrade"
-+#   VAR_LIB_KDCPROXY = "/var/lib/kdcproxy"
-+#   VAR_LIB_PKI_DIR = "/var/lib/pki"
-+#   VAR_LIB_PKI_CA_ALIAS_DIR = "/var/lib/pki-ca/alias"
-+#   VAR_LIB_PKI_TOMCAT_DIR = "/var/lib/pki/pki-tomcat"
-+#   CA_BACKUP_KEYS_P12 = "/var/lib/pki/pki-tomcat/alias/ca_backup_keys.p12"
-+#   KRA_BACKUP_KEYS_P12 = "/var/lib/pki/pki-tomcat/alias/kra_backup_keys.p12"
-+#   CA_CS_CFG_PATH = "/var/lib/pki/pki-tomcat/conf/ca/CS.cfg"
-+#   CAJARSIGNINGCERT_CFG = (
-+#       "/var/lib/pki/pki-tomcat/ca/profiles/ca/caJarSigningCert.cfg")
-+#   CASIGNEDLOGCERT_CFG = (
-+#       "/var/lib/pki/pki-tomcat/ca/profiles/ca/caSignedLogCert.cfg")
-+#   KRA_CS_CFG_PATH = "/var/lib/pki/pki-tomcat/conf/kra/CS.cfg"
-+#   KRACERT_P12 = "/root/kracert.p12"
-+#   SAMBA_DIR = "/var/lib/samba/"
-+#   SSSD_DB = "/var/lib/sss/db"
-+#   SSSD_MC_GROUP = "/var/lib/sss/mc/group"
-+#   SSSD_MC_PASSWD = "/var/lib/sss/mc/passwd"
-+#   SSSD_PUBCONF_KNOWN_HOSTS = "/var/lib/sss/pubconf/known_hosts"
-+#   SSSD_PUBCONF_KRB5_INCLUDE_D_DIR = "/var/lib/sss/pubconf/krb5.include.d/"
-+#   DIRSRV_LOCK_DIR = "/var/lock/dirsrv"
-+#   VAR_LOG_DIRSRV_INSTANCE_TEMPLATE = "/var/log/dirsrv/slapd-%s"
-+#   SLAPD_INSTANCE_ACCESS_LOG_TEMPLATE = "/var/log/dirsrv/slapd-%s/access"
-+#   SLAPD_INSTANCE_ERROR_LOG_TEMPLATE = "/var/log/dirsrv/slapd-%s/errors"
 +    VAR_LOG_HTTPD_DIR = "/var/log/apache2"
-+#   IPABACKUP_LOG = "/var/log/ipabackup.log"
-+#   IPACLIENT_INSTALL_LOG = "/var/log/ipaclient-install.log"
-+#   IPACLIENT_UNINSTALL_LOG = "/var/log/ipaclient-uninstall.log"
-+#   IPAREPLICA_CA_INSTALL_LOG = "/var/log/ipareplica-ca-install.log"
-+#   IPAREPLICA_CONNCHECK_LOG = "/var/log/ipareplica-conncheck.log"
-+#   IPAREPLICA_INSTALL_LOG = "/var/log/ipareplica-install.log"
-+#   IPARESTORE_LOG = "/var/log/iparestore.log"
-+#   IPASERVER_CA_INSTALL_LOG = "/var/log/ipaserver-ca-install.log"
-+#   IPASERVER_INSTALL_LOG = "/var/log/ipaserver-install.log"
-+#   IPASERVER_KRA_INSTALL_LOG = "/var/log/ipaserver-kra-install.log"
-+#   IPASERVER_KRA_UNINSTALL_LOG = "/var/log/ipaserver-kra-uninstall.log"
-+#   IPASERVER_UNINSTALL_LOG = "/var/log/ipaserver-uninstall.log"
-+#   IPAUPGRADE_LOG = "/var/log/ipaupgrade.log"
-+#   KADMIND_LOG = "/var/log/kadmind.log"
-+#   MESSAGES = "/var/log/messages"
-+#   VAR_LOG_PKI_DIR = "/var/log/pki/"
-+#   TOMCAT_TOPLEVEL_DIR = "/var/log/pki/pki-tomcat"
-+#   TOMCAT_CA_DIR = "/var/log/pki/pki-tomcat/ca"
-+#   TOMCAT_CA_ARCHIVE_DIR = "/var/log/pki/pki-tomcat/ca/archive"
-+#   TOMCAT_SIGNEDAUDIT_DIR = "/var/log/pki/pki-tomcat/ca/signedAudit"
-+#   TOMCAT_KRA_DIR = "/var/log/pki/pki-tomcat/kra"
-+#   TOMCAT_KRA_ARCHIVE_DIR = "/var/log/pki/pki-tomcat/kra/archive"
-+#   TOMCAT_KRA_SIGNEDAUDIT_DIR = "/var/log/pki/pki-tomcat/kra/signedAudit"
-+#   LOG_SECURE = "/var/log/secure"
++    VAR_LOG_HTTPD_ERROR = "/var/log/apache2/error.log"
 +    NAMED_RUN = "/var/cache/bind/named.run"
 +    VAR_OPENDNSSEC_DIR = "/var/lib/opendnssec"
 +    OPENDNSSEC_KASP_DB = "/var/lib/opendnssec/db/kasp.db"
 +    IPA_ODS_EXPORTER_CCACHE = "/var/lib/opendnssec/tmp/ipa-ods-exporter.ccache"
-+#   VAR_RUN_DIRSRV_DIR = "/var/run/dirsrv"
 +    KRB5CC_HTTPD = "/var/run/apache2/ipa/krbcache/krb5ccache"
-+#   IPA_RENEWAL_LOCK = "/var/run/ipa/renewal.lock"
-+#   SVC_LIST_FILE = "/var/run/ipa/services.list"
-+#   IPA_MEMCACHED_DIR = "/var/run/ipa_memcached"
-+#   VAR_RUN_IPA_MEMCACHED = "/var/run/ipa_memcached/ipa_memcached"
-+#   KRB5CC_SAMBA = "/var/run/samba/krb5cc_samba"
-+#   SLAPD_INSTANCE_SOCKET_TEMPLATE = "/var/run/slapd-%s.socket"
-+#   ALL_SLAPD_INSTANCE_SOCKETS = "/var/run/slapd-*.socket"
-+#   ADMIN_CERT_PATH = '/root/.dogtag/pki-tomcat/ca_admin.cert'
-+#   ENTROPY_AVAIL = '/proc/sys/kernel/random/entropy_avail'
-+#   LDIF2DB = '/usr/sbin/ldif2db'
-+#   DB2LDIF = '/usr/sbin/db2ldif'
-+#   BAK2DB = '/usr/sbin/bak2db'
-+#   DB2BAK = '/usr/sbin/db2bak'
-+#   KDCPROXY_CONFIG = '/etc/ipa/kdcproxy/kdcproxy.conf'
-+#   CERTMONGER = '/usr/sbin/certmonger'
-+#   NETWORK_MANAGER_CONFIG_DIR = '/etc/NetworkManager/conf.d'
-+#   IPA_CUSTODIA_CONF_DIR = '/etc/ipa/custodia'
-+#   IPA_CUSTODIA_CONF = '/etc/ipa/custodia/custodia.conf'
 +    IPA_CUSTODIA_SOCKET = "/run/apache2/ipa-custodia.sock"
 +    IPA_CUSTODIA_AUDIT_LOG = '/var/log/ipa-custodia.audit.log'
 +    IPA_GETKEYTAB = '/usr/sbin/ipa-getkeytab'
@@ -394,7 +146,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +paths = DebianPathNamespace()
 --- /dev/null
 +++ b/ipaplatform/debian/services.py
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,198 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -432,6 +184,9 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +# to their actual systemd service names
 +debian_system_units = redhat_services.redhat_system_units
 +
++debian_system_units['httpd'] = 'apache2.service'
++debian_system_units['kadmin'] = 'krb5-admin-server.service'
++debian_system_units['krb5kdc'] = 'krb5-kdc.service'
 +debian_system_units['named-regular'] = 'bind9.service'
 +debian_system_units['named-pkcs11'] = 'bind9-pkcs11.service'
 +debian_system_units['named'] = debian_system_units['named-pkcs11']
@@ -443,6 +198,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +debian_system_units['ods_signerd'] = debian_system_units['ods-signerd']
 +debian_system_units['rpcgssd'] = 'rpc-gssd.service'
 +debian_system_units['rpcidmapd'] = 'nfs-idmapd.service'
++debian_system_units['smb'] = 'smbd.service'
 +
 +# Service classes that implement Debian-specific behaviour
 +
@@ -564,18 +320,10 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +        return DebianNoService(name)
 +    if name == 'ipa':
 +        return redhat_services.RedHatIPAService(name)
-+    if name == 'httpd':
-+        return DebianSysvService("apache2")
-+    if name == 'kadmin':
-+        return DebianSysvService("krb5-admin-server")
-+    if name == 'krb5kdc':
-+        return DebianSysvService("krb5-kdc")
 +    if name == 'messagebus':
 +        return DebianNoService(name)
 +    if name == 'ntpd':
 +        return DebianSysvService("ntp")
-+    if name == 'smb':
-+        return DebianSysvService("smbd")
 +    if name == 'sshd':
 +        return DebianSSHService(name)
 +    return DebianService(name)
@@ -599,7 +347,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +knownservices = DebianServices()
 --- /dev/null
 +++ b/ipaplatform/debian/tasks.py
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,61 @@
 +# Authors:
 +#   Timo Aaltonen <tjaalton@ubuntu.com>
 +#
@@ -634,18 +382,27 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    def restore_pre_ipa_client_configuration(self, fstore, statestore,
 +                                             was_sssd_installed,
 +                                             was_sssd_configured):
++        # Debian doesn't use authconfig, nothing to restore
 +        return True
 +
 +    def set_nisdomain(self, nisdomain):
++        # Debian doesn't use authconfig, nothing to set
 +        return True
 +
 +    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
++        # Debian doesn't use authconfig, this is handled by pam-auth-update
 +        return True
 +
 +    def modify_pam_to_use_krb5(self, statestore):
++        # Debian doesn't use authconfig, this is handled by pam-auth-update
 +        return True
 +
-+    def restore_network_configuration(self, fstore, statestore):
++    def backup_auth_configuration(self, path):
++        # Debian doesn't use authconfig, nothing to backup
++        return True
++
++    def restore_auth_configuration(self, path):
++        # Debian doesn't use authconfig, nothing to restore
 +        return True
 +
 +    def parse_ipa_version(self, version):
@@ -675,7 +432,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
          srv_vals.append("0.%s.pool.ntp.org" % os)
 --- /dev/null
 +++ b/ipaplatform/debian/constants.py
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,25 @@
 +#
 +# Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 +#
@@ -689,11 +446,7 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +
 +
 +class DebianConstantsNamespace(BaseConstantsNamespace):
-+#   DS_USER = "dirsrv"
-+#   DS_GROUP = "dirsrv"
 +    HTTPD_USER = "www-data"
-+#   IPA_DNS_PACKAGE_NAME = "freeipa-server-dns"
-+#   KDCPROXY_USER = "kdcproxy"
 +    NAMED_USER = "bind"
 +    NAMED_GROUP = "bind"
 +    # ntpd init variable used for daemon options
@@ -702,8 +455,6 @@ Date:   Fri Mar 1 12:21:00 2013 +0200
 +    NTPD_OPTS_QUOTE = "\'"
 +    ODS_USER = "opendnssec"
 +    ODS_GROUP = "opendnssec"
-+#   PKI_USER = "pkiuser"
 +    SECURE_NFS_VAR = "NEED_GSSD"
-+#   SSSD_USER = "sssd"
 +
 +constants = DebianConstantsNamespace()

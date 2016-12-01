@@ -19,6 +19,11 @@ freeipa (4.4.2-1) UNRELEASED; urgency=medium
   * control: Add python-libsss-nss-idmap to build-depends.
   * control: Bump depends on sssd to 1.14.0.
   * install: Updated.
+  * platform:
+    - drop variables that were commented out
+    - add some comments to tasks.py
+    - migrate some services to use systemd
+    - add & update some paths
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
