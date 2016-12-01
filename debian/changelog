@@ -5,6 +5,7 @@ freeipa (4.4.2-1) UNRELEASED; urgency=medium
   * patches: Refreshed.
   * work-around-apache-fail.diff: Dropped, apache supports systemd now
     so this should not be needed.
+  * watch: Use https url.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
