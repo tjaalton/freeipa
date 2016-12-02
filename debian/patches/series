@@ -1,4 +1,5 @@
 # upstreamed
+fix-cve-2016-5404.diff
 configure-apache-from-installer.diff
 
 # not upstreamable
