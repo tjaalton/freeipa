@@ -1,4 +1,5 @@
 # upstreamed
+ipa-kdb-support-dal-version-5-and-6.diff
 fix-cve-2016-5404.diff
 configure-apache-from-installer.diff
 
