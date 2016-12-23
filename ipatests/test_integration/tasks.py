@@ -356,6 +356,9 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
             '-w', replica.config.admin_password]
     if setup_ca:
         args.append('--setup-ca')
+    if setup_kra:
+        assert setup_ca, "CA must be installed on replica with KRA"
+        args.append('--setup-kra')
     if setup_dns:
         args.extend([
             '--setup-dns',
@@ -379,17 +382,6 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     replica.run_command(args)
     enable_replication_debugging(replica)
     setup_sssd_debugging(replica)
-
-    if setup_kra:
-        assert setup_ca, "CA must be installed on replica with KRA"
-        args = [
-            "ipa-kra-install",
-            "-p", replica.config.dirman_password,
-            "-U",
-        ]
-        if domainlevel(master) == DOMAIN_LEVEL_0:
-            args.append(replica_filename)
-        replica.run_command(args)
 
     kinit_admin(replica)
 
@@ -507,6 +499,17 @@ def remove_trust_with_ad(master, ad_domain):
     # Remove the range
     range_name = ad_domain.upper() + '_id_range'
     master.run_command(['ipa', 'idrange-del', range_name])
+
+    remove_trust_info_from_ad(master, ad_domain)
+
+
+def remove_trust_info_from_ad(master, ad_domain):
+    # Remove record about trust from AD
+    master.run_command(['rpcclient', ad_domain,
+                        '-U\\Administrator%{}'.format(
+                            master.config.ad_admin_password),
+                        '-c', 'deletetrustdom {}'.format(master.domain.name)],
+                       raiseonerr=False)
 
 
 def configure_auth_to_local_rule(master, ad):
@@ -983,12 +986,20 @@ def double_circle_topo(master, replicas, site_size=6):
 
 
 def install_topo(topo, master, replicas, clients, domain_level=None,
-                 skip_master=False, setup_replica_cas=True):
+                 skip_master=False, setup_replica_cas=True,
+                 setup_replica_kras=False):
     """Install IPA servers and clients in the given topology"""
+    if setup_replica_kras and not setup_replica_cas:
+        raise ValueError("Option 'setup_replica_kras' requires "
+                         "'setup_replica_cas' set to True")
     replicas = list(replicas)
     installed = {master}
     if not skip_master:
-        install_master(master, domain_level=domain_level)
+        install_master(
+            master,
+            domain_level=domain_level,
+            setup_kra=setup_replica_kras
+        )
 
     add_a_records_for_hosts_in_master_domain(master)
 
@@ -998,7 +1009,11 @@ def install_topo(topo, master, replicas, clients, domain_level=None,
             connect_replica(parent, child)
         else:
             log.info('Installing replica %s from %s' % (parent, child))
-            install_replica(parent, child, setup_ca=setup_replica_cas)
+            install_replica(
+                parent, child,
+                setup_ca=setup_replica_cas,
+                setup_kra=setup_replica_kras
+            )
         installed.add(child)
     install_clients([master] + replicas, clients)
 
@@ -1191,6 +1206,13 @@ def run_server_del(host, server_to_delete, force=False,
         args.append('--ignore-last-of-role')
 
     return host.run_command(args, raiseonerr=False)
+
+
+def run_certutil(host, args, reqdir, stdin=None, raiseonerr=True):
+    new_args = [paths.CERTUTIL, "-d", reqdir]
+    new_args = " ".join(new_args + args)
+    return host.run_command(new_args, raiseonerr=raiseonerr,
+                            stdin_text=stdin)
 
 
 def assert_error(result, stderr_text, returncode=None):

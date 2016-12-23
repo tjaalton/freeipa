@@ -55,7 +55,6 @@ from ipaserver.install import certs, service, sysupgrade
 from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
-from ipapython import dnsutil
 
 if six.PY3:
     unicode = str
@@ -447,14 +446,17 @@ def get_directive(filename, directive, separator=' '):
     return None
 
 def kadmin(command):
-    ipautil.run(["kadmin.local", "-q", command,
-                                 "-x", "ipa-setup-override-restrictions"])
+    return ipautil.run(["kadmin.local", "-q", command,
+                        "-x", "ipa-setup-override-restrictions"],
+                       capture_output=True,
+                       capture_error=True)
+
 
 def kadmin_addprinc(principal):
-    kadmin("addprinc -randkey " + principal)
+    return kadmin("addprinc -randkey " + principal)
 
 def kadmin_modprinc(principal, options):
-    kadmin("modprinc " + options + " " + principal)
+    return kadmin("modprinc " + options + " " + principal)
 
 def create_keytab(path, principal):
     try:
@@ -463,16 +465,16 @@ def create_keytab(path, principal):
     except os.error:
         root_logger.critical("Failed to remove %s." % path)
 
-    kadmin("ktadd -k " + path + " " + principal)
+    return kadmin("ktadd -k " + path + " " + principal)
 
 def resolve_ip_addresses_nss(fqdn):
     """Get list of IP addresses for given host (using NSS/getaddrinfo).
     :returns:
         list of IP addresses as UnsafeIPAddress objects
     """
-    # make sure the name is fully qualified
-    # so search path from resolv.conf does not apply
-    fqdn = str(dnsutil.DNSName(fqdn).make_absolute())
+    # it would be good disable search list processing from resolv.conf
+    # to avoid cases where we get IP address for an totally different name
+    # but there is no way to do this using getaddrinfo parameters
     try:
         addrinfos = socket.getaddrinfo(fqdn, None,
                                        socket.AF_UNSPEC, socket.SOCK_STREAM)

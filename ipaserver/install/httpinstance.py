@@ -175,8 +175,7 @@ class HTTPInstance(service.Service):
         self.step("importing CA certificates from LDAP", self.__import_ca_certs)
         if autoconfig:
             self.step("setting up browser autoconfig", self.__setup_autoconfig)
-        if not self.promote:
-            self.step("publish CA cert", self.__publish_ca_cert)
+        self.step("publish CA cert", self.__publish_ca_cert)
         self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
         self.step("configuring SELinux for httpd", self.configure_selinux_for_httpd)
         if not self.is_kdcproxy_configured():
@@ -345,14 +344,23 @@ class HTTPInstance(service.Service):
             self.__set_mod_nss_nickname(nickname)
             self.add_cert_to_service()
 
-        elif not self.promote:
-            db.create_password_conf()
-            self.dercert = db.create_server_cert(self.cert_nickname, self.fqdn,
-                                                 ca_db)
-            db.track_server_cert(self.cert_nickname, self.principal,
-                                 db.passwd_fname, 'restart_httpd')
-            db.create_signing_cert("Signing-Cert", "Object Signing Cert", ca_db)
-            self.add_cert_to_service()
+        else:
+            if not self.promote:
+                db.create_password_conf()
+                self.dercert = db.create_server_cert(self.cert_nickname, self.fqdn,
+                                                     ca_db)
+                db.track_server_cert(self.cert_nickname, self.principal,
+                                     db.passwd_fname, 'restart_httpd')
+                db.create_signing_cert("Signing-Cert", "Object Signing Cert", ca_db)
+                self.add_cert_to_service()
+
+            server_certs = db.find_server_certs()
+            if not server_certs:
+                raise RuntimeError("Could not find a suitable server cert.")
+
+            # We only handle one server cert
+            nickname = server_certs[0][0]
+            db.export_ca_cert(nickname)
 
         # Fix the database permissions
         os.chmod(certs.NSS_DIR + "/cert8.db", 0o660)

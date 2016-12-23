@@ -399,9 +399,9 @@ class BaseCertObject(Object):
             obj['subject'] = DN(unicode(cert.subject))
             obj['issuer'] = DN(unicode(cert.issuer))
             obj['serial_number'] = cert.serial_number
+            obj['valid_not_before'] = unicode(cert.valid_not_before_str)
+            obj['valid_not_after'] = unicode(cert.valid_not_after_str)
             if full:
-                obj['valid_not_before'] = unicode(cert.valid_not_before_str)
-                obj['valid_not_after'] = unicode(cert.valid_not_after_str)
                 obj['md5_fingerprint'] = unicode(
                     nss.data_to_hex(nss.md5_digest(cert.der_data), 64)[0])
                 obj['sha1_fingerprint'] = unicode(
@@ -1231,16 +1231,17 @@ class cert_find(Search, CertMethod):
                 obj = {'serial_number': serial_number}
             else:
                 obj = ra_obj
-                obj['issuer'] = issuer
-                obj['subject'] = DN(ra_obj['subject'])
-                obj['revoked'] = (
-                    ra_obj['status'] in (u'REVOKED', u'REVOKED_EXPIRED'))
-
                 if all:
-                    ra_obj = ra.get_certificate(str(serial_number))
-                    if not raw:
+                    obj.update(ra.get_certificate(str(serial_number)))
+
+                if not raw:
+                    obj['issuer'] = issuer
+                    obj['subject'] = DN(ra_obj['subject'])
+                    obj['revoked'] = (
+                        ra_obj['status'] in (u'REVOKED', u'REVOKED_EXPIRED'))
+                    if all:
                         obj['certificate'] = (
-                            ra_obj['certificate'].replace('\r\n', ''))
+                            obj['certificate'].replace('\r\n', ''))
                         self.obj._parse(obj)
 
             obj['cacn'] = ca_obj['cn'][0]
