@@ -25,6 +25,7 @@ freeipa (4.4.3-1) UNRELEASED; urgency=medium
     - add some comments to tasks.py
     - migrate some services to use systemd
     - add & update some paths
+    - add some stub services (LP: #1653245)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
