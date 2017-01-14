@@ -27,6 +27,8 @@ freeipa (4.4.3-1) UNRELEASED; urgency=medium
     - add & update some paths
     - add some stub services (LP: #1653245)
   * control: Add krb5-otp to server depends. (LP: #1640732)
+  * control: Demote ntp to Recommends so that lxc containers can be
+    enrolled without it. (LP: #1630911)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Dec 2016 08:25:03 +0200
 
