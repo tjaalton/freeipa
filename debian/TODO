@@ -1,5 +1,3 @@
-4.1 needs
+TODO
 
-- softhsm 2.x
-- dnssec patch in bind9
-
+- Bundle OpenSans fonts? Fallback works fine though
