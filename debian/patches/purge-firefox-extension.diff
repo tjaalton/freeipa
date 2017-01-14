@@ -541,10 +541,10 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
          self.step("importing CA certificates from LDAP", self.__import_ca_certs)
 -        if autoconfig:
 -            self.step("setting up browser autoconfig", self.__setup_autoconfig)
-         if not self.promote:
-             self.step("publish CA cert", self.__publish_ca_cert)
+         self.step("publish CA cert", self.__publish_ca_cert)
          self.step("clean up any existing httpd ccache", self.remove_httpd_ccache)
-@@ -376,42 +374,6 @@ class HTTPInstance(service.Service):
+         self.step("configuring SELinux for httpd", self.configure_selinux_for_httpd)
+@@ -383,42 +381,6 @@ class HTTPInstance(service.Service):
          db = certs.CertDB(self.realm, subject_base=self.subject_base)
          self.import_ca_certs(db, self.ca_is_configured)
  
@@ -605,7 +605,7 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
  
 --- a/ipaserver/install/server/upgrade.py
 +++ b/ipaserver/install/server/upgrade.py
-@@ -269,16 +269,6 @@ def cleanup_adtrust(fstore):
+@@ -270,16 +270,6 @@ def cleanup_adtrust(fstore):
              root_logger.debug('Removing %s from backup', backed_up_file)
  
  
@@ -619,14 +619,14 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
 -    http.setup_firefox_extension(realm, domain)
 -
 -
- def ca_configure_profiles_acl(ca):
-     root_logger.info('[Authorizing RA Agent to modify profiles]')
- 
-@@ -1716,7 +1706,6 @@ def upgrade_configuration():
+ def upgrade_adtrust_config():
+     """
+     Upgrade 'dedicated keytab file' in smb.conf to omit FILE: prefix
+@@ -1737,7 +1727,6 @@ def upgrade_configuration():
  
      cleanup_kdc(fstore)
      cleanup_adtrust(fstore)
 -    setup_firefox_extension(fstore)
+     upgrade_adtrust_config()
  
      bind = bindinstance.BindInstance(fstore)
-     if bind.is_configured() and not bind.is_running():
