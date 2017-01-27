@@ -352,7 +352,7 @@ Depends:
  python-polib,
  python-pytest-multihost,
  python-pytest-sourceorder,
- python-sssdconfig,
+ python-sss,
  xz-utils,
  ${misc:Depends},
  ${python:Depends}
