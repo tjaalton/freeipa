@@ -5,7 +5,7 @@ LOGFILE=/var/log/ipaclient-upgrade.log
 
 if [ "$1" = configure ]; then
     python2 -c 'from ipapython.certdb import update_ipa_nssdb; update_ipa_nssdb()' \
-        > /var/log/$LOGFILE 2>&1
+        > $LOGFILE 2>&1
 fi
 
 if [ ! -e /run/ipa ]; then
