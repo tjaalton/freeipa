@@ -4,6 +4,8 @@ freeipa (4.4.3-4) UNRELEASED; urgency=medium
     ipaplatform/debian/services.py.
   * fix-kdcproxy-path.diff: Update debian/paths.py to use correct path
     for ipa-httpd-kdcproxy.
+  * client.dirs: Ship /etc/krb5.conf.d, because not having that breaks
+    the installer when krb5.conf tries to include that.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 17 Feb 2017 01:40:15 +0200
 
