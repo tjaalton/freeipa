@@ -1,7 +1,7 @@
 freeipa (4.4.3-4) UNRELEASED; urgency=medium
 
   * fix-is-running.diff: Add a third argument to is_running() in
-    ipaplatform/debian/services.py.
+    ipaplatform/debian/services.py. (Closes: #856533)
   * fix-kdcproxy-path.diff: Update debian/paths.py to use correct path
     for ipa-httpd-kdcproxy.
   * client.dirs: Ship /etc/krb5.conf.d, because not having that breaks
