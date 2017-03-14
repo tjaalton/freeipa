@@ -95,5 +95,6 @@ usr/share/man/man1/ipa-winsync-migrate.1*
 usr/share/man/man8/ipa-upgradeconfig.8*
 usr/share/man/man8/ipactl.8*
 var/lib/ipa/pki-ca
+var/lib/ipa/gssproxy
 var/lib/ipa/sysrestore
 var/lib/ipa/sysupgrade

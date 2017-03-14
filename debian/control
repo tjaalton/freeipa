@@ -79,6 +79,7 @@ Depends:
  freeipa-admintools (= ${source:Version}),
  freeipa-client (= ${binary:Version}),
  freeipa-common (= ${source:Version}),
+ gssproxy (>= 0.7.0),
  krb5-admin-server,
  krb5-kdc,
  krb5-kdc-ldap,
