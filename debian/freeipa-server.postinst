@@ -41,11 +41,6 @@ if [ "$1" = configure ]; then
     fi
 fi
 
-if [ ! -e /run/ipa_memcached ]; then
-    mkdir -m 0700 /run/ipa_memcached
-    chown www-data:www-data /run/ipa_memcached
-fi
-
 if [ ! -e /run/apache2/ipa ]; then
     mkdir -m 0700 /run/apache2/ipa
     chown www-data:www-data /run/apache2/ipa

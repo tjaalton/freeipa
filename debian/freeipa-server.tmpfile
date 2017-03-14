@@ -1,4 +1,3 @@
-d /var/run/ipa_memcached 0700 www-data www-data
 d /var/run/apache2/ipa 0700 www-data www-data
 d /var/run/apache2/ipa/clientcaches 0700 www-data www-data
 d /var/run/apache2/ipa/krbcache 0700 www-data www-data

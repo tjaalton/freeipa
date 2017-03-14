@@ -79,7 +79,6 @@ ifneq ($(ONLY_CLIENT), 1)
 	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
 	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
 
-	install -m 0644 init/ipa_memcached.conf $(DESTDIR)/etc/default/ipa_memcached
 	install -m 0644 init/ipa-dnskeysyncd.conf $(DESTDIR)/etc/default/ipa-dnskeysyncd
 	install -m 0644 init/ipa-ods-exporter.conf $(DESTDIR)/etc/default/ipa-ods-exporter
 	install -m 0644 install/share/kdcproxy.conf $(DESTDIR)/etc/ipa/kdcproxy/kdcproxy.conf
@@ -89,7 +88,6 @@ ifneq ($(ONLY_CLIENT), 1)
 	install -m 0755 daemons/dnssec/ipa-ods-exporter $(DESTDIR)/usr/lib/ipa/
 	install -m 0644 daemons/dnssec/ipa-ods-exporter.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 daemons/dnssec/ipa-ods-exporter.socket $(DESTDIR)/lib/systemd/system
-	install -m 0644 init/systemd/ipa_memcached.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 init/systemd/ipa-custodia.service $(DESTDIR)/lib/systemd/system
 	install -m 0644 contrib/completion/ipa.bash_completion $(DESTDIR)/usr/share/bash-completion/completions/ipa
@@ -110,7 +108,6 @@ override_dh_install:
 
 override_dh_systemd_enable:
 	dh_systemd_enable -pfreeipa-server --no-enable ipa.service
-	dh_systemd_enable -pfreeipa-server --no-enable ipa_memcached.service
 	dh_systemd_enable -pfreeipa-server --no-enable ipa-dnskeysyncd.service
 	dh_systemd_enable -pfreeipa-server --no-enable ipa-custodia.service
 	dh_systemd_enable -pfreeipa-server --no-enable ipa-ods-exporter.service

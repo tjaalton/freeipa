@@ -18,7 +18,6 @@ usr/lib/python*/dist-packages/ipaserver/install/kra.py
 usr/lib/python*/dist-packages/ipaserver/install/krainstance.py
 usr/lib/python*/dist-packages/ipaserver/install/krbinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/ldapupdate.py
-usr/lib/python*/dist-packages/ipaserver/install/memcacheinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/ntpinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/odsexporterinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/opendnssecinstance.py
