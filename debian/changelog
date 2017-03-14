@@ -13,6 +13,7 @@ freeipa (4.5.0-1) UNRELEASED; urgency=medium
   * control, server.install: Depend on gssproxy.
   * control: Build-depend on python-jinja2, add CSR files to python-
     ipaclient.
+  * fix-xmlrpc-check.diff: Detect xmlrpc-c properly on Debian.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
 

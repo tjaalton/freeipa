@@ -14,3 +14,4 @@ create-sysconfig-ods.diff
 fix-named-conf-template.diff
 fix-is-running.diff
 fix-kdcproxy-path.diff
+fix-xmlrpc-check.diff
