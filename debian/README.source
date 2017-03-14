@@ -1,0 +1,7 @@
+freeipa
+
+Upstream does not ship unminified copies of various javascript files, so we must ship them
+in debian/missing-sources. Minified build.js, dojo.js and freeipa/{app,core}.js
+are built with a certain set of modules, so those bits are under missing-sources/{build,dojo}.
+The list of modules needed for the build are taken from install/ui/src/build.profile.js,
+install/ui/src/dojo.profile.js and install/ui/src/webui.profile.js.

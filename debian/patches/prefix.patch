@@ -1,0 +1,66 @@
+Author: Timo Aaltonen <tjaalton@ubuntu.com>
+Date:   Mon Jan 2 16:09:40 2012 +0200
+
+use the debian layout when installing python modules
+
+--- a/Makefile
++++ b/Makefile
+@@ -118,9 +118,9 @@ client-install: client client-dirs
+ 	cd install/po && $(MAKE) install || exit 1;
+ 	@for subdir in $(CLIENTPYDIRS); do \
+ 		if [ "$(DESTDIR)" = "" ]; then \
+-			(cd $$subdir && $(PYTHON) setup.py install); \
++			(cd $$subdir && $(PYTHON) setup.py install --install-layout=deb); \
+ 		else \
+-			(cd $$subdir && $(PYTHON) setup.py install --root $(DESTDIR)); \
++			(cd $$subdir && $(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb); \
+ 		fi \
+ 	done
+ 
+@@ -215,11 +215,11 @@ server: version-update
+ 
+ server-install: server
+ 	if [ "$(DESTDIR)" = "" ]; then \
+-		$(PYTHON) setup.py install; \
+-		(cd ipaplatform && $(PYTHON) setup.py install); \
++		$(PYTHON) setup.py install --install-layout=deb; \
++		(cd ipaplatform && $(PYTHON) setup.py install --install-layout=deb); \
+ 	else \
+-		$(PYTHON) setup.py install --root $(DESTDIR); \
+-		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR)); \
++		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
++		(cd ipaplatform && $(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb); \
+ 	fi
+ 
+ tests: version-update tests-man-autogen
+@@ -230,7 +230,7 @@ tests-install: tests
+ 	if [ "$(DESTDIR)" = "" ]; then \
+ 		cd ipatests; $(PYTHON) setup.py install; \
+ 	else \
+-		cd ipatests; $(PYTHON) setup.py install --root $(DESTDIR); \
++		cd ipatests; $(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
+ 	fi
+ 	cd ipatests/man && $(MAKE) install
+ 
+--- a/ipapython/Makefile
++++ b/ipapython/Makefile
+@@ -13,7 +13,7 @@ install:
+ 	if [ "$(DESTDIR)" = "" ]; then \
+ 		$(PYTHON) setup.py install; \
+ 	else \
+-		$(PYTHON) setup.py install --root $(DESTDIR); \
++		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
+ 	fi
+ 	@for subdir in $(SUBDIRS); do \
+ 		(cd $$subdir && $(MAKE) $@) || exit 1; \
+--- a/ipalib/Makefile
++++ b/ipalib/Makefile
+@@ -12,7 +12,7 @@ install:
+ 	if [ "$(DESTDIR)" = "" ]; then \
+ 		$(PYTHON) setup.py install; \
+ 	else \
+-		$(PYTHON) setup.py install --root $(DESTDIR); \
++		$(PYTHON) setup.py install --root $(DESTDIR) --install-layout=deb; \
+ 	fi
+ 
+ clean:

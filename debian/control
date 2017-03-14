@@ -1,0 +1,366 @@
+Source: freeipa
+Section: net
+Priority: extra
+Maintainer: Debian FreeIPA Team <pkg-freeipa-devel@lists.alioth.debian.org>
+Uploaders: Timo Aaltonen <tjaalton@debian.org>
+Build-Depends:
+ 389-ds-base-dev (>= 1.3.5.6),
+ check,
+ debhelper (>= 9),
+ dh-autoreconf,
+ dh-python,
+ dh-systemd,
+ gettext,
+ krb5-user,
+ libcmocka-dev,
+ libcurl4-nss-dev,
+ libini-config-dev,
+ libkrad-dev,
+ libkrb5-dev (>= 1.13),
+ libldap2-dev,
+ libnspr4-dev,
+ libnss3-dev,
+ libpopt-dev,
+ librhino-java,
+ libsasl2-dev,
+ libssl-dev,
+ libsss-idmap-dev,
+ libsss-nss-idmap-dev (>= 1.14.0),
+ libsvrcore-dev,
+ libtalloc-dev,
+ libtevent-dev,
+ libunistring-dev,
+ libverto-dev,
+ libxmlrpc-core-c3-dev (>= 1.33.06),
+ pki-base (>= 10.3.5-6),
+ python-all-dev,
+ python-cryptography,
+ python-dbus,
+ python-dnspython (>= 1.11.1),
+ python-gssapi,
+ python-kdcproxy,
+ python-ldap (>= 2.4.15),
+ python-lesscpy,
+ python-libipa-hbac,
+ python-libsss-nss-idmap,
+ python-lxml,
+ python-memcache,
+ python-netaddr,
+ python-netifaces (>= 0.10.4),
+ python-nose,
+ python-nss (>= 0.16.0),
+ python-polib,
+ python-pyasn1,
+ python-qrcode (>= 5.0.0),
+ python-setuptools,
+ python-six,
+ python-sss (>= 1.14.0),
+ python-usb (>= 1.0.0~b2),
+ python-yubico,
+ rhino,
+ samba-dev,
+ systemd,
+ uuid-dev
+Standards-Version: 3.9.6
+Vcs-Git: https://anonscm.debian.org/git/pkg-freeipa/freeipa.git
+Vcs-Browser: https://anonscm.debian.org/cgit/pkg-freeipa/freeipa.git
+Homepage: http://www.freeipa.org
+
+Package: freeipa-server
+Architecture: any
+Breaks: freeipa-server-trust-ad (<< 4.3.0-1)
+Replaces: freeipa-server-trust-ad (<< 4.3.0-1)
+Depends:
+ 389-ds-base (>= 1.3.5.6),
+ acl,
+ apache2,
+ certmonger (>= 0.78.6-3),
+ custodia,
+ fonts-font-awesome,
+ freeipa-admintools (= ${source:Version}),
+ freeipa-client (= ${binary:Version}),
+ freeipa-common (= ${source:Version}),
+ krb5-admin-server,
+ krb5-kdc,
+ krb5-kdc-ldap,
+ krb5-otp,
+ krb5-pkinit,
+ ldap-utils,
+ libapache2-mod-auth-gssapi (>= 1.4.0),
+ libapache2-mod-nss (>= 1.0.10-2~),
+ libapache2-mod-wsgi,
+ libjs-dojo-core,
+ libjs-jquery,
+ libnss3-tools,
+ libsasl2-modules-gssapi-mit,
+ memcached,
+ ntp,
+ oddjob (>= 0.34.3-2),
+ p11-kit,
+ pki-ca (>= 10.3.5-6),
+ pki-kra (>= 10.3.5-6),
+ python-dateutil,
+ python-ipaserver (= ${source:Version}),
+ python-gssapi,
+ python-ldap (>= 2.4.22),
+ python-systemd,
+ slapi-nis (>= 0.56.1),
+ softhsm2 (>= 2.1.0-2),
+ systemd-sysv,
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends}
+Recommends:
+ freeipa-server-dns,
+Description: FreeIPA centralized identity framework -- server
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This is the server package.
+
+Package: freeipa-server-dns
+Architecture: all
+Breaks: freeipa-server (<< 4.3.0-1)
+Replaces: freeipa-server (<< 4.3.0-1)
+Depends:
+ freeipa-server (>= ${source:Version}),
+ bind9 (>= 1:9.10.3.dfsg.P4-8),
+ bind9-dyndb-ldap (>= 10),
+ opendnssec (>= 1:1.4.9-2),
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends}
+Description: FreeIPA centralized identity framework -- IPA DNS integration
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package adds DNS integration with BIND 9.
+
+Package: freeipa-server-trust-ad
+Architecture: any
+Depends:
+ freeipa-common (= ${source:Version}),
+ freeipa-server (= ${binary:Version}),
+ python-ipaserver (= ${source:Version}),
+ python-samba,
+ samba,
+ winbind,
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends}
+Description: FreeIPA centralized identity framework -- AD trust installer
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ Cross-realm trusts with Active Directory in IPA require working Samba 4
+ installation. This package is provided for convenience to install all required
+ dependencies at once.
+
+Package: freeipa-common
+Architecture: all
+Breaks: python-freeipa
+Replaces: python-freeipa
+Depends:
+ ${misc:Depends},
+Description: FreeIPA centralized identity framework -- common files
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package includes common files.
+
+Package: freeipa-client
+Architecture: any
+Depends:
+ bind9utils,
+ certmonger (>= 0.78.6-3),
+ curl,
+ dnsutils,
+ freeipa-common (= ${source:Version}),
+ krb5-user,
+ libcurl3 (>= 7.22.0),
+ libnss3-tools,
+ libnss-sss,
+ libpam-sss,
+ libsasl2-modules-gssapi-mit,
+ libsss-sudo,
+ libxmlrpc-core-c3 (>= 1.16.33-3.1ubuntu5),
+ oddjob-mkhomedir,
+ python-dnspython,
+ python-ipaclient (= ${source:Version}),
+ python-gssapi,
+ python-ldap,
+ sssd (>= 1.14.0),
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends}
+Recommends:
+ ntp,
+Suggests:
+ libpam-krb5,
+Description: FreeIPA centralized identity framework -- client
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This is the client package.
+
+Package: freeipa-admintools
+Architecture: all
+Depends:
+ freeipa-client (>= ${source:Version}),
+ python-ipalib (>= ${source:Version}),
+ python-gssapi,
+ python-ldap,
+ ${misc:Depends},
+ ${python:Depends},
+Description: FreeIPA centralized identity framework -- admintools
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package contains some tools for administrators.
+
+Package: freeipa-tests
+Architecture: all
+Depends:
+ freeipa-client (>= ${source:Version}),
+ python-ipalib (>= ${source:Version}),
+ python-ipatests (>= ${source:Version}),
+ python-pytest,
+ ${misc:Depends},
+ ${python:Depends}
+Recommends: python-yaml
+Description: FreeIPA centralized identity framework -- tests
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package contains tests that verify IPA functionality.
+
+Package: python-ipaclient
+Architecture: all
+Section: python
+Breaks: freeipa-client (<< 4.3.0-1)
+Replaces: freeipa-client (<< 4.3.0-1)
+Depends:
+ freeipa-common (= ${binary:Version}),
+ python-dnspython,
+ python-ipalib (>= ${source:Version}),
+ ${misc:Depends},
+ ${python:Depends},
+Description: FreeIPA centralized identity framework -- Python modules for ipaclient
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This Python module is used by FreeIPA client.
+
+Package: python-ipalib
+Architecture: all
+Section: python
+Breaks: python-freeipa
+Replaces: python-freeipa
+Depends:
+ freeipa-common (= ${source:Version}),
+ gnupg2,
+ gnupg-agent,
+ keyutils,
+ python-cffi,
+ python-cryptography,
+ python-custodia,
+ python-dbus,
+ python-dnspython,
+ python-gssapi,
+ python-jwcrypto,
+ python-ldap,
+ python-libipa-hbac,
+ python-lxml,
+ python-memcache,
+ python-netaddr,
+ python-netifaces (>= 0.10.4),
+ python-nss (>= 0.16.0),
+ python-pyasn1,
+ python-qrcode (>= 5.0.0),
+ python-requests,
+ python-setuptools,
+ python-six,
+ python-usb (>= 1.0.0~b2),
+ python-yubico,
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends},
+Description: FreeIPA centralized identity framework -- shared Python modules
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This Python module is used by other FreeIPA packages.
+
+Package: python-ipaserver
+Architecture: all
+Section: python
+Breaks: freeipa-server (<< 4.3.0-1)
+Replaces: freeipa-server (<< 4.3.0-1)
+Depends:
+ freeipa-common (= ${binary:Version}),
+ pki-tools (>= 10.2.6-3),
+ python-dbus,
+ python-dnspython,
+ python-gssapi,
+ python-ipaclient (= ${binary:Version}),
+ python-ipalib (>= ${source:Version}),
+ python-kdcproxy,
+ python-ldap (>= 2.4.22),
+ python-libsss-nss-idmap,
+ python-pyasn1,
+ zip,
+ ${misc:Depends},
+ ${python:Depends},
+Description: FreeIPA centralized identity framework -- Python modules for server
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This Python module is used by FreeIPA server.
+
+Package: python-ipatests
+Architecture: all
+Section: python
+Breaks: freeipa-tests (<< 4.3.0-1)
+Replaces: freeipa-tests (<< 4.3.0-1)
+Depends:
+ libnss3-tools,
+ python-coverage,
+ python-ipalib (>= ${source:Version}),
+ python-nose,
+ python-paramiko,
+ python-paste,
+ python-polib,
+ python-pytest-multihost,
+ python-pytest-sourceorder,
+ python-sss,
+ xz-utils,
+ ${misc:Depends},
+ ${python:Depends}
+Recommends: python-yaml
+Description: FreeIPA centralized identity framework -- Python modules for tests
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This Python module is used by FreeIPA tests.

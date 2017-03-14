@@ -1,0 +1,3 @@
+version=3
+#options=dversionmangle=s/\+dfsg$//,uversionmangle=s/$/+dfsg1/,compression=xz \
+https://freeipa.org/page/Downloads http://freeipa.org/downloads/src/freeipa-(.+).tar.gz

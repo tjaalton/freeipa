@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+LOGFILE=/var/log/ipaclient-upgrade.log
+
+if [ "$1" = configure ]; then
+    python2 -c 'from ipapython.certdb import update_ipa_nssdb; update_ipa_nssdb()' \
+        > $LOGFILE 2>&1
+fi
+
+if [ ! -e /run/ipa ]; then
+    mkdir -m 0700 /run/ipa
+fi
+
+#DEBHELPER#
