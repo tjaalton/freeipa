@@ -1,33 +1,25 @@
---- a/daemons/dnssec/ipa-dnskeysyncd.service
-+++ b/daemons/dnssec/ipa-dnskeysyncd.service
-@@ -2,11 +2,11 @@
- Description=IPA key daemon
- 
+--- a/daemons/dnssec/ipa-dnskeysyncd.service.in
++++ b/daemons/dnssec/ipa-dnskeysyncd.service.in
+@@ -4,9 +4,9 @@ Description=IPA key daemon
  [Service]
--EnvironmentFile=/etc/sysconfig/ipa-dnskeysyncd
--ExecStart=/usr/libexec/ipa/ipa-dnskeysyncd
+ EnvironmentFile=@sysconfenvdir@/ipa-dnskeysyncd
+ ExecStart=@libexecdir@/ipa/ipa-dnskeysyncd
 -User=ods
 -Group=named
 -SupplementaryGroups=ods
-+EnvironmentFile=/etc/default/ipa-dnskeysyncd
-+ExecStart=/usr/lib/ipa/ipa-dnskeysyncd
 +User=opendnssec
 +Group=bind
 +SupplementaryGroups=opendnssec
  PrivateTmp=yes
  Restart=on-failure
  RestartSec=60s
---- a/daemons/dnssec/ipa-ods-exporter.service
-+++ b/daemons/dnssec/ipa-ods-exporter.service
-@@ -4,9 +4,9 @@ Wants=ipa-ods-exporter.socket
- After=ipa-ods-exporter.socket
- 
+--- a/daemons/dnssec/ipa-ods-exporter.service.in
++++ b/daemons/dnssec/ipa-ods-exporter.service.in
+@@ -6,7 +6,7 @@ After=ipa-ods-exporter.socket
  [Service]
--EnvironmentFile=/etc/sysconfig/ipa-ods-exporter
--ExecStart=/usr/libexec/ipa/ipa-ods-exporter
+ EnvironmentFile=@sysconfenvdir@/ipa-ods-exporter
+ ExecStart=@libexecdir@/ipa/ipa-ods-exporter
 -User=ods
-+EnvironmentFile=/etc/default/ipa-ods-exporter
-+ExecStart=/usr/lib/ipa/ipa-ods-exporter
 +User=opendnssec
  PrivateTmp=yes
  Restart=on-failure

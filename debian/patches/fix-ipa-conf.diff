@@ -10,20 +10,16 @@ Description: Fix paths
  
  
  # Configure mod_wsgi handler for /ipa
-@@ -63,9 +63,9 @@ WSGIScriptReloading Off
- <Location "/ipa">
-   AuthType GSSAPI
-   AuthName "Kerberos Login"
--  GssapiCredStore keytab:/etc/httpd/conf/ipa.keytab
--  GssapiCredStore client_keytab:/etc/httpd/conf/ipa.keytab
--  GssapiDelegCcacheDir /var/run/httpd/ipa/clientcaches
-+  GssapiCredStore keytab:/etc/apache2/ipa.keytab
-+  GssapiCredStore client_keytab:/etc/apache2/ipa.keytab
-+  GssapiDelegCcacheDir /var/run/apache2/ipa/clientcaches
-   GssapiDelegCcacheUnique On
-   GssapiUseS4U2Proxy on
-   GssapiAllowedMech krb5
-@@ -111,7 +111,7 @@ WSGIScriptReloading Off
+@@ -68,7 +68,7 @@ WSGIScriptReloading Off
+   SessionCookieName ipa_session path=/ipa;httponly;secure;
+   SessionHeader IPASESSION
+   SessionMaxAge 1800
+-  GssapiSessionKey file:/etc/httpd/alias/ipasession.key
++  GssapiSessionKey file:/etc/apache2/ipasession.key
+ 
+   GssapiDelegCcacheDir /var/run/ipa/ccaches
+   GssapiDelegCcachePerms mode:0660 gid:ipaapi
+@@ -112,7 +112,7 @@ Alias /ipa/session/cookie "/usr/share/ip
  # Custodia stuff is redirected to the custodia daemon
  # after authentication
  <Location "/ipa/keys/">
@@ -32,7 +28,7 @@ Description: Fix paths
      RequestHeader set GSS_NAME %{GSS_NAME}s
      RequestHeader set REMOTE_USER %{REMOTE_USER}s
  </Location>
-@@ -145,8 +145,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+@@ -146,8 +146,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  
  #  List explicitly only the fonts we want to serve

@@ -1,11 +1,11 @@
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -630,7 +630,7 @@ def install_check(installer):
+@@ -768,7 +768,7 @@ def install_check(installer):
          finally:
              shutil.rmtree(tmp_db_dir)
  
 -    ldapuri = 'ldaps://%s' % ipautil.format_netloc(config.master_host_name)
 +    ldapuri = 'ldap://%s' % ipautil.format_netloc(config.master_host_name)
      remote_api = create_api(mode=None)
-     remote_api.bootstrap(in_server=True, context='installer',
-                          ldap_uri=ldapuri)
+     remote_api.bootstrap(in_server=True,
+                          context='installer',
