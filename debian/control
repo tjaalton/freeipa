@@ -38,6 +38,7 @@ Build-Depends:
  python-dbus,
  python-dnspython (>= 1.11.1),
  python-gssapi,
+ python-jinja2,
  python-kdcproxy,
  python-ldap (>= 2.4.15),
  python-lesscpy,
@@ -256,6 +257,7 @@ Depends:
  freeipa-common (= ${binary:Version}),
  python-dnspython,
  python-ipalib (>= ${source:Version}),
+ python-jinja2,
  ${misc:Depends},
  ${python:Depends},
 Description: FreeIPA centralized identity framework -- Python modules for ipaclient
