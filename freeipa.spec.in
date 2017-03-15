@@ -1,6 +1,21 @@
 # Define ONLY_CLIENT to only make the ipa-client and ipa-python
 # subpackages
 %{!?ONLY_CLIENT:%global ONLY_CLIENT 0}
+%if %{ONLY_CLIENT}
+    %global enable_server_option --disable-server
+%else
+    %global enable_server_option --enable-server
+%endif
+
+# Build with ipatests
+%if ! %{ONLY_CLIENT}
+    %global with_ipatests 1
+%endif
+%if 0%{?with_ipatests}
+    %global with_ipatests_option --with-ipatests
+%else
+    %global with_ipatests_option --without-ipatests
+%endif
 
 %if 0%{?rhel}
 %global with_python3 0
@@ -11,10 +26,9 @@
 # lint is not executed during rpmbuild
 # %%global with_lint 1
 %if 0%{?with_lint}
-    %global enable_pylint_option --enable-pylint
+    %global linter_options --enable-pylint --with-jslint
 %else
-    %global enable_pylint_option --disable-pylint
-    %global without_jslint_option --without-jslint
+    %global linter_options --disable-pylint --without-jslint
 %endif
 
 # Python wheel support and PyPI packages
@@ -79,13 +93,18 @@ BuildRequires:  libtool
 BuildRequires:  gettext
 BuildRequires:  gettext-devel
 BuildRequires:  python-devel
+BuildRequires:  python-setuptools
 %if 0%{?with_python3}
 BuildRequires:  python3-devel
+BuildRequires:  python3-setuptools
 %endif # with_python3
 # %{_unitdir}, %{_tmpfilesdir}
 BuildRequires:  systemd
 # systemd-tmpfiles which is executed from make install requires apache user
 BuildRequires:  httpd
+BuildRequires:  nspr-devel
+BuildRequires:  nss-devel
+BuildRequires:  openssl-devel
 BuildRequires:  libini_config-devel
 BuildRequires:  cyrus-sasl-devel
 %if ! %{ONLY_CLIENT}
@@ -99,9 +118,6 @@ BuildRequires:  samba-devel >= 2:4.0.0
 %endif
 BuildRequires:  libtalloc-devel
 BuildRequires:  libtevent-devel
-BuildRequires:  nspr-devel
-BuildRequires:  nss-devel
-BuildRequires:  openssl-devel
 BuildRequires:  libuuid-devel
 BuildRequires:  libsss_idmap-devel
 # 1.14.0: sss_nss_getnamebycert (https://fedorahosted.org/sssd/ticket/2897)
@@ -143,7 +159,6 @@ BuildRequires:  python3-wheel
 #
 %if 0%{?with_lint}
 BuildRequires:  samba-python
-BuildRequires:  python-setuptools
 # 1.4: the version where Certificate.serial changed to .serial_number
 BuildRequires:  python-cryptography >= 1.4
 BuildRequires:  python-gssapi >= 1.2.0
@@ -179,7 +194,6 @@ BuildRequires:  python2-jinja2
 %if 0%{?with_python3}
 # FIXME: this depedency is missing - server will not work
 #BuildRequires:  python3-samba
-BuildRequires:  python3-setuptools
 # 1.4: the version where Certificate.serial changed to .serial_number
 BuildRequires:  python3-cryptography >= 1.4
 BuildRequires:  python3-gssapi >= 1.2.0
@@ -255,6 +269,7 @@ Requires: mod_wsgi
 Requires: mod_auth_gssapi >= 1.5.0
 Requires: mod_nss >= 1.0.8-26
 Requires: mod_session
+Requires: mod_lookup_identity
 Requires: python-ldap >= 2.4.15
 Requires: python-gssapi >= 1.2.0
 Requires: acl
@@ -315,6 +330,7 @@ Summary: Python libraries used by IPA server
 Group: System Environment/Libraries
 BuildArch: noarch
 %{?python_provide:%python_provide python2-ipaserver}
+%{!?python_provide:Provides: python-ipaserver = %{version}-%{release}}
 Requires: %{name}-server-common = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python2-ipaclient = %{version}-%{release}
@@ -504,6 +520,7 @@ Summary: Python libraries used by IPA client
 Group: System Environment/Libraries
 BuildArch: noarch
 %{?python_provide:%python_provide python2-ipaclient}
+%{!?python_provide:Provides: python-ipaclient = %{version}-%{release}}
 Requires: %{name}-client-common = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python2-ipalib = %{version}-%{release}
@@ -598,10 +615,13 @@ Group: System Environment/Libraries
 BuildArch: noarch
 Conflicts: %{name}-python < 4.2.91
 %{?python_provide:%python_provide python2-ipalib}
+%{!?python_provide:Provides: python-ipalib = %{version}-%{release}}
 Provides: python2-ipapython = %{version}-%{release}
 %{?python_provide:%python_provide python2-ipapython}
+%{!?python_provide:Provides: python-ipapython = %{version}-%{release}}
 Provides: python2-ipaplatform = %{version}-%{release}
 %{?python_provide:%python_provide python2-ipaplatform}
+%{!?python_provide:Provides: python-ipaplatform = %{version}-%{release}}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python-gssapi >= 1.2.0
 Requires: gnupg
@@ -711,7 +731,7 @@ and integration with Active Directory based infrastructures (Trusts).
 If you are using IPA, you need to install this package.
 
 
-%if ! %{ONLY_CLIENT}
+%if 0%{?with_ipatests}
 
 %package -n python2-ipatests
 Summary: IPA tests and test tools
@@ -719,6 +739,7 @@ BuildArch: noarch
 Obsoletes: %{name}-tests < 4.2.91
 Provides: %{name}-tests = %{version}-%{release}
 %{?python_provide:%python_provide python2-ipatests}
+%{!?python_provide:Provides: python-ipatests = %{version}-%{release}}
 Requires: python2-ipaclient = %{version}-%{release}
 Requires: python2-ipaserver = %{version}-%{release}
 Requires: tar
@@ -779,7 +800,7 @@ This package contains tests that verify IPA functionality under Python 3.
 
 %endif # with_python3
 
-%endif # ONLY_CLIENT
+%endif # with_ipatests
 
 
 %prep
@@ -806,8 +827,9 @@ find \
 	-type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
 	-exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!%{__python2}|' {} \;
 %configure --with-vendor-suffix=-%{release} \
-           %{enable_pylint_option} \
-           %{?without_jslint_option}
+           %{enable_server_option} \
+           %{with_ipatests_option} \
+           %{linter_options}
 
 # -Onone is workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1398405
 %make_build -Onone
@@ -824,17 +846,14 @@ find \
 	-type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
 	-exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!%{__python3}|' {} \;
 %configure --with-vendor-suffix=-%{release} \
-           %{enable_pylint_option} \
-           %{?without_jslint_option}
+           %{enable_server_option} \
+           %{with_ipatests_option} \
+           %{linter_options}
 popd
 %endif # with_python3
 
 %check
-%if ! %{ONLY_CLIENT}
 make %{?_smp_mflags} check VERBOSE=yes LIBDIR=%{_libdir}
-%else
-make %{?_smp_mflags} client-check VERBOSE=yes LIBDIR=%{_libdir}
-%endif # ONLY_CLIENT
 
 
 %install
@@ -859,20 +878,29 @@ pushd %{_builddir}/freeipa-%{version}-python3
 (cd ipalib && %make_install)
 (cd ipaplatform && %make_install)
 (cd ipapython && %make_install)
+%if ! %{ONLY_CLIENT}
 (cd ipaserver && %make_install)
+%endif # ONLY_CLIENT
+%if 0%{?with_ipatests}
 (cd ipatests && %make_install)
+%endif # with_ipatests
 popd
 
+%if 0%{?with_ipatests}
 mv %{buildroot}%{_bindir}/ipa-run-tests %{buildroot}%{_bindir}/ipa-run-tests-%{python3_version}
 mv %{buildroot}%{_bindir}/ipa-test-config %{buildroot}%{_bindir}/ipa-test-config-%{python3_version}
 mv %{buildroot}%{_bindir}/ipa-test-task %{buildroot}%{_bindir}/ipa-test-task-%{python3_version}
 ln -s %{_bindir}/ipa-run-tests-%{python3_version} %{buildroot}%{_bindir}/ipa-run-tests-3
 ln -s %{_bindir}/ipa-test-config-%{python3_version} %{buildroot}%{_bindir}/ipa-test-config-3
 ln -s %{_bindir}/ipa-test-task-%{python3_version} %{buildroot}%{_bindir}/ipa-test-task-3
+%endif # with_ipatests
+
 %endif # with_python3
 
 # Python 2 installation
 %make_install
+
+%if 0%{?with_ipatests}
 mv %{buildroot}%{_bindir}/ipa-run-tests %{buildroot}%{_bindir}/ipa-run-tests-%{python2_version}
 mv %{buildroot}%{_bindir}/ipa-test-config %{buildroot}%{_bindir}/ipa-test-config-%{python2_version}
 mv %{buildroot}%{_bindir}/ipa-test-task %{buildroot}%{_bindir}/ipa-test-task-%{python2_version}
@@ -883,7 +911,7 @@ ln -s %{_bindir}/ipa-test-task-%{python2_version} %{buildroot}%{_bindir}/ipa-tes
 ln -s %{_bindir}/ipa-run-tests-%{python2_version} %{buildroot}%{_bindir}/ipa-run-tests
 ln -s %{_bindir}/ipa-test-config-%{python2_version} %{buildroot}%{_bindir}/ipa-test-config
 ln -s %{_bindir}/ipa-test-task-%{python2_version} %{buildroot}%{_bindir}/ipa-test-task
-
+%endif # with_ipatests
 
 # remove files which are useful only for make uninstall
 find %{buildroot} -wholename '*/site-packages/*/install_files.txt' -exec rm {} \;
@@ -1220,7 +1248,6 @@ fi
 # END
 %dir %{_usr}/share/ipa
 %{_usr}/share/ipa/wsgi.py*
-%{_usr}/share/ipa/copy-schema-to-ca.py*
 %{_usr}/share/ipa/*.ldif
 %{_usr}/share/ipa/*.uldif
 %{_usr}/share/ipa/*.template
@@ -1400,7 +1427,6 @@ fi
 %ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/secmod.db
 %ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/pwdfile.txt
 %ghost %config(noreplace) %{_sysconfdir}/pki/ca-trust/source/ipa.p11-kit
-%dir %{_usr}/share/ipa
 %dir %{_localstatedir}/lib/ipa-client
 %dir %{_localstatedir}/lib/ipa-client/sysrestore
 %{_mandir}/man5/default.conf.5*
@@ -1454,7 +1480,7 @@ fi
 %endif # with_python3
 
 
-%if ! %{ONLY_CLIENT}
+%if 0%{?with_ipatests}
 
 %files -n python2-ipatests
 %defattr(-,root,root,-)
@@ -1492,7 +1518,7 @@ fi
 
 %endif # with_python3
 
-%endif # ONLY_CLIENT
+%endif # with_ipatests
 
 
 %changelog

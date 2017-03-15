@@ -155,7 +155,13 @@ AM_CHECK_WRAPPER(nss_wrapper, HAVE_NSS_WRAPPER)
 dnl ---------------------------------------------------------------------------
 dnl - Check for POPT
 dnl ---------------------------------------------------------------------------
-PKG_CHECK_MODULES([POPT], [popt])
+POPT_LIBS=
+PKG_CHECK_MODULES([POPT], [popt], [],
+    [AC_CHECK_HEADER([popt.h], [], [AC_MSG_ERROR([popt.h not found])])
+     AC_CHECK_LIB([popt], [poptGetContext], [POPT_LIBS="-lpopt"])
+     AC_SUBST(POPT_LIBS)
+    ]
+)
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for SASL
@@ -165,7 +171,20 @@ PKG_CHECK_MODULES([SASL], [libsasl2])
 dnl ---------------------------------------------------------------------------
 dnl - Check for XMLRPC-C
 dnl ---------------------------------------------------------------------------
-PKG_CHECK_MODULES([XMLRPC], [xmlrpc xmlrpc_client xmlrpc_util])
+PKG_CHECK_MODULES([XMLRPC], [xmlrpc xmlrpc_client xmlrpc_util], [],
+                  [try_xmlrpc_fallback=true])
+if test x"$try_xmlrpc_fallback" = xtrue; then
+    XMLRPC_LIBS=
+    AC_CHECK_HEADER([xmlrpc-c/base.h], [],
+                    [AC_MSG_ERROR([xmlrpc-c/base.h not found])])
+
+    AC_CHECK_LIB([xmlrpc_client], [xmlrpc_client_init2],
+                 [XMLRPC_LIBS="-lxmlrpc -lxmlrpc_client -lxmlrpc_util"])
+    if test "x$XMLRPC_LIBS" = "x" ; then
+        AC_MSG_ERROR([xmlrpc-c not found])
+    fi
+    AC_SUBST(XMLRPC_LIBS)
+fi
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for libintl
@@ -284,6 +303,14 @@ fi
 AC_SUBST([IPAPLATFORM])
 AC_MSG_RESULT([${IPAPLATFORM}])
 
+if test "x${IPAPLATFORM}" == "xdebian"; then
+    # see https://www.debian.org/doc/packaging-manuals/python-policy/ap-packaging_tools.html
+    PYTHON_INSTALL_EXTRA_OPTIONS="--install-layout=deb"
+else
+    PYTHON_INSTALL_EXTRA_OPTIONS=""
+fi
+AC_SUBST([PYTHON_INSTALL_EXTRA_OPTIONS])
+AC_MSG_RESULT([python setup.py install extra options ${PYTHON_INSTALL_EXTRA_OPTIONS}])
 
 dnl ---------------------------------------------------------------------------
 dnl Version information from VERSION.m4 and command line
@@ -375,17 +402,25 @@ AC_SUBST([i18ntests])
 AM_CONDITIONAL([WITH_POLINT], [test "x${enable_i18ntests}" == "xyes"])
 
 AC_ARG_ENABLE([pylint],
-	    AS_HELP_STRING([--disable-pylint],
-			   [skip Pylint in make lint target]),
+	    AS_HELP_STRING([--enable-pylint],
+			   [Require pylint. Default is autodetection with
+			    "python -m pylint".]),
 	    [PYLINT=$enableval],
-	    [PYLINT=yes]
+	    [PYLINT=check]
 )
+
 if test x$PYLINT != xno; then
     AC_MSG_CHECKING([for Pylint])
-    $PYTHON -m pylint --version > /dev/null
+    $PYTHON -m pylint --version >/dev/null 2>&1
     if test "$?" != "0"; then
-        AC_MSG_ERROR([cannot find pylint for $PYTHON])
+        if test x$PYLINT = xcheck; then
+            PYLINT=no
+            AC_MSG_NOTICE([cannot find optional pylint for $PYTHON])
+        else
+            AC_MSG_ERROR([cannot find pylint for $PYTHON])
+        fi
     else
+        PYLINT=yes
         AC_MSG_RESULT([yes])
     fi
 fi
@@ -397,13 +432,27 @@ AC_ARG_WITH([jslint],
         AS_HELP_STRING([--with-jslint=[FILE]],
                        [path to JavaScript linter. Default is autodetection of
                        utility "jsl" ]),
-dnl --without-jslint will set JSLINT=no
-        [JSLINT=$with_jslint],
-        [AC_PATH_PROG([JSLINT], [jsl])]
+        [JSLINT="$withval"],
+        [JSLINT=check]
 )
-if test "x${JSLINT}" == "x"; then
-	AC_MSG_ERROR([cannot find JS lint])
-fi
+
+AS_CASE([$JSLINT],
+    [yes], [AC_PATH_PROG([JSLINT], [jsl], [missing])
+            if test $JSLINT = missing; then
+                AC_MSG_FAILURE([jsl is missing])
+            fi],
+    [no], [],
+    [check], [AC_PATH_PROG([JSLINT], [jsl], [no])],
+    dnl user setting
+    [if ! test -f "$JSLINT"; then
+        AC_MSG_RESULT([$JSLINT non-existing])
+        AC_MSG_FAILURE([invalid value $JSLINT for jsl])
+     fi
+     if ! test -x "$JSLINT"; then
+        AC_MSG_RESULT([$JSLINT non-executable])
+        AC_MSG_FAILURE([invalid value $JSLINT for jsl])
+     fi]
+)
 AC_SUBST([JSLINT])
 AM_CONDITIONAL([WITH_JSLINT], [test "x${JSLINT}" != "xno"])
 
@@ -516,6 +565,9 @@ echo "
         source code location:     ${srcdir}
         compiler:                 ${CC}
         cflags:                   ${CFLAGS}
+        Python:                   ${PYTHON}
+        pylint:                   ${PYLINT}
+        jslint:                   ${JSLINT}
         LDAP libs:                ${LDAP_LIBS}
         OpenSSL crypto libs:      ${CRYPTO_LIBS}
         KRB5 libs:                ${KRB5_LIBS}"

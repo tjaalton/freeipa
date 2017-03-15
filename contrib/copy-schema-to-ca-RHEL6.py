@@ -10,6 +10,10 @@ replication errors until this script is run on it.
 
 """
 
+# DO NOT TOUCH THIS CODE, IT MUST BE COMPATIBLE WITH RHEL6
+# disable pylint because current codebase didn't match RHEL6 code
+# pylint: disable=all
+
 import os
 import sys
 import pwd
@@ -17,27 +21,15 @@ import shutil
 
 from hashlib import sha1
 
-from ipaplatform.paths import paths
 from ipapython import ipautil
 from ipapython.ipa_log_manager import root_logger, standard_logging_setup
 from ipaserver.install.dsinstance import schema_dirname
 from ipalib import api
 
-try:
-    # BE CAREFUL when using the constants module - you need to define all
-    # the constants separately because of old IPA installations
-    from ipaplatform.constants import constants
-    PKI_USER = constants.PKI_USER
-    DS_USER = constants.DS_USER
-except ImportError:
-    # oh dear, this is an old IPA (3.0+)
-    from ipaserver.install.dsinstance import DS_USER   #pylint: disable=E0611
-    from ipaserver.install.cainstance import PKI_USER  #pylint: disable=E0611
-
-try:
-    from ipaplatform import services
-except ImportError:
-    from ipapython import services  # pylint: disable=no-name-in-module
+# oh dear, this is an old IPA (3.0+)
+from ipaserver.install.dsinstance import DS_USER
+from ipaserver.install.cainstance import PKI_USER
+from ipapython import services
 
 SERVERID = "PKI-IPA"
 SCHEMA_FILENAMES = (
@@ -66,7 +58,7 @@ def add_ca_schema():
     pki_pent = pwd.getpwnam(PKI_USER)
     ds_pent = pwd.getpwnam(DS_USER)
     for schema_fname in SCHEMA_FILENAMES:
-        source_fname = os.path.join(paths.USR_SHARE_IPA_DIR, schema_fname)
+        source_fname = os.path.join(ipautil.SHARE_DIR, schema_fname)
         target_fname = os.path.join(schema_dirname(SERVERID), schema_fname)
         if not os.path.exists(source_fname):
             root_logger.debug('File does not exist: %s', source_fname)
@@ -114,7 +106,7 @@ def main():
     standard_logging_setup(verbose=True)
 
     # In 3.0, restarting needs access to api.env
-    api.bootstrap_with_global_options(context='server', confdir=paths.ETC_IPA)
+    api.bootstrap_with_global_options(context='server')
 
     add_ca_schema()
     restart_pki_ds()
