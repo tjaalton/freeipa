@@ -8,7 +8,7 @@ freeipa (4.5.0-1) UNRELEASED; urgency=medium
     - Remove obsolete patches: fix-memcached.diff,
       fix-oddjobs.diff
     - Refresh patches: fix-dnssec-services.diff,
-      fix-ipa-conf.diff, fix-replicainstall.diff
+      fix-ipa-conf.diff, fix-replicainstall.diff, prefix.patch
   * control et al: Memcached is not used anymore.
   * control, server.install: Depend on gssproxy.
   * control: Build-depend on python-jinja2, add CSR files to python-
