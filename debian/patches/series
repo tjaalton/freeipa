@@ -1,7 +1,6 @@
 # from upstream
 
 # not upstreamable
-prefix.patch
 hack-libarch.diff
 enable-mod-nss-during-setup.diff
 
@@ -12,6 +11,3 @@ fix-replicainstall.diff
 fix-dnssec-services.diff
 create-sysconfig-ods.diff
 fix-named-conf-template.diff
-fix-is-running.diff
-fix-kdcproxy-path.diff
-fix-xmlrpc-check.diff
