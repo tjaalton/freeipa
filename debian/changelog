@@ -16,6 +16,8 @@ freeipa (4.5.0-1) UNRELEASED; urgency=medium
   * fix-xmlrpc-check.diff: Detect xmlrpc-c properly on Debian.
   * *.install: Updated.
   * client.postinst: Fix update_ipa_nssdb import.
+  * rules, autoreconf: Refactor the build to match current upstream,
+    drop d/autoreconf.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
 
