@@ -3,6 +3,7 @@ usr/lib/python*/dist-packages/ipaclient/*.py
 usr/lib/python*/dist-packages/ipaclient/csrgen/profiles/*.json
 usr/lib/python*/dist-packages/ipaclient/csrgen/rules/*.json
 usr/lib/python*/dist-packages/ipaclient/csrgen/templates/*.tmpl
+usr/lib/python*/dist-packages/ipaclient/install/*.py
 usr/lib/python*/dist-packages/ipaclient/plugins/*.py
 usr/lib/python*/dist-packages/ipaclient/remote_plugins/*.py
 usr/lib/python*/dist-packages/ipaclient/remote_plugins/2_*/*.py

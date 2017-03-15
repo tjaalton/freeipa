@@ -1,4 +1,3 @@
-usr/lib/python*/dist-packages/freeipa-*.egg-info
 usr/lib/python*/dist-packages/ipalib-*.egg-info
 usr/lib/python*/dist-packages/ipalib/*
 usr/lib/python*/dist-packages/ipaplatform-*.egg-info

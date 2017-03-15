@@ -51,7 +51,6 @@ usr/sbin/ipa-restore
 usr/sbin/ipa-server-certinstall
 usr/sbin/ipa-server-install
 usr/sbin/ipa-server-upgrade
-usr/sbin/ipa-upgradeconfig
 usr/sbin/ipa-winsync-migrate
 usr/sbin/ipactl
 usr/share/ipa/*.ldif
@@ -64,7 +63,7 @@ usr/share/ipa/html/*
 usr/share/ipa/ipa-pki-proxy.conf
 usr/share/ipa/ipa-rewrite.conf
 usr/share/ipa/ipa.conf
-usr/share/ipa/kdcproxy.conf
+usr/share/ipa/ipa.conf.tmpfiles
 usr/share/ipa/migration/*
 usr/share/ipa/profiles/*.cfg
 usr/share/ipa/schema.d/*
@@ -92,7 +91,6 @@ usr/share/man/man1/ipa-server-certinstall.1*
 usr/share/man/man1/ipa-server-install.1*
 usr/share/man/man1/ipa-server-upgrade.1*
 usr/share/man/man1/ipa-winsync-migrate.1*
-usr/share/man/man8/ipa-upgradeconfig.8*
 usr/share/man/man8/ipactl.8*
 var/lib/ipa/pki-ca
 var/lib/ipa/gssproxy
