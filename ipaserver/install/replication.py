@@ -152,7 +152,7 @@ def wait_for_task(conn, dn):
     return exit_code
 
 
-def wait_for_entry(connection, entry, timeout=7200, attr='', quiet=True):
+def wait_for_entry(connection, dn, timeout=7200, attr='', quiet=True):
     """Wait for entry and/or attr to show up"""
 
     filter = "(objectclass=*)"
@@ -161,8 +161,6 @@ def wait_for_entry(connection, entry, timeout=7200, attr='', quiet=True):
         filter = "(%s=*)" % attr
         attrlist.append(attr)
     timeout += int(time.time())
-
-    dn = entry.dn
 
     if not quiet:
         sys.stdout.write("Waiting for %s %s:%s " % (connection, dn, attr))
@@ -175,7 +173,7 @@ def wait_for_entry(connection, entry, timeout=7200, attr='', quiet=True):
         except errors.NotFound:
             pass  # no entry yet
         except Exception as e:  # badness
-            print("\nError reading entry", dn, e)
+            root_logger.error("Error reading entry %s: %s", dn, e)
             break
         if not entry:
             if not quiet:
@@ -184,11 +182,13 @@ def wait_for_entry(connection, entry, timeout=7200, attr='', quiet=True):
             time.sleep(1)
 
     if not entry and int(time.time()) > timeout:
-        print("\nwait_for_entry timeout for %s for %s" % (connection, dn))
+        root_logger.error(
+            "wait_for_entry timeout for %s for %s", connection, dn)
     elif entry and not quiet:
-        print("\nThe waited for entry is:", entry)
+        root_logger.error("The waited for entry is: %s", entry)
     elif not entry:
-        print("\nError: could not read entry %s from %s" % (dn, connection))
+        root_logger.error(
+            "Error: could not read entry %s from %s", dn, connection)
 
 
 class ReplicationManager(object):
@@ -734,7 +734,7 @@ class ReplicationManager(object):
             # that we will have to set the memberof fixup task
             self.need_memberof_fixup = True
 
-        wait_for_entry(a_conn, entry)
+        wait_for_entry(a_conn, entry.dn)
 
     def needs_memberof_fixup(self):
         return self.need_memberof_fixup
