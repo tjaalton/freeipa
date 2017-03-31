@@ -6,8 +6,8 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
 
 --- a/freeipa.spec.in
 +++ b/freeipa.spec.in
-@@ -165,7 +165,6 @@ Requires: pki-ca >= 10.3.5-6
- Requires: pki-kra >= 10.3.5-6
+@@ -174,7 +174,6 @@ Requires: pki-ca >= 10.3.5-11
+ Requires: pki-kra >= 10.3.5-11
  Requires(preun): python systemd-units
  Requires(postun): python systemd-units
 -Requires: zip
@@ -589,7 +589,7 @@ Date:   Tue Mar 29 21:33:15 2016 +0300
          ca_db.publish_ca_cert(paths.CA_CRT)
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -186,12 +186,10 @@ def install_http(config, auto_redirect,
+@@ -194,12 +194,10 @@ def install_http(config, auto_redirect,
      http = httpinstance.HTTPInstance()
      http.create_instance(
          config.realm_name, config.host_name, config.domain_name,

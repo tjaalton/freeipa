@@ -2,6 +2,8 @@ freeipa (4.4.4-1) UNRELEASED; urgency=medium
 
   * New upstream release.
     - CVE-2017-2590
+    - ipa-kdb-support-dal-version-5-and-6.diff: Dropped, upstream.
+    - purge-firefox-extension.diff: Refreshed.
   * fix-is-running.diff: Add a third argument to is_running() in
     ipaplatform/debian/services.py. (Closes: #856533)
   * fix-kdcproxy-path.diff: Update debian/paths.py to use correct path
