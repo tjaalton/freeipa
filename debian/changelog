@@ -10,6 +10,7 @@ freeipa (4.4.4-1) UNRELEASED; urgency=medium
     for ipa-httpd-kdcproxy.
   * client.dirs: Ship /etc/krb5.conf.d, because not having that breaks
     the installer when krb5.conf tries to include that.
+  * copyright, watch: Update source/release location.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 17 Feb 2017 01:40:15 +0200
 
