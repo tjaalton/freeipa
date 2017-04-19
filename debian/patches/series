@@ -1,4 +1,5 @@
 # upstreamed
+fix-pkcs11-helper.diff
 
 # not upstreamable
 prefix.patch
