@@ -1,7 +1,9 @@
 usr/lib/python*/dist-packages/ipaserver/__init__*
 usr/lib/python*/dist-packages/ipaserver/advise/*
+usr/lib/python*/dist-packages/ipaserver/dcerpc.py
 usr/lib/python*/dist-packages/ipaserver/dns_data_management*
 usr/lib/python*/dist-packages/ipaserver/install/__init__.py
+usr/lib/python*/dist-packages/ipaserver/install/adtrustinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/bindinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/ca.py
 usr/lib/python*/dist-packages/ipaserver/install/cainstance.py
