@@ -16,6 +16,8 @@ freeipa (4.4.4-1) UNRELEASED; urgency=medium
     uninstall works.
   * fix-pkcs11-helper.diff: Fix ipa-dnskeysyncd setup which was broken
     by softhsm 2.2.
+  * fix-opendnssec-setup.diff: Opendnssec 2.0.x broke DNSSEC setup, fix
+    it.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 17 Feb 2017 01:40:15 +0200
 

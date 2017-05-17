@@ -21,3 +21,4 @@ purge-firefox-extension.diff
 fix-ipa-otpd-service.diff
 fix-is-running.diff
 fix-kdcproxy-path.diff
+fix-opendnssec-setup.diff
