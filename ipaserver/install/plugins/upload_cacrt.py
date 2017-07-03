@@ -52,10 +52,10 @@ class update_upload_cacrt(Updater):
         ldap = self.api.Backend.ldap2
 
         for nickname, trust_flags in db.list_certs():
-            if 'u' in trust_flags:
+            if trust_flags.has_key:
                 continue
             if nickname == ca_nickname and ca_enabled:
-                trust_flags = 'CT,C,C'
+                trust_flags = certdb.IPA_CA_TRUST_FLAGS
             cert = db.get_cert_from_db(nickname, pem=False)
             trust, _ca, eku = certstore.trust_flags_to_key_policy(trust_flags)
 
@@ -79,7 +79,11 @@ class update_upload_cacrt(Updater):
             try:
                 ldap.add_entry(entry)
             except errors.DuplicateEntry:
-                pass
+                if nickname == ca_nickname and ca_enabled:
+                    try:
+                        ldap.update_entry(entry)
+                    except errors.EmptyModlist:
+                        pass
 
         if ca_cert:
             dn = DN(('cn', 'CACert'), ('cn', 'ipa'), ('cn','etc'),

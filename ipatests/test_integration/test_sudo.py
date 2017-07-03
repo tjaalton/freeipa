@@ -20,8 +20,8 @@
 import pytest
 
 from ipatests.test_integration.base import IntegrationTest
-from ipatests.test_integration.tasks import clear_sssd_cache, modify_sssd_conf
-from ipatests.test_integration import util
+from ipatests.pytest_plugins.integration.tasks import (
+    clear_sssd_cache, get_host_ip_with_hostmask, modify_sssd_conf)
 
 
 class TestSudo(IntegrationTest):
@@ -298,7 +298,7 @@ class TestSudo(IntegrationTest):
 
     def test_sudo_rule_restricted_to_one_hostmask_setup(self):
         # We need to detect the hostmask first
-        full_ip = util.get_host_ip_with_hostmask(self.client)
+        full_ip = get_host_ip_with_hostmask(self.client)
 
         # Make a note for the next test, which needs to be skipped
         # if hostmask detection failed
@@ -341,7 +341,7 @@ class TestSudo(IntegrationTest):
             raise pytest.skip("Hostmask could not be detected")
 
         # Detect the hostmask first to delete the hostmask based rule
-        full_ip = util.get_host_ip_with_hostmask(self.client)
+        full_ip = get_host_ip_with_hostmask(self.client)
 
         # Remove the client's hostmask from the rule
         self.master.run_command(['ipa', '-n', 'sudorule-remove-host',

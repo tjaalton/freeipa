@@ -21,8 +21,7 @@ import nose
 import re
 
 from ipatests.test_integration.base import IntegrationTest
-from ipatests.test_integration import tasks
-from ipatests.test_integration import util
+from ipatests.pytest_plugins.integration import tasks
 from ipaplatform.paths import paths
 
 
@@ -80,8 +79,8 @@ class ADTrustBase(IntegrationTest):
                     % dict(idauth=_sid_identifier_authority)
         stdout_re = re.escape('  ipaNTSecurityIdentifier: ') + sid_regex
 
-        util.run_repeatedly(cls.master, command,
-                            test=lambda x: re.search(stdout_re, x))
+        tasks.run_repeatedly(cls.master, command,
+                             test=lambda x: re.search(stdout_re, x))
 
     @classmethod
     def configure_dns_and_time(cls):
@@ -189,8 +188,8 @@ class TestBasicADTrust(ADTrustBase):
                                 stdin_text=original_passwd)
 
         # change password for the user to be able to kinit
-        util.ldappasswd_user_change(ipauser, original_passwd, new_passwd,
-                                    self.master)
+        tasks.ldappasswd_user_change(ipauser, original_passwd, new_passwd,
+                                     self.master)
 
         # try to kinit as ipauser
         self.master.run_command(

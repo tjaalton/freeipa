@@ -65,7 +65,6 @@ dist_app_DATA =				\
 	opendnssec_conf.template	\
 	opendnssec_kasp.template	\
 	unique-attributes.ldif		\
-	schema_compat.uldif		\
 	ldapi.ldif			\
 	wsgi.py				\
 	repoint-managed-entries.ldif	\
@@ -90,6 +89,7 @@ dist_app_DATA =				\
 	gssapi.login			\
 	ipa.conf.tmpfiles		\
 	gssproxy.conf.template		\
+	ipakrb5.aug			\
 	$(NULL)
 
 kdcproxyconfdir = $(IPA_SYSCONF_DIR)/kdcproxy

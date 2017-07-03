@@ -11,6 +11,7 @@ import pwd
 import fileinput
 import sys
 
+from augeas import Augeas
 import dns.exception
 
 import six
@@ -905,8 +906,6 @@ def certificate_renewal_update(ca, ds, http):
     template = paths.CERTMONGER_COMMAND_TEMPLATE
     serverid = installutils.realm_to_serverid(api.env.realm)
 
-    # bump version when requests is changed
-    version = 6
     requests = [
         {
             'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
@@ -939,7 +938,7 @@ def certificate_renewal_update(ca, ds, http):
             'cert-presave-command': template % 'stop_pkicad',
             'cert-postsave-command':
                 (template % 'renew_ca_cert "caSigningCert cert-pki-ca"'),
-            'template-profile': 'ipaCACertRenewal',
+            'template-profile': '',
         },
         {
             'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
@@ -971,15 +970,25 @@ def certificate_renewal_update(ca, ds, http):
         }
     ]
 
-    root_logger.info("[Update certmonger certificate renewal configuration to "
-                     "version %d]" % version)
+    root_logger.info("[Update certmonger certificate renewal configuration]")
     if not ca.is_configured():
         root_logger.info('CA is not configured')
         return False
 
-    state = 'certificate_renewal_update_%d' % version
-    if sysupgrade.get_upgrade_state('dogtag', state):
-        return False
+    db = certs.CertDB(api.env.realm, paths.PKI_TOMCAT_ALIAS_DIR)
+    for nickname, _trust_flags in db.list_certs():
+        if nickname.startswith('caSigningCert cert-pki-ca '):
+            requests.append(
+                {
+                    'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
+                    'cert-nickname': nickname,
+                    'ca': 'dogtag-ipa-ca-renew-agent',
+                    'cert-presave-command': template % 'stop_pkicad',
+                    'cert-postsave-command':
+                        (template % ('renew_ca_cert "%s"' % nickname)),
+                    'template-profile': 'caCACert',
+                }
+            )
 
     # State not set, lets see if we are already configured
     for request in requests:
@@ -987,9 +996,6 @@ def certificate_renewal_update(ca, ds, http):
         if request_id is None:
             break
     else:
-        sysupgrade.set_upgrade_state('dogtag', state, True)
-        root_logger.info("Certmonger certificate renewal configuration is "
-                         "already at version %d" % version)
         return False
 
     # Ok, now we need to stop tracking, then we can start tracking them
@@ -998,24 +1004,21 @@ def certificate_renewal_update(ca, ds, http):
     ds.stop_tracking_certificates(serverid)
     http.stop_tracking_certificates()
 
-    if not sysupgrade.get_upgrade_state('dogtag',
-                                        'certificate_renewal_update_1'):
-        filename = paths.CERTMONGER_CAS_CA_RENEWAL
-        if os.path.exists(filename):
-            with installutils.stopped_service('certmonger'):
-                root_logger.info("Removing %s" % filename)
-                installutils.remove_file(filename)
+    filename = paths.CERTMONGER_CAS_CA_RENEWAL
+    if os.path.exists(filename):
+        with installutils.stopped_service('certmonger'):
+            root_logger.info("Removing %s" % filename)
+            installutils.remove_file(filename)
 
     ca.configure_certmonger_renewal()
     ca.configure_renewal()
     ca.configure_agent_renewal()
     ca.track_servercert()
+    ca.add_lightweight_ca_tracking_requests()
     ds.start_tracking_certificates(serverid)
     http.start_tracking_certificates()
 
-    sysupgrade.set_upgrade_state('dogtag', state, True)
-    root_logger.info("Certmonger certificate renewal configuration updated to "
-                     "version %d" % version)
+    root_logger.info("Certmonger certificate renewal configuration updated")
     return True
 
 def copy_crl_file(old_path, new_path=None):
@@ -1387,7 +1390,7 @@ def fix_trust_flags():
     nickname = certdb.get_ca_nickname(api.env.realm)
     cert = db.get_cert_from_db(nickname)
     if cert:
-        db.trust_root_cert(nickname, 'CT,C,C')
+        db.trust_root_cert(nickname, certdb.IPA_CA_TRUST_FLAGS)
 
     sysupgrade.set_upgrade_state('http', 'fix_trust_flags', True)
 
@@ -1402,6 +1405,11 @@ def update_mod_nss_protocol(http):
     http.set_mod_nss_protocol()
 
     sysupgrade.set_upgrade_state('nss.conf', 'protocol_updated_tls12', True)
+
+
+def disable_mod_nss_ocsp(http):
+    root_logger.info('[Updating mod_nss enabling OCSP]')
+    http.disable_mod_nss_ocsp()
 
 
 def update_mod_nss_cipher_suite(http):
@@ -1427,7 +1435,15 @@ def update_ipa_httpd_service_conf(http):
 def update_http_keytab(http):
     root_logger.info('[Moving HTTPD service keytab to gssproxy]')
     if os.path.exists(paths.OLD_IPA_KEYTAB):
-        shutil.move(paths.OLD_IPA_KEYTAB, http.keytab)
+        # ensure proper SELinux context by using copy operation
+        shutil.copy(paths.OLD_IPA_KEYTAB, http.keytab)
+        try:
+            os.remove(paths.OLD_IPA_KEYTAB)
+        except OSError as e:
+            root_logger.error(
+                'Cannot remove file %s (%s). Please remove the file manually.',
+                paths.OLD_IPA_KEYTAB, e
+            )
     pent = pwd.getpwnam(http.keytab_user)
     os.chown(http.keytab, pent.pw_uid, pent.pw_gid)
 
@@ -1482,43 +1498,55 @@ def add_default_caacl(ca):
     sysupgrade.set_upgrade_state('caacl', 'add_default_caacl', True)
 
 
-def enable_anonymous_principal(krb):
-    princ_realm = krb.get_anonymous_principal_name()
-    dn = DN(('krbprincipalname', princ_realm), krb.get_realm_suffix())
-    try:
-        _ = api.Backend.ldap2.get_entry(dn)  # pylint: disable=unused-variable
-    except ipalib.errors.NotFound:
-        krb.add_anonymous_principal()
-
-    try:
-        api.Backend.ldap2.set_entry_active(dn, True)
-    except ipalib.errors.AlreadyActive:
-        pass
-
-
 def setup_pkinit(krb):
     root_logger.info("[Setup PKINIT]")
 
-    if os.path.exists(paths.KDC_CERT):
-        root_logger.info("PKINIT already set up")
-        return
+    if not krbinstance.is_pkinit_enabled():
+        krb.issue_selfsigned_pkinit_certs()
 
-    if not api.Command.ca_is_enabled()['result']:
-        root_logger.info("CA is not enabled")
-        return
+    aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD,
+                 loadpath=paths.USR_SHARE_IPA_DIR)
+    try:
+        aug.transform('IPAKrb5', paths.KRB5KDC_KDC_CONF)
+        aug.load()
 
-    krb.setup_pkinit()
-    replacevars = dict()
-    replacevars['pkinit_identity'] = 'FILE:{},{}'.format(
-        paths.KDC_CERT,paths.KDC_KEY)
-    appendvars = {}
-    ipautil.backup_config_and_replace_variables(
-        krb.fstore, paths.KRB5KDC_KDC_CONF, replacevars=replacevars,
-        appendvars=appendvars)
-    tasks.restore_context(paths.KRB5KDC_KDC_CONF)
-    if krb.is_running():
-        krb.stop()
-    krb.start()
+        path = '/files{}/realms/{}'.format(paths.KRB5KDC_KDC_CONF, krb.realm)
+        modified = False
+
+        value = 'FILE:{},{}'.format(paths.KDC_CERT, paths.KDC_KEY)
+        expr = '{}[count(pkinit_identity)=1][pkinit_identity="{}"]'.format(
+            path, value)
+        if not aug.match(expr):
+            aug.remove('{}/pkinit_identity'.format(path))
+            aug.set('{}/pkinit_identity'.format(path), value)
+            modified = True
+
+        for value in  ['FILE:{}'.format(paths.KDC_CERT),
+                       'FILE:{}'.format(paths.CACERT_PEM)]:
+            expr = '{}/pkinit_anchors[.="{}"]'.format(path, value)
+            if not aug.match(expr):
+                aug.set('{}/pkinit_anchors[last()+1]'.format(path), value)
+                modified = True
+
+        value = 'FILE:{}'.format(paths.CA_BUNDLE_PEM)
+        expr = '{}/pkinit_pool[.="{}"]'.format(path, value)
+        if not aug.match(expr):
+            aug.set('{}/pkinit_pool[last()+1]'.format(path), value)
+            modified = True
+
+        if modified:
+            try:
+                aug.save()
+            except IOError:
+                for error_path in aug.match('/augeas//error'):
+                    root_logger.error('augeas: %s', aug.get(error_path))
+                raise
+
+            if krb.is_running():
+                krb.stop()
+            krb.start()
+    finally:
+        aug.close()
 
 
 def disable_httpd_system_trust(http):
@@ -1526,7 +1554,7 @@ def disable_httpd_system_trust(http):
 
     db = certs.CertDB(api.env.realm, nssdir=paths.HTTPD_ALIAS_DIR)
     for nickname, trust_flags in db.list_certs():
-        if 'u' not in trust_flags:
+        if not trust_flags.has_key:
             cert = db.get_cert_from_db(nickname, pem=False)
             if cert:
                 ca_certs.append((cert, nickname, trust_flags))
@@ -1642,6 +1670,7 @@ def upgrade_configuration():
     http = httpinstance.HTTPInstance(fstore)
     http.fqdn = fqdn
     http.realm = api.env.realm
+    http.suffix = ipautil.realm_to_suffix(api.env.realm)
     http.configure_selinux_for_httpd()
     http.change_mod_nss_port_from_http()
 
@@ -1666,7 +1695,6 @@ def upgrade_configuration():
 
     if not http.is_kdcproxy_configured():
         root_logger.info('[Enabling KDC Proxy]')
-        httpinstance.create_kdcproxy_user()
         http.create_kdcproxy_conf()
         http.enable_kdcproxy()
 
@@ -1675,6 +1703,7 @@ def upgrade_configuration():
     update_ipa_httpd_service_conf(http)
     update_mod_nss_protocol(http)
     update_mod_nss_cipher_suite(http)
+    disable_mod_nss_ocsp(http)
     fix_trust_flags()
     update_http_keytab(http)
     http.configure_gssproxy()
@@ -1808,10 +1837,11 @@ def upgrade_configuration():
                         KRB5KDC_KADM5_KEYTAB=paths.KRB5KDC_KADM5_KEYTAB,
                         KDC_CERT=paths.KDC_CERT,
                         KDC_KEY=paths.KDC_KEY,
-                        CACERT_PEM=paths.CACERT_PEM)
+                        CACERT_PEM=paths.CACERT_PEM,
+                        KDC_CA_BUNDLE_PEM=paths.KDC_CA_BUNDLE_PEM,
+                        CA_BUNDLE_PEM=paths.CA_BUNDLE_PEM)
+    krb.add_anonymous_principal()
     setup_pkinit(krb)
-    enable_anonymous_principal(krb)
-    http.request_anon_keytab()
 
     if not ds_running:
         ds.stop(ds_serverid)
@@ -1851,7 +1881,6 @@ def upgrade_check(options):
 
 def upgrade():
     # Do this early so that any code depending on these dirs will not fail
-    installutils.create_ipaapi_user()
     tasks.create_tmpfiles_dirs()
     tasks.configure_tmpfiles()
 

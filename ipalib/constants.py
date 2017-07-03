@@ -140,6 +140,8 @@ DEFAULT_CONFIG = (
 
     # Time to wait for a service to start, in seconds
     ('startup_timeout', 300),
+    # How long http connection should wait for reply [seconds].
+    ('http_timeout', 30),
 
     # Web Application mount points
     ('mount_ipa', '/ipa/'),
@@ -153,6 +155,7 @@ DEFAULT_CONFIG = (
     ('session_auth_duration', '20 minutes'),
     # How a session expiration is computed, see SessionManager.set_session_expiration_time()
     ('session_duration_type', 'inactivity_timeout'),
+    ('kinit_lifetime', None),
 
     # Debugging:
     ('verbose', 0),
@@ -313,3 +316,5 @@ USER_CACHE_PATH = (
         '.cache'
     )
 )
+
+SOFTHSM_DNSSEC_TOKEN_LABEL = u'ipaDNSSEC'

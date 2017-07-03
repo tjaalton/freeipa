@@ -40,6 +40,7 @@ from cryptography.hazmat.backends import default_backend
 
 import six
 
+from ipalib.install.kinit import kinit_keytab
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipalib import api, errors, x509
@@ -97,29 +98,11 @@ def get_nickname():
         DN('CN=IPA RA', subject_base): 'ipaCert',
     }
 
-    try:
-        return nickname_by_subject_dn[DN(subject)]
-    except KeyError:
-        cas = api.Command.ca_find(ipacasubjectdn=DN(subject))['result']
-        if len(cas) == 0:
-            return None
-        return 'caSigningCert cert-pki-ca {}'.format(cas[0]['ipacaid'][0])
-
-
-def is_lightweight_ca():
-    nickname = get_nickname() or ''
-    return nickname != IPA_CA_NICKNAME and nickname.startswith(IPA_CA_NICKNAME)
-
-def is_renewable():
-    cert = os.environ.get('CERTMONGER_CERTIFICATE')
-    if not cert:
-        return False
-    else:
-        return x509.is_self_signed(cert) or is_lightweight_ca()
+    return nickname_by_subject_dn.get(DN(subject))
 
 
 def is_replicated():
-    return not get_nickname()
+    return bool(get_nickname())
 
 
 def is_renewal_master():
@@ -132,7 +115,7 @@ def ldap_connect():
     conn = None
     try:
         conn = ldap2(api)
-        conn.connect(autobind=True)
+        conn.connect(ccache=os.environ['KRB5CCNAME'])
         yield conn
     finally:
         if conn is not None and conn.isconnected():
@@ -210,10 +193,18 @@ def call_handler(_handler, *args, **kwargs):
 
     return result
 
-def request_cert():
+
+def request_cert(reuse_existing, **kwargs):
     """
     Request certificate from IPA CA.
     """
+    if reuse_existing:
+        cert = os.environ.get('CERTMONGER_CERTIFICATE')
+        if cert:
+            return (ISSUED, cert)
+        else:
+            return (REJECTED, "New certificate requests not supported")
+
     syslog.syslog(syslog.LOG_NOTICE,
                   "Forwarding request to dogtag-ipa-renew-agent")
 
@@ -248,7 +239,8 @@ def request_cert():
     else:
         return (rc, stdout)
 
-def store_cert():
+
+def store_cert(**kwargs):
     """
     Store certificate in LDAP.
     """
@@ -274,11 +266,6 @@ def store_cert():
     cert = os.environ.get('CERTMONGER_CERTIFICATE')
     if not cert:
         return (REJECTED, "New certificate requests not supported")
-
-    if is_lightweight_ca():
-        # Lightweight CAs are updated in Dogtag's NSSDB
-        # by Dogtag itself, so do not store it
-        return (ISSUED, cert)
 
     dercert = x509.normalize_certificate(cert)
 
@@ -310,11 +297,12 @@ def store_cert():
             syslog.syslog(
                 syslog.LOG_ERR,
                 "Giving up. To retry storing the certificate, resubmit the "
-                "request with profile \"ipaStorage\"")
+                "request with CA \"dogtag-ipa-ca-renew-agent-reuse\"")
 
     return (ISSUED, cert)
 
-def request_and_store_cert():
+
+def request_and_store_cert(**kwargs):
     """
     Request certificate from IPA CA and store it in LDAP.
     """
@@ -340,7 +328,7 @@ def request_and_store_cert():
         else:
             os.environ['CERTMONGER_CA_COOKIE'] = cookie
 
-        result = call_handler(request_cert)
+        result = call_handler(request_cert, **kwargs)
         if result[0] == WAIT:
             return (result[0], 'request:%s' % result[1])
         elif result[0] == WAIT_WITH_DELAY:
@@ -359,7 +347,7 @@ def request_and_store_cert():
         os.environ['CERTMONGER_CA_COOKIE'] = cookie
     os.environ['CERTMONGER_CERTIFICATE'] = cert
 
-    result = call_handler(store_cert)
+    result = call_handler(store_cert, **kwargs)
     if result[0] == WAIT:
         return (result[0], 'store:%s:%s' % (cert, result[1]))
     elif result[0] == WAIT_WITH_DELAY:
@@ -367,7 +355,8 @@ def request_and_store_cert():
     else:
         return result
 
-def retrieve_or_reuse_cert():
+
+def retrieve_or_reuse_cert(**kwargs):
     """
     Retrieve certificate from LDAP. If the certificate is not available, reuse
     the old certificate.
@@ -395,7 +384,8 @@ def retrieve_or_reuse_cert():
 
     return (ISSUED, cert)
 
-def retrieve_cert_continuous():
+
+def retrieve_cert_continuous(reuse_existing, **kwargs):
     """
     Retrieve new certificate from LDAP. Repeat every eight hours until the
     certificate is available.
@@ -404,14 +394,10 @@ def retrieve_cert_continuous():
     if old_cert:
         old_cert = x509.normalize_certificate(old_cert)
 
-    if is_lightweight_ca():
-        # Lightweight CAs are updated in Dogtag's NSSDB
-        # by Dogtag itself, so do not try to retrieve it.
-        # Everything is fine as is.
-        return (ISSUED, os.environ.get('CERTMONGER_CERTIFICATE'))
-
-    result = call_handler(retrieve_or_reuse_cert)
-    if result[0] != ISSUED:
+    result = call_handler(retrieve_or_reuse_cert,
+                          reuse_existing=reuse_existing,
+                          **kwargs)
+    if result[0] != ISSUED or reuse_existing:
         return result
 
     new_cert = x509.normalize_certificate(result[1])
@@ -422,25 +408,22 @@ def retrieve_cert_continuous():
 
     return result
 
-def retrieve_cert():
+
+def retrieve_cert(**kwargs):
     """
     Retrieve new certificate from LDAP.
     """
-    result = call_handler(retrieve_cert_continuous)
+    result = call_handler(retrieve_cert_continuous, **kwargs)
     if result[0] == WAIT_WITH_DELAY:
         return (REJECTED, "Updated certificate not available")
 
     return result
 
-def export_csr():
-    """
-    This does not actually renew the cert, it just writes the CSR provided
-    by certmonger to /var/lib/ipa/ca.csr and returns the existing cert.
-    """
-    operation = os.environ.get('CERTMONGER_OPERATION')
-    if operation != 'SUBMIT':
-        return (OPERATION_NOT_SUPPORTED_BY_HELPER,)
 
+def renew_ca_cert(reuse_existing, **kwargs):
+    """
+    This is used for automatic CA certificate renewal.
+    """
     csr = os.environ.get('CERTMONGER_CSR')
     if not csr:
         return (UNCONFIGURED, "Certificate request not provided")
@@ -448,30 +431,21 @@ def export_csr():
     cert = os.environ.get('CERTMONGER_CERTIFICATE')
     if not cert:
         return (REJECTED, "New certificate requests not supported")
-
-    csr_file = paths.IPA_CA_CSR
-    try:
-        with open(csr_file, 'wb') as f:
-            f.write(csr)
-    except Exception as e:
-        return (UNREACHABLE, "Failed to write %s: %s" % (csr_file, e))
-
-    return (ISSUED, cert)
-
-def renew_ca_cert():
-    """
-    This is used for automatic CA certificate renewal.
-    """
-    cert = os.environ.get('CERTMONGER_CERTIFICATE')
-    if not cert:
-        return (REJECTED, "New certificate requests not supported")
+    is_self_signed = x509.is_self_signed(cert)
 
     operation = os.environ.get('CERTMONGER_OPERATION')
     if operation == 'SUBMIT':
         state = 'retrieve'
 
-        if is_renewable() and is_renewal_master():
+        if is_self_signed and not reuse_existing and is_renewal_master():
             state = 'request'
+
+        csr_file = paths.IPA_CA_CSR
+        try:
+            with open(csr_file, 'wb') as f:
+                f.write(csr)
+        except Exception as e:
+            return (UNREACHABLE, "Failed to write %s: %s" % (csr_file, e))
     elif operation == 'POLL':
         cookie = os.environ.get('CERTMONGER_CA_COOKIE')
         if not cookie:
@@ -487,17 +461,24 @@ def renew_ca_cert():
         return (OPERATION_NOT_SUPPORTED_BY_HELPER,)
 
     if state == 'retrieve':
-        result = call_handler(retrieve_cert)
-        if result[0] == REJECTED and not is_renewable():
+        result = call_handler(retrieve_cert,
+                              reuse_existing=reuse_existing,
+                              **kwargs)
+        if result[0] == REJECTED and not is_self_signed and not reuse_existing:
             syslog.syslog(syslog.LOG_ALERT,
                           "Certificate with subject '%s' is about to expire, "
                           "use ipa-cacert-manage to renew it"
                           % (os.environ.get("CERTMONGER_REQ_SUBJECT"),))
     elif state == 'request':
-        profile = os.environ['CERTMONGER_CA_PROFILE']
+        profile = os.environ.get('CERTMONGER_CA_PROFILE')
         os.environ['CERTMONGER_CA_PROFILE'] = 'caCACert'
-        result = call_handler(request_and_store_cert)
-        os.environ['CERTMONGER_CA_PROFILE'] = profile
+        result = call_handler(request_and_store_cert,
+                              reuse_existing=reuse_existing,
+                              **kwargs)
+        if profile is not None:
+            os.environ['CERTMONGER_CA_PROFILE'] = profile
+        else:
+            del os.environ['CERTMONGER_CA_PROFILE']
 
     if result[0] == WAIT:
         return (result[0], '%s:%s' % (state, result[1]))
@@ -507,17 +488,18 @@ def renew_ca_cert():
         return result
 
 def main():
-    handlers = {
-        'ipaStorage':           store_cert,
-        'ipaRetrievalOrReuse':  retrieve_or_reuse_cert,
-        'ipaRetrieval':         retrieve_cert,
-        'ipaCSRExport':         export_csr,
-        'ipaCACertRenewal':     renew_ca_cert,
+    kwargs = {
+        'reuse_existing': False,
     }
+    try:
+        sys.argv.remove('--reuse-existing')
+    except ValueError:
+        pass
+    else:
+        kwargs['reuse_existing'] = True
 
     api.bootstrap(in_server=True, context='renew', confdir=paths.ETC_IPA)
     api.finalize()
-    api.Backend.ldap2.connect()
 
     operation = os.environ.get('CERTMONGER_OPERATION')
     if operation not in ('SUBMIT', 'POLL'):
@@ -526,24 +508,32 @@ def main():
     tmpdir = tempfile.mkdtemp(prefix="tmp-")
     certs.renewal_lock.acquire()
     try:
-        profile = os.environ.get('CERTMONGER_CA_PROFILE')
-        if is_replicated():
-            if profile or is_renewal_master():
+        principal = str('host/%s@%s' % (api.env.host, api.env.realm))
+        ccache_filename = os.path.join(tmpdir, 'ccache')
+        os.environ['KRB5CCNAME'] = ccache_filename
+        kinit_keytab(principal, paths.KRB5_KEYTAB, ccache_filename)
+
+        api.Backend.ldap2.connect()
+
+        if get_nickname() == IPA_CA_NICKNAME:
+            handler = renew_ca_cert
+        elif is_replicated():
+            if is_renewal_master():
                 handler = request_and_store_cert
             else:
                 handler = retrieve_cert_continuous
         else:
             handler = request_cert
-        handler = handlers.get(profile, handler)
 
-        res = call_handler(handler)
+        res = call_handler(handler, **kwargs)
         for item in res[1:]:
             print(item)
         return res[0]
     finally:
+        if api.Backend.ldap2.isconnected():
+            api.Backend.ldap2.disconnect()
         certs.renewal_lock.release()
         shutil.rmtree(tmpdir)
-        api.Backend.ldap2.disconnect()
 
 
 try:

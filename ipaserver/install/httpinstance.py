@@ -29,9 +29,13 @@ import pipes
 import locale
 
 import six
+from augeas import Augeas
 
-from ipalib.constants import IPAAPI_USER
 from ipalib.install import certmonger
+from ipapython import ipaldap
+from ipapython.certdb import (IPA_CA_TRUST_FLAGS,
+                              EXTERNAL_CA_TRUST_FLAGS)
+from ipaserver.install import replication
 from ipaserver.install import service
 from ipaserver.install import certs
 from ipaserver.install import installutils
@@ -42,8 +46,6 @@ from ipapython.ipa_log_manager import root_logger
 import ipapython.errors
 from ipaserver.install import sysupgrade
 from ipalib import api
-from ipalib import errors
-from ipalib.constants import ANON_USER
 from ipaplatform.constants import constants
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
@@ -70,6 +72,10 @@ NSS_CIPHER_SUITE = [
     '+rsa_aes_256_gcm_sha_384', '+rsa_aes_256_sha'
 ]
 NSS_CIPHER_REVISION = '20160129'
+
+OCSP_DIRECTIVE = 'NSSOCSP'
+
+NSS_OCSP_ENABLED = 'nss_ocsp_enabled'
 
 
 def httpd_443_configured():
@@ -102,21 +108,10 @@ def httpd_443_configured():
     return False
 
 
-def create_kdcproxy_user():
-    """Create KDC proxy user/group if it doesn't exist yet."""
-    tasks.create_system_user(
-        name=KDCPROXY_USER,
-        group=KDCPROXY_USER,
-        homedir=paths.VAR_LIB_KDCPROXY,
-        shell=paths.NOLOGIN,
-        comment="IPA KDC Proxy User",
-        create_homedir=True,
-    )
-
-
 class WebGuiInstance(service.SimpleServiceInstance):
     def __init__(self):
         service.SimpleServiceInstance.__init__(self, "ipa_webgui")
+
 
 class HTTPInstance(service.Service):
     def __init__(self, fstore=None, cert_nickname='Server-Cert',
@@ -130,18 +125,22 @@ class HTTPInstance(service.Service):
             service_user=HTTPD_USER,
             keytab=paths.HTTP_KEYTAB)
 
+        self.cacert_nickname = None
         self.cert_nickname = cert_nickname
         self.ca_is_configured = True
         self.keytab_user = constants.GSSPROXY_USER
 
     subject_base = ipautil.dn_attribute_property('_subject_base')
 
-    def create_instance(self, realm, fqdn, domain_name, pkcs12_info=None,
+    def create_instance(self, realm, fqdn, domain_name, dm_password=None,
+                        pkcs12_info=None,
                         subject_base=None, auto_redirect=True, ca_file=None,
-                        ca_is_configured=None, promote=False):
+                        ca_is_configured=None, promote=False,
+                        master_fqdn=None):
         self.fqdn = fqdn
         self.realm = realm
         self.domain = domain_name
+        self.dm_password = dm_password
         self.suffix = ipautil.realm_to_suffix(self.realm)
         self.pkcs12_info = pkcs12_info
         self.dercert = None
@@ -157,7 +156,9 @@ class HTTPInstance(service.Service):
         if ca_is_configured is not None:
             self.ca_is_configured = ca_is_configured
         self.promote = promote
+        self.master_fqdn = master_fqdn
 
+        self.step("stopping httpd", self.__stop)
         self.step("setting mod_nss port to 443", self.__set_mod_nss_port)
         self.step("setting mod_nss cipher suite",
                   self.set_mod_nss_cipher_suite)
@@ -165,10 +166,10 @@ class HTTPInstance(service.Service):
                   self.set_mod_nss_protocol)
         self.step("setting mod_nss password file", self.__set_mod_nss_passwordfile)
         self.step("enabling mod_nss renegotiate", self.enable_mod_nss_renegotiate)
+        self.step("disabling mod_nss OCSP", self.disable_mod_nss_ocsp)
         self.step("adding URL rewriting rules", self.__add_include)
         self.step("configuring httpd", self.__configure_http)
         self.step("setting up httpd keytab", self.request_service_keytab)
-        self.step("retrieving anonymous keytab", self.request_anon_keytab)
         self.step("configuring Gssproxy", self.configure_gssproxy)
         self.step("setting up ssl", self.__setup_ssl)
         if self.ca_is_configured:
@@ -180,18 +181,17 @@ class HTTPInstance(service.Service):
                   self.remove_httpd_ccaches)
         self.step("configuring SELinux for httpd", self.configure_selinux_for_httpd)
         if not self.is_kdcproxy_configured():
-            self.step("create KDC proxy user", create_kdcproxy_user)
             self.step("create KDC proxy config", self.create_kdcproxy_conf)
             self.step("enable KDC proxy", self.enable_kdcproxy)
-        self.step("restarting httpd", self.__start)
+        self.step("starting httpd", self.start)
         self.step("configuring httpd to start on boot", self.__enable)
         self.step("enabling oddjobd", self.enable_and_start_oddjobd)
 
         self.start_creation()
 
-    def __start(self):
+    def __stop(self):
         self.backup_state("running", self.is_running())
-        self.restart()
+        self.stop()
 
     def __enable(self):
         self.backup_state("enabled", self.is_enabled())
@@ -273,6 +273,35 @@ class HTTPInstance(service.Service):
         installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSRenegotiation', 'on', False)
         installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSRequireSafeNegotiation', 'on', False)
 
+    def disable_mod_nss_ocsp(self):
+        if sysupgrade.get_upgrade_state('http', NSS_OCSP_ENABLED) is None:
+            self.__disable_mod_nss_ocsp()
+            sysupgrade.set_upgrade_state('http', NSS_OCSP_ENABLED, False)
+
+    def __disable_mod_nss_ocsp(self):
+        aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD)
+
+        aug.set('/augeas/load/Httpd/lens', 'Httpd.lns')
+        aug.set('/augeas/load/Httpd/incl', paths.HTTPD_NSS_CONF)
+        aug.load()
+
+        path = '/files{}/VirtualHost'.format(paths.HTTPD_NSS_CONF)
+        ocsp_path = '{}/directive[.="{}"]'.format(path, OCSP_DIRECTIVE)
+        ocsp_arg = '{}/arg'.format(ocsp_path)
+        ocsp_comment = '{}/#comment[.="{}"]'.format(path, OCSP_DIRECTIVE)
+
+        ocsp_dir = aug.get(ocsp_path)
+
+        # there is NSSOCSP directive in nss.conf file, comment it
+        # otherwise just do nothing
+        if ocsp_dir is not None:
+            ocsp_state = aug.get(ocsp_arg)
+            aug.remove(ocsp_arg)
+            aug.rename(ocsp_path, '#comment')
+            aug.set(ocsp_comment, '{} {}'.format(OCSP_DIRECTIVE, ocsp_state))
+            aug.save()
+
+
     def set_mod_nss_cipher_suite(self):
         ciphers = ','.join(NSS_CIPHER_SUITE)
         installutils.set_directive(paths.HTTPD_NSS_CONF, 'NSSCipherSuite', ciphers, False)
@@ -315,20 +344,6 @@ class HTTPInstance(service.Service):
             if certmonger_stopped:
                 certmonger.stop()
 
-    def request_anon_keytab(self):
-        parent = os.path.dirname(paths.ANON_KEYTAB)
-        if not os.path.exists(parent):
-            os.makedirs(parent, 0o755)
-
-        self.clean_previous_keytab(keytab=paths.ANON_KEYTAB)
-        self.run_getkeytab(self.api.env.ldap_uri, paths.ANON_KEYTAB, ANON_USER)
-
-        pent = pwd.getpwnam(IPAAPI_USER)
-        os.chmod(parent, 0o700)
-        os.chown(parent, pent.pw_uid, pent.pw_gid)
-
-        self.set_keytab_owner(keytab=paths.ANON_KEYTAB, owner=IPAAPI_USER)
-
     def create_password_conf(self):
         """
         This is the format of mod_nss pin files.
@@ -355,9 +370,17 @@ class HTTPInstance(service.Service):
         name = 'Root Certs'
         args = [paths.MODUTIL, '-dbdir', paths.HTTPD_ALIAS_DIR, '-force']
 
-        result = ipautil.run(args + ['-list', name],
-                             env={},
-                             capture_output=True)
+        try:
+            result = ipautil.run(args + ['-list', name],
+                                 env={},
+                                 capture_output=True)
+        except ipautil.CalledProcessError as e:
+            if e.returncode == 29:  # ERROR: Module not found in database.
+                root_logger.debug(
+                    'Module %s not available, treating as disabled', name)
+                return False
+            raise
+
         if 'Status: Enabled' in result.output:
             ipautil.run(args + ['-disable', name], env={})
             return True
@@ -368,21 +391,21 @@ class HTTPInstance(service.Service):
         db = certs.CertDB(self.realm, nssdir=paths.HTTPD_ALIAS_DIR,
                           subject_base=self.subject_base, user="root",
                           group=constants.HTTPD_GROUP,
-                          truncate=(not self.promote))
+                          create=True)
         self.disable_system_trust()
+        self.create_password_conf()
+
         if self.pkcs12_info:
             if self.ca_is_configured:
-                trust_flags = 'CT,C,C'
+                trust_flags = IPA_CA_TRUST_FLAGS
             else:
-                trust_flags = None
+                trust_flags = EXTERNAL_CA_TRUST_FLAGS
             db.init_from_pkcs12(self.pkcs12_info[0], self.pkcs12_info[1],
                                 ca_file=self.ca_file,
                                 trust_flags=trust_flags)
             server_certs = db.find_server_certs()
             if len(server_certs) == 0:
                 raise RuntimeError("Could not find a suitable server cert in import in %s" % self.pkcs12_info[0])
-
-            self.create_password_conf()
 
             # We only handle one server cert
             nickname = server_certs[0][0]
@@ -398,7 +421,6 @@ class HTTPInstance(service.Service):
 
         else:
             if not self.promote:
-                self.create_password_conf()
                 ca_args = [
                     paths.CERTMONGER_DOGTAG_SUBMIT,
                     '--ee-url', 'https://%s:8443/ca/ee/ca' % self.fqdn,
@@ -409,29 +431,35 @@ class HTTPInstance(service.Service):
                 ]
                 helper = " ".join(ca_args)
                 prev_helper = certmonger.modify_ca_helper('IPA', helper)
-
-                try:
-                    certmonger.request_and_wait_for_cert(
-                        certpath=db.secdir,
-                        nickname=self.cert_nickname,
-                        principal=self.principal,
-                        passwd_fname=db.passwd_fname,
-                        subject=str(DN(('CN', self.fqdn), self.subject_base)),
-                        ca='IPA',
-                        profile=dogtag.DEFAULT_PROFILE,
-                        dns=[self.fqdn],
-                        post_command='restart_httpd')
-                    self.dercert = db.get_cert_from_db(
-                        self.cert_nickname, pem=False)
-                finally:
+            else:
+                prev_helper = None
+            try:
+                certmonger.request_and_wait_for_cert(
+                    certpath=db.secdir,
+                    nickname=self.cert_nickname,
+                    principal=self.principal,
+                    passwd_fname=db.passwd_fname,
+                    subject=str(DN(('CN', self.fqdn), self.subject_base)),
+                    ca='IPA',
+                    profile=dogtag.DEFAULT_PROFILE,
+                    dns=[self.fqdn],
+                    post_command='restart_httpd')
+            finally:
+                if prev_helper is not None:
                     certmonger.modify_ca_helper('IPA', prev_helper)
 
+            self.dercert = db.get_cert_from_db(self.cert_nickname, pem=False)
+
+            if prev_helper is not None:
                 self.add_cert_to_service()
 
             # Verify we have a valid server cert
             server_certs = db.find_server_certs()
             if not server_certs:
                 raise RuntimeError("Could not find a suitable server cert.")
+
+        # store the CA cert nickname so that we can publish it later on
+        self.cacert_nickname = db.cacert_name
 
     def __import_ca_certs(self):
         db = certs.CertDB(self.realm, nssdir=paths.HTTPD_ALIAS_DIR,
@@ -441,7 +469,7 @@ class HTTPInstance(service.Service):
     def __publish_ca_cert(self):
         ca_db = certs.CertDB(self.realm, nssdir=paths.HTTPD_ALIAS_DIR,
                              subject_base=self.subject_base)
-        ca_db.publish_ca_cert(paths.CA_CRT)
+        ca_db.export_pem_cert(self.cacert_nickname, paths.CA_CRT)
 
     def is_kdcproxy_configured(self):
         """Check if KDC proxy has already been configured in the past"""
@@ -449,46 +477,8 @@ class HTTPInstance(service.Service):
 
     def enable_kdcproxy(self):
         """Add ipaConfigString=kdcProxyEnabled to cn=KDC"""
-        entry_name = DN(('cn', 'KDC'), ('cn', self.fqdn), ('cn', 'masters'),
-                        ('cn', 'ipa'), ('cn', 'etc'), self.suffix)
-        attr_name = 'kdcProxyEnabled'
-
-        try:
-            entry = api.Backend.ldap2.get_entry(
-                entry_name, ['ipaConfigString'])
-        except errors.NotFound:
-            pass
-        else:
-            if any(attr_name.lower() == val.lower()
-                   for val in entry.get('ipaConfigString', [])):
-                root_logger.debug("service KDCPROXY already enabled")
-                return
-
-            entry.setdefault('ipaConfigString', []).append(attr_name)
-            try:
-                api.Backend.ldap2.update_entry(entry)
-            except errors.EmptyModlist:
-                root_logger.debug("service KDCPROXY already enabled")
-                return
-            except:
-                root_logger.debug("failed to enable service KDCPROXY")
-                raise
-
-            root_logger.debug("service KDCPROXY enabled")
-            return
-
-        entry = api.Backend.ldap2.make_entry(
-            entry_name,
-            objectclass=["nsContainer", "ipaConfigObject"],
-            cn=['KDC'],
-            ipaconfigstring=[attr_name]
-        )
-
-        try:
-            api.Backend.ldap2.add_entry(entry)
-        except errors.DuplicateEntry:
-            root_logger.debug("failed to add service KDCPROXY entry")
-            raise
+        service.set_service_entry_config(
+            'KDC', self.fqdn, [u'kdcProxyEnabled'], self.suffix)
 
     def create_kdcproxy_conf(self):
         """Create ipa-kdc-proxy.conf in /etc/ipa/kdcproxy"""
@@ -555,6 +545,9 @@ class HTTPInstance(service.Service):
                 ca_iface.Set('org.fedorahosted.certmonger.ca',
                              'external-helper', helper)
 
+        db = certs.CertDB(self.realm, paths.HTTPD_ALIAS_DIR)
+        db.restore()
+
         for f in [paths.HTTPD_IPA_CONF, paths.HTTPD_SSL_CONF, paths.HTTPD_NSS_CONF]:
             try:
                 self.fstore.restore_file(f)
@@ -595,3 +588,22 @@ class HTTPInstance(service.Service):
         db = certs.CertDB(self.realm, nssdir=paths.HTTPD_ALIAS_DIR)
         db.track_server_cert(self.cert_nickname, self.principal,
                              db.passwd_fname, 'restart_httpd')
+
+    def request_service_keytab(self):
+        super(HTTPInstance, self).request_service_keytab()
+
+        if self.master_fqdn is not None:
+            service_dn = DN(('krbprincipalname', self.principal),
+                            api.env.container_service,
+                            self.suffix)
+
+            ldap_uri = ipaldap.get_ldap_uri(self.master_fqdn)
+            with ipaldap.LDAPClient(ldap_uri,
+                                    start_tls=not self.promote,
+                                    cacert=paths.IPA_CA_CRT) as remote_ldap:
+                if self.promote:
+                    remote_ldap.gssapi_bind()
+                else:
+                    remote_ldap.simple_bind(ipaldap.DIRMAN_DN,
+                                            self.dm_password)
+                replication.wait_for_entry(remote_ldap, service_dn, timeout=60)

@@ -86,8 +86,8 @@ dnl ---------------------------------------------------------------------------
 
 SAVE_CPPFLAGS=$CPPFLAGS
 CPPFLAGS="$NSPR_CFLAGS $NSS_CFLAGS"
-AC_CHECK_LIB([ldap_r], [ldap_search], [], AC_MSG_ERROR([libldap_r not found]))
-AC_CHECK_LIB([lber], [ber_peek_tag], [], AC_MSG_ERROR([liblber not found]))
+AC_CHECK_LIB([ldap_r], [ldap_search], [ ], AC_MSG_ERROR([libldap_r not found]))
+AC_CHECK_LIB([lber], [ber_peek_tag], [ ], AC_MSG_ERROR([liblber not found]))
 LDAP_LIBS="-lldap_r -llber"
 LDAP_CFLAGS=""
 AC_SUBST(LDAP_LIBS)
@@ -109,6 +109,18 @@ AM_PATH_PYTHON(2.7)
 if test "x$PYTHON" = "x" ; then
   AC_MSG_ERROR([Python not found])
 fi
+
+dnl ---------------------------------------------------------------------------
+dnl - Check for Python 2/3 for devcheck
+dnl ---------------------------------------------------------------------------
+
+AC_PATH_PROG(PYTHON2, python2)
+AC_SUBST([PYTHON2])
+AM_CONDITIONAL([WITH_PYTHON2], [test "x${PYTHON2}" != "x"])
+
+AC_PATH_PROG(PYTHON3, python3)
+AC_SUBST([PYTHON3])
+AM_CONDITIONAL([WITH_PYTHON3], [test "x${PYTHON3}" != "x"])
 
 dnl ---------------------------------------------------------------------------
 dnl - Check for cmocka unit test framework http://cmocka.cryptomilk.org/
@@ -225,6 +237,20 @@ AM_COND_IF([ENABLE_SERVER], [
 ])
 
 dnl ---------------------------------------------------------------------------
+dnl - Check if IPA certauth plugin can be build
+dnl ---------------------------------------------------------------------------
+
+AM_CONDITIONAL([BUILD_IPA_CERTAUTH_PLUGIN],
+               [test x$have_certauth_plugin = xyes -a x"$SSSCERTMAP_LIBS" != x])
+AM_COND_IF([BUILD_IPA_CERTAUTH_PLUGIN], [
+    AC_DEFINE([HAVE_KRB5_CERTAUTH_PLUGIN], [1],
+        [MIT Kerberos version supports certauth plugin])
+    AM_COND_IF([ENABLE_SERVER],
+               [AC_MSG_NOTICE([Build IPA KDB certauth plugin])],
+               [AC_MSG_WARN([Cannot build IPA KDB certauth plugin])])
+])
+
+dnl ---------------------------------------------------------------------------
 dnl - Check for program paths
 dnl ---------------------------------------------------------------------------
 AC_PATH_PROG(UNLINK, unlink, [AC_MSG_ERROR([unlink not found])])
@@ -304,13 +330,31 @@ AC_SUBST([IPAPLATFORM])
 AC_MSG_RESULT([${IPAPLATFORM}])
 
 if test "x${IPAPLATFORM}" == "xdebian"; then
+    NAMED_GROUP="bind"
+    ODS_USER="opendnssec"
     # see https://www.debian.org/doc/packaging-manuals/python-policy/ap-packaging_tools.html
     PYTHON_INSTALL_EXTRA_OPTIONS="--install-layout=deb"
 else
+    NAMED_GROUP="named"
+    ODS_USER="ods"
     PYTHON_INSTALL_EXTRA_OPTIONS=""
 fi
+
+AC_MSG_CHECKING([NAMED_GROUP])
+AC_SUBST([NAMED_GROUP])
+AC_MSG_RESULT([${NAMED_GROUP}])
+
+AC_MSG_CHECKING([ODS_USER])
+AC_SUBST([ODS_USER])
+AC_MSG_RESULT([${ODS_USER}])
+
+AC_MSG_CHECKING([python setup.py install extra options])
 AC_SUBST([PYTHON_INSTALL_EXTRA_OPTIONS])
-AC_MSG_RESULT([python setup.py install extra options ${PYTHON_INSTALL_EXTRA_OPTIONS}])
+if test "x${PYTHON_INSTALL_EXTRA_OPTIONS}" == "x"; then
+    AC_MSG_RESULT([none])
+else
+    AC_MSG_RESULT([${PYTHON_INSTALL_EXTRA_OPTIONS}])
+fi
 
 dnl ---------------------------------------------------------------------------
 dnl Version information from VERSION.m4 and command line

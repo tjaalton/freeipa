@@ -17,20 +17,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import collections
 import os
 import io
 import pwd
 import grp
 import re
 import tempfile
+from tempfile import NamedTemporaryFile
 import shutil
 import base64
 from cryptography.hazmat.primitives import serialization
+import cryptography.x509
 from nss import nss
 from nss.error import NSPRError
 
 from ipapython.dn import DN
 from ipapython.ipa_log_manager import root_logger
+from ipapython.kerberos import Principal
 from ipapython import ipautil
 from ipalib import x509     # pylint: disable=ipa-forbidden-import
 
@@ -51,6 +55,29 @@ else:
 CA_NICKNAME_FMT = "%s IPA CA"
 
 NSS_FILES = ("cert8.db", "key3.db", "secmod.db", "pwdfile.txt")
+
+TrustFlags = collections.namedtuple('TrustFlags', 'has_key trusted ca usages')
+
+EMPTY_TRUST_FLAGS = TrustFlags(False, None, None, None)
+
+IPA_CA_TRUST_FLAGS = TrustFlags(
+    False, True, True, frozenset({
+        x509.EKU_SERVER_AUTH,
+        x509.EKU_CLIENT_AUTH,
+        x509.EKU_CODE_SIGNING,
+        x509.EKU_EMAIL_PROTECTION,
+        x509.EKU_PKINIT_CLIENT_AUTH,
+        x509.EKU_PKINIT_KDC,
+    }),
+)
+
+EXTERNAL_CA_TRUST_FLAGS = TrustFlags(
+    False, True, True, frozenset({x509.EKU_SERVER_AUTH}),
+)
+
+TRUSTED_PEER_TRUST_FLAGS = TrustFlags(
+    False, True, False, frozenset({x509.EKU_SERVER_AUTH}),
+)
 
 
 def get_ca_nickname(realm, format=CA_NICKNAME_FMT):
@@ -75,6 +102,119 @@ def find_cert_from_txt(cert, start=0):
 
     cert = cert[s:e]
     return (cert, e)
+
+
+def get_file_cont(slot, token, filename):
+    with open(filename) as f:
+        return f.read()
+
+
+def parse_trust_flags(trust_flags):
+    """
+    Convert certutil trust flags to TrustFlags object.
+    """
+    has_key = 'u' in trust_flags
+
+    if 'p' in trust_flags:
+        if 'C' in trust_flags or 'P' in trust_flags or 'T' in trust_flags:
+            raise ValueError("cannot be both trusted and not trusted")
+        return False, None, None
+    elif 'C' in trust_flags or 'T' in trust_flags:
+        if 'P' in trust_flags:
+            raise ValueError("cannot be both CA and not CA")
+        ca = True
+    elif 'P' in trust_flags:
+        ca = False
+    else:
+        return TrustFlags(has_key, None, None, frozenset())
+
+    trust_flags = trust_flags.split(',')
+    ext_key_usage = set()
+    for i, kp in enumerate((x509.EKU_SERVER_AUTH,
+                            x509.EKU_EMAIL_PROTECTION,
+                            x509.EKU_CODE_SIGNING)):
+        if 'C' in trust_flags[i] or 'P' in trust_flags[i]:
+            ext_key_usage.add(kp)
+    if 'T' in trust_flags[0]:
+        ext_key_usage.add(x509.EKU_CLIENT_AUTH)
+
+    return TrustFlags(has_key, True, ca, frozenset(ext_key_usage))
+
+
+def unparse_trust_flags(trust_flags):
+    """
+    Convert TrustFlags object to certutil trust flags.
+    """
+    has_key, trusted, ca, ext_key_usage = trust_flags
+
+    if trusted is False:
+        if has_key:
+            return 'pu,pu,pu'
+        else:
+            return 'p,p,p'
+    elif trusted is None or ca is None:
+        if has_key:
+            return 'u,u,u'
+        else:
+            return ',,'
+    elif ext_key_usage is None:
+        if ca:
+            if has_key:
+                return 'CTu,Cu,Cu'
+            else:
+                return 'CT,C,C'
+        else:
+            if has_key:
+                return 'Pu,Pu,Pu'
+            else:
+                return 'P,P,P'
+
+    trust_flags = ['', '', '']
+    for i, kp in enumerate((x509.EKU_SERVER_AUTH,
+                            x509.EKU_EMAIL_PROTECTION,
+                            x509.EKU_CODE_SIGNING)):
+        if kp in ext_key_usage:
+            trust_flags[i] += ('C' if ca else 'P')
+    if ca and x509.EKU_CLIENT_AUTH in ext_key_usage:
+        trust_flags[0] += 'T'
+    if has_key:
+        for i in range(3):
+            trust_flags[i] += 'u'
+
+    trust_flags = ','.join(trust_flags)
+    return trust_flags
+
+
+def verify_kdc_cert_validity(kdc_cert, ca_certs, realm):
+    pem_kdc_cert = kdc_cert.public_bytes(serialization.Encoding.PEM)
+    pem_ca_certs = '\n'.join(
+        cert.public_bytes(serialization.Encoding.PEM) for cert in ca_certs)
+
+    with NamedTemporaryFile() as kdc_file, NamedTemporaryFile() as ca_file:
+        kdc_file.write(pem_kdc_cert)
+        kdc_file.flush()
+        ca_file.write(pem_ca_certs)
+        ca_file.flush()
+
+        try:
+            ipautil.run(
+                [OPENSSL, 'verify', '-CAfile', ca_file.name, kdc_file.name])
+            eku = kdc_cert.extensions.get_extension_for_class(
+                cryptography.x509.ExtendedKeyUsage)
+            list(eku.value).index(
+                cryptography.x509.ObjectIdentifier(x509.EKU_PKINIT_KDC))
+        except (ipautil.CalledProcessError,
+                cryptography.x509.ExtensionNotFound,
+                ValueError):
+            raise ValueError("invalid for a KDC")
+
+        principal = str(Principal(['krbtgt', realm], realm))
+        gns = x509.process_othernames(x509.get_san_general_names(kdc_cert))
+        for gn in gns:
+            if isinstance(gn, x509.KRB5PrincipalName) and gn.name == principal:
+                break
+        else:
+            raise ValueError("invalid for realm %s" % realm)
 
 
 class NSSDatabase(object):
@@ -169,6 +309,19 @@ class NSSDatabase(object):
                     new_mode = filemode
                 os.chmod(path, new_mode)
 
+    def restore(self):
+        for filename in NSS_FILES:
+            path = os.path.join(self.secdir, filename)
+            backup_path = path + '.orig'
+            save_path = path + '.ipasave'
+            try:
+                if os.path.exists(path):
+                    os.rename(path, save_path)
+                if os.path.exists(backup_path):
+                    os.rename(backup_path, path)
+            except OSError as e:
+                root_logger.debug(e)
+
     def list_certs(self):
         """Return nicknames and cert flags for all certs in the database
 
@@ -182,7 +335,9 @@ class NSSDatabase(object):
         for cert in certs:
             match = re.match(r'^(.+?)\s+(\w*,\w*,\w*)\s*$', cert)
             if match:
-                certlist.append(match.groups())
+                nickname = match.group(1)
+                trust_flags = parse_trust_flags(match.group(2))
+                certlist.append((nickname, trust_flags))
 
         return tuple(certlist)
 
@@ -195,7 +350,7 @@ class NSSDatabase(object):
         """
         server_certs = []
         for name, flags in self.list_certs():
-            if 'u' in flags:
+            if flags.has_key:
                 server_certs.append((name, flags))
 
         return server_certs
@@ -423,7 +578,7 @@ class NSSDatabase(object):
             cert = x509.load_certificate(cert_pem)
             nickname = str(DN(cert.subject))
             data = cert.public_bytes(serialization.Encoding.DER)
-            self.add_cert(data, nickname, ',,')
+            self.add_cert(data, nickname, EMPTY_TRUST_FLAGS)
 
         if extracted_key:
             in_file = ipautil.write_tmp_file(
@@ -448,14 +603,13 @@ class NSSDatabase(object):
 
             self.import_pkcs12(out_file.name, out_password)
 
-    def trust_root_cert(self, root_nickname, trust_flags=None):
+    def trust_root_cert(self, root_nickname, trust_flags):
         if root_nickname[:7] == "Builtin":
             root_logger.debug(
                 "No need to add trust for built-in root CAs, skipping %s" %
                 root_nickname)
         else:
-            if trust_flags is None:
-                trust_flags = 'C,,'
+            trust_flags = unparse_trust_flags(trust_flags)
             try:
                 self.run_certutil(["-M", "-n", root_nickname,
                                    "-t", trust_flags])
@@ -517,6 +671,7 @@ class NSSDatabase(object):
                              location)
 
     def add_cert(self, cert, nick, flags, pem=False):
+        flags = unparse_trust_flags(flags)
         args = ["-A", "-n", nick, "-t", flags]
         if pem:
             args.append("-a")
@@ -534,12 +689,14 @@ class NSSDatabase(object):
         if nss.nss_is_initialized():
             nss.nss_shutdown()
         nss.nss_init(self.secdir)
+        nss.set_password_callback(get_file_cont)
         try:
             certdb = nss.get_default_certdb()
             cert = nss.find_cert_from_nickname(nickname)
             intended_usage = nss.certificateUsageSSLServer
             try:
-                approved_usage = cert.verify_now(certdb, True, intended_usage)
+                approved_usage = cert.verify_now(certdb, True, intended_usage,
+                                                 self.pwd_file)
             except NSPRError as e:
                 if e.errno != -8102:
                     raise ValueError(e.strerror)
@@ -559,6 +716,7 @@ class NSSDatabase(object):
         if nss.nss_is_initialized():
             nss.nss_shutdown()
         nss.nss_init(self.secdir)
+        nss.set_password_callback(get_file_cont)
         try:
             certdb = nss.get_default_certdb()
             cert = nss.find_cert_from_nickname(nickname)
@@ -573,7 +731,8 @@ class NSSDatabase(object):
                 raise ValueError("not a CA certificate")
             intended_usage = nss.certificateUsageSSLCA
             try:
-                approved_usage = cert.verify_now(certdb, True, intended_usage)
+                approved_usage = cert.verify_now(certdb, True, intended_usage,
+                                                 self.pwd_file)
             except NSPRError as e:
                 if e.errno != -8102:    # SEC_ERROR_INADEQUATE_KEY_USAGE
                     raise ValueError(e.strerror)
@@ -584,11 +743,9 @@ class NSSDatabase(object):
             del certdb, cert
             nss.nss_shutdown()
 
-    def publish_ca_cert(self, canickname, location):
-        args = ["-L", "-n", canickname, "-a"]
-        result = self.run_certutil(args, capture_output=True)
-        cert = result.output
-        fd = open(location, "w+")
-        fd.write(cert)
-        fd.close()
-        os.chmod(location, 0o444)
+    def verify_kdc_cert_validity(self, nickname, realm):
+        nicknames = self.get_trust_chain(nickname)
+        certs = [self.get_cert(nickname) for nickname in nicknames]
+        certs = [x509.load_certificate(cert, x509.DER) for cert in certs]
+
+        verify_kdc_cert_validity(certs[-1], certs[:-1], realm)

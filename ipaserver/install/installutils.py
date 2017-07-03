@@ -44,19 +44,19 @@ import six
 from six.moves.configparser import SafeConfigParser, NoOptionError
 # pylint: enable=import-error
 
-from ipalib.constants import IPAAPI_USER, IPAAPI_GROUP
 from ipalib.install import sysrestore
 from ipalib.install.kinit import kinit_password
 import ipaplatform
 from ipapython import ipautil, admintool, version
 from ipapython.admintool import ScriptError
+from ipapython.certdb import EXTERNAL_CA_TRUST_FLAGS
 from ipapython.ipa_log_manager import root_logger
+from ipapython.ipaldap import DIRMAN_DN, LDAPClient
 from ipalib.util import validate_hostname
 from ipalib import api, errors, x509
 from ipapython.dn import DN
 from ipaserver.install import certs, service, sysupgrade
 from ipaplatform import services
-from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 
@@ -276,7 +276,7 @@ def read_ip_addresses():
         if not ip:
             break
         try:
-            ip_parsed = ipautil.CheckedIPAddress(ip, match_local=True)
+            ip_parsed = ipautil.CheckedIPAddress(ip)
         except Exception as e:
             print("Error: Invalid IP Address %s: %s" % (ip, e))
             continue
@@ -330,6 +330,21 @@ def get_password(prompt):
 def _read_password_default_validator(password):
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters long")
+
+
+def validate_dm_password_ldap(password):
+    """
+    Validate DM password by attempting to connect to LDAP. api.env has to
+    contain valid ldap_uri.
+    """
+    client = LDAPClient(api.env.ldap_uri, cacert=paths.IPA_CA_CRT)
+    try:
+        client.simple_bind(DIRMAN_DN, password)
+    except errors.ACIError:
+        raise ValueError("Invalid Directory Manager password")
+    else:
+        client.unbind()
+
 
 def read_password(user, confirm=True, validate=True, retry=True, validator=_read_password_default_validator):
     correct = False
@@ -570,7 +585,7 @@ def get_server_ip_address(host_name, unattended, setup_dns, ip_addresses):
     if len(hostaddr):
         for ha in hostaddr:
             try:
-                ips.append(ipautil.CheckedIPAddress(ha, match_local=True))
+                ips.append(ipautil.CheckedIPAddress(ha, match_local=False))
             except ValueError as e:
                 root_logger.warning("Invalid IP address %s for %s: %s", ha, host_name, unicode(e))
 
@@ -986,7 +1001,7 @@ def handle_error(error, log_file_name=None):
 
 
 def load_pkcs12(cert_files, key_password, key_nickname, ca_cert_files,
-                host_name):
+                host_name=None, realm_name=None):
     """
     Load and verify server certificate and private key from multiple files
 
@@ -1019,10 +1034,10 @@ def load_pkcs12(cert_files, key_password, key_nickname, ca_cert_files,
                 raise ScriptError(str(e))
 
         for nickname, trust_flags in nssdb.list_certs():
-            if 'u' in trust_flags:
+            if trust_flags.has_key:
                 key_nickname = nickname
                 continue
-            nssdb.trust_root_cert(nickname)
+            nssdb.trust_root_cert(nickname, EXTERNAL_CA_TRUST_FLAGS)
 
         # Check we have the whole cert chain & the CA is in it
         trust_chain = list(reversed(nssdb.get_trust_chain(key_nickname)))
@@ -1051,13 +1066,21 @@ def load_pkcs12(cert_files, key_password, key_nickname, ca_cert_files,
                     "CA certificate %s in %s is not valid: %s" %
                     (subject, ", ".join(cert_files), e))
 
-        # Check server validity
-        try:
-            nssdb.verify_server_cert_validity(key_nickname, host_name)
-        except ValueError as e:
-            raise ScriptError(
-                "The server certificate in %s is not valid: %s" %
-                (", ".join(cert_files), e))
+        if host_name is not None:
+            try:
+                nssdb.verify_server_cert_validity(key_nickname, host_name)
+            except ValueError as e:
+                raise ScriptError(
+                    "The server certificate in %s is not valid: %s" %
+                    (", ".join(cert_files), e))
+
+        if realm_name is not None:
+            try:
+                nssdb.verify_kdc_cert_validity(key_nickname, realm_name)
+            except ValueError as e:
+                raise ScriptError(
+                    "The KDC certificate in %s is not valid: %s" %
+                    (", ".join(cert_files), e))
 
         out_file = tempfile.NamedTemporaryFile()
         out_password = ipautil.ipa_generate_password()
@@ -1162,7 +1185,7 @@ def load_external_cert(files, ca_subject):
             cache[nickname] = (cert, subject, issuer)
             if subject == ca_subject:
                 ca_nickname = nickname
-            nssdb.trust_root_cert(nickname)
+            nssdb.trust_root_cert(nickname, EXTERNAL_CA_TRUST_FLAGS)
 
         if ca_nickname is None:
             raise ScriptError(
@@ -1515,14 +1538,3 @@ def default_subject_base(realm_name):
 
 def default_ca_subject_dn(subject_base):
     return DN(('CN', 'Certificate Authority'), subject_base)
-
-
-def create_ipaapi_user():
-    """Create IPA API user/group if it doesn't exist yet."""
-    tasks.create_system_user(
-        name=IPAAPI_USER,
-        group=IPAAPI_GROUP,
-        homedir=paths.VAR_LIB,
-        shell=paths.NOLOGIN
-    )
-    tasks.add_user_to_group(constants.HTTPD_USER, IPAAPI_GROUP)

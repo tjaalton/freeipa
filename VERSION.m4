@@ -21,7 +21,7 @@
 ########################################################
 define(IPA_VERSION_MAJOR, 4)
 define(IPA_VERSION_MINOR, 5)
-define(IPA_VERSION_RELEASE, 0)
+define(IPA_VERSION_RELEASE, 2)
 
 ########################################################
 # For 'pre' releases the version will be               #
@@ -46,7 +46,7 @@ define(IPA_VERSION_PRE_RELEASE, )
 # This option works only with GNU m4:                  #
 # it requires esyscmd m4 macro.                        #
 ########################################################
-define(IPA_VERSION_IS_GIT_SNAPSHOT, yes)
+define(IPA_VERSION_IS_GIT_SNAPSHOT, no)
 
 ########################################################
 # The version of IPA data. This is used to identify    #
@@ -73,8 +73,8 @@ define(IPA_DATA_VERSION, 20100614120000)
 #                                                      #
 ########################################################
 define(IPA_API_VERSION_MAJOR, 2)
-define(IPA_API_VERSION_MINOR, 223)
-# Last change: Add domain resolution order to ID views
+define(IPA_API_VERSION_MINOR, 228)
+# Last change: Expose ipaNTAdditionalSuffixes in trust-mod
 
 
 ########################################################

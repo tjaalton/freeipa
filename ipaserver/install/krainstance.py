@@ -60,9 +60,9 @@ class KRAInstance(DogtagInstance):
     be the same for both the CA and KRA.
     """
 
-    tracking_reqs = (('auditSigningCert cert-pki-kra', None),
-                     ('transportCert cert-pki-kra', None),
-                     ('storageCert cert-pki-kra', None))
+    tracking_reqs = ('auditSigningCert cert-pki-kra',
+                     'transportCert cert-pki-kra',
+                     'storageCert cert-pki-kra')
 
     def __init__(self, realm):
         super(KRAInstance, self).__init__(
@@ -150,6 +150,7 @@ class KRAInstance(DogtagInstance):
         os.chown(cfg_file, pent.pw_uid, pent.pw_gid)
         self.tmp_agent_db = tempfile.mkdtemp(
                 prefix="tmp-", dir=paths.VAR_LIB_IPA)
+        tmp_agent_pwd = ipautil.ipa_generate_password()
 
         # Create KRA configuration
         config = ConfigParser()
@@ -173,8 +174,7 @@ class KRAInstance(DogtagInstance):
 
         # Client security database
         config.set("KRA", "pki_client_database_dir", self.tmp_agent_db)
-        config.set("KRA", "pki_client_database_password",
-                   ipautil.ipa_generate_password())
+        config.set("KRA", "pki_client_database_password", tmp_agent_pwd)
         config.set("KRA", "pki_client_database_purge", "True")
         config.set("KRA", "pki_client_pkcs12_password", self.admin_password)
 
@@ -235,6 +235,14 @@ class KRAInstance(DogtagInstance):
             "KRA", "pki_share_dbuser_dn",
             str(DN(('uid', 'pkidbuser'), ('ou', 'people'), ('o', 'ipaca'))))
 
+        if not (os.path.isdir(paths.PKI_TOMCAT_ALIAS_DIR) and
+                os.path.isfile(paths.PKI_TOMCAT_PASSWORD_CONF)):
+            # generate pin which we know can be used for FIPS NSS database
+            pki_pin = ipautil.ipa_generate_password()
+            config.set("KRA", "pki_pin", pki_pin)
+        else:
+            pki_pin = None
+
         _p12_tmpfile_handle, p12_tmpfile_name = tempfile.mkstemp(dir=paths.TMP)
 
         if self.clone:
@@ -244,7 +252,7 @@ class KRAInstance(DogtagInstance):
             os.chown(p12_tmpfile_name, pent.pw_uid, pent.pw_gid)
 
             # Security domain registration
-            config.set("KRA", "pki_security_domain_hostname", self.master_host)
+            config.set("KRA", "pki_security_domain_hostname", self.fqdn)
             config.set("KRA", "pki_security_domain_https_port", "443")
             config.set("KRA", "pki_security_domain_user", self.admin_user)
             config.set("KRA", "pki_security_domain_password",
@@ -275,7 +283,10 @@ class KRAInstance(DogtagInstance):
         try:
             DogtagInstance.spawn_instance(
                 self, cfg_file,
-                nolog_list=(self.dm_password, self.admin_password)
+                nolog_list=(self.dm_password,
+                            self.admin_password,
+                            pki_pin,
+                            tmp_agent_pwd)
             )
         finally:
             os.remove(p12_tmpfile_name)

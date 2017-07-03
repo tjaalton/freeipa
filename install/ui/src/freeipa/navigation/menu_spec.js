@@ -326,6 +326,7 @@ nav.self_service = {
         { entity: 'user' },
         { entity: 'otptoken' },
         {
+            name: 'vault',
             entity: 'vault',
             facet: 'search',
             children: [
@@ -349,6 +350,16 @@ nav.self_service = {
                     hidden: true
                 }
             ]
+        }
+    ]
+};
+
+nav.ad_self_service = {
+    name: 'ad_self_service',
+    items: [
+        {
+            entity: 'idoverrideuser',
+            label: 'Profile'
         }
     ]
 };

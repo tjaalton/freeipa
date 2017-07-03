@@ -37,6 +37,7 @@ from ipalib.install import certmonger, sysrestore
 from ipapython.ipa_log_manager import root_logger
 from ipapython import dogtag
 from ipapython import ipautil
+from ipapython.certdb import EMPTY_TRUST_FLAGS, IPA_CA_TRUST_FLAGS
 from ipapython.certdb import get_ca_nickname, find_cert_from_txt, NSSDatabase
 from ipapython.dn import DN
 from ipalib import pkcs10, x509, api
@@ -63,7 +64,7 @@ def get_cert_nickname(cert):
 
 def install_pem_from_p12(p12_fname, p12_passwd, pem_fname):
     pwd = ipautil.write_tmp_file(p12_passwd)
-    ipautil.run([paths.OPENSSL, "pkcs12", "-nokeys",
+    ipautil.run([paths.OPENSSL, "pkcs12", "-nokeys", "-clcerts",
                  "-in", p12_fname, "-out", pem_fname,
                  "-passin", "file:" + pwd.name])
 
@@ -72,7 +73,8 @@ def install_key_from_p12(p12_fname, p12_passwd, pem_fname):
     pwd = ipautil.write_tmp_file(p12_passwd)
     ipautil.run([paths.OPENSSL, "pkcs12", "-nodes", "-nocerts",
                  "-in", p12_fname, "-out", pem_fname,
-                 "-passin", "file:" + pwd.name])
+                 "-passin", "file:" + pwd.name],
+                umask=0o077)
 
 
 def export_pem_p12(pkcs12_fname, pkcs12_pwd_fname, nickname, pem_fname):
@@ -99,7 +101,7 @@ class CertDB(object):
     # TODO: Remove all selfsign code
     def __init__(self, realm, nssdir, fstore=None,
                  host_name=None, subject_base=None, ca_subject=None,
-                 user=None, group=None, mode=None, truncate=False):
+                 user=None, group=None, mode=None, create=False):
         self.nssdb = NSSDatabase(nssdir)
 
         self.secdir = nssdir
@@ -132,15 +134,16 @@ class CertDB(object):
         self.uid = 0
         self.gid = 0
 
-        if not truncate and os.path.exists(self.secdir):
-            # We are going to set the owner of all of the cert
-            # files to the owner of the containing directory
-            # instead of that of the process. This works when
-            # this is called by root for a daemon that runs as
-            # a normal user
-            mode = os.stat(self.secdir)
-            self.uid = mode[stat.ST_UID]
-            self.gid = mode[stat.ST_GID]
+        if not create:
+            if os.path.isdir(self.secdir):
+                # We are going to set the owner of all of the cert
+                # files to the owner of the containing directory
+                # instead of that of the process. This works when
+                # this is called by root for a daemon that runs as
+                # a normal user
+                mode = os.stat(self.secdir)
+                self.uid = mode[stat.ST_UID]
+                self.gid = mode[stat.ST_GID]
         else:
             if user is not None:
                 pu = pwd.getpwnam(user)
@@ -161,6 +164,23 @@ class CertDB(object):
     @property
     def passwd_fname(self):
         return self.nssdb.pwd_file
+
+    def exists(self):
+        """
+        Checks whether all NSS database files + our pwd_file exist
+        """
+        db_files = (
+            self.secdir,
+            self.certdb_fname,
+            self.keydb_fname,
+            self.secmod_fname,
+            self.nssdb.pwd_file,
+        )
+
+        for f in db_files:
+            if not os.path.exists(f):
+                return False
+        return True
 
     def __del__(self):
         if self.reqdir is not None:
@@ -233,6 +253,9 @@ class CertDB(object):
         self.nssdb.create_db(user=self.user, group=self.group, mode=self.mode,
                              backup=True)
         self.set_perms(self.passwd_fname, write=True)
+
+    def restore(self):
+        self.nssdb.restore()
 
     def list_certs(self):
         """
@@ -528,7 +551,7 @@ class CertDB(object):
 
         return root_nicknames
 
-    def trust_root_cert(self, root_nickname, trust_flags=None):
+    def trust_root_cert(self, root_nickname, trust_flags):
         if root_nickname is None:
             root_logger.debug("Unable to identify root certificate to trust. Continuing but things are likely to fail.")
             return
@@ -576,16 +599,15 @@ class CertDB(object):
         # a new certificate database.
         self.create_passwd_file()
         self.create_certdbs()
-        self.load_cacert(cacert_fname, 'CT,C,C')
+        self.load_cacert(cacert_fname, IPA_CA_TRUST_FLAGS)
 
-    def create_from_pkcs12(self, pkcs12_fname, pkcs12_passwd, passwd=None,
-                           ca_file=None, trust_flags=None):
+    def create_from_pkcs12(self, pkcs12_fname, pkcs12_passwd,
+                           ca_file, trust_flags):
         """Create a new NSS database using the certificates in a PKCS#12 file.
 
            pkcs12_fname: the filename of the PKCS#12 file
            pkcs12_pwd_fname: the file containing the pin for the PKCS#12 file
            nickname: the nickname/friendly-name of the cert we are loading
-           passwd: The password to use for the new NSS database we are creating
 
            The global CA may be added as well in case it wasn't included in the
            PKCS#12 file. Extra certs won't hurt in any case.
@@ -593,7 +615,7 @@ class CertDB(object):
            The global CA may be specified in ca_file, as a PEM filename.
         """
         self.create_noise_file()
-        self.create_passwd_file(passwd)
+        self.create_passwd_file()
         self.create_certdbs()
         self.init_from_pkcs12(
             pkcs12_fname,
@@ -602,7 +624,7 @@ class CertDB(object):
             trust_flags=trust_flags)
 
     def init_from_pkcs12(self, pkcs12_fname, pkcs12_passwd,
-                         ca_file=None, trust_flags=None):
+                         ca_file, trust_flags):
         self.import_pkcs12(pkcs12_fname, pkcs12_passwd)
         server_certs = self.find_server_certs()
         if len(server_certs) == 0:
@@ -622,7 +644,7 @@ class CertDB(object):
                     cert, st = find_cert_from_txt(certs, st)
                 except RuntimeError:
                     break
-                self.add_cert(cert, 'CA %s' % num, ',,', pem=True)
+                self.add_cert(cert, 'CA %s' % num, EMPTY_TRUST_FLAGS, pem=True)
                 num += 1
 
         # We only handle one server cert
@@ -635,11 +657,7 @@ class CertDB(object):
         self.cacert_name = ca_names[-1]
         self.trust_root_cert(self.cacert_name, trust_flags)
 
-        self.create_pin_file()
         self.export_ca_cert(nickname, False)
-
-    def publish_ca_cert(self, location):
-        self.nssdb.publish_ca_cert(self.cacert_name, location)
 
     def export_pem_cert(self, nickname, location):
         return self.nssdb.export_pem_cert(nickname, location)

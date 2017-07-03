@@ -30,9 +30,9 @@ from pytest_multihost import make_multihost_fixture
 
 from ipapython import ipautil
 from ipapython.ipa_log_manager import log_mgr
-from ipatests.test_integration import tasks
-from ipatests.test_integration.config import Config
-from ipatests.test_integration.env_config import get_global_config
+from .config import Config
+from .env_config import get_global_config
+from . import tasks
 
 log = log_mgr.get_logger(__name__)
 

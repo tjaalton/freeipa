@@ -26,6 +26,10 @@ import gssapi
 
 from ipalib.install import certmonger, certstore
 from ipapython import admintool, ipautil
+from ipapython.certdb import (EMPTY_TRUST_FLAGS,
+                              EXTERNAL_CA_TRUST_FLAGS,
+                              TrustFlags,
+                              parse_trust_flags)
 from ipapython.dn import DN
 from ipaplatform.paths import paths
 from ipalib import api, errors, x509
@@ -54,6 +58,12 @@ class CACertManage(admintool.AdminTool):
             "--self-signed", dest='self_signed',
             action='store_true',
             help="Sign the renewed certificate by itself")
+        ext_cas = ("generic", "ms-cs")
+        renew_group.add_option(
+            "--external-ca-type", dest="external_ca_type",
+            type="choice", choices=ext_cas,
+            metavar="{{{0}}}".format(",".join(ext_cas)),
+            help="Type of the external CA. Default: generic")
         renew_group.add_option(
             "--external-ca", dest='self_signed',
             action='store_false',
@@ -172,14 +182,19 @@ class CACertManage(admintool.AdminTool):
         except errors.NotFound:
             raise admintool.ScriptError("CA renewal master not found")
 
-        self.resubmit_request(ca, 'caCACert')
+        self.resubmit_request()
 
         print("CA certificate successfully renewed")
 
     def renew_external_step_1(self, ca):
         print("Exporting CA certificate signing request, please wait")
 
-        self.resubmit_request(ca, 'ipaCSRExport')
+        if self.options.external_ca_type == 'ms-cs':
+            profile = 'SubCA'
+        else:
+            profile = ''
+
+        self.resubmit_request('dogtag-ipa-ca-renew-agent-reuse', profile)
 
         print(("The next step is to get %s signed by your CA and re-run "
               "ipa-cacert-manage as:" % paths.IPA_CA_CSR))
@@ -231,10 +246,10 @@ class CACertManage(admintool.AdminTool):
 
         with certs.NSSDatabase() as tmpdb:
             tmpdb.create_db()
-            tmpdb.add_cert(old_cert_der, 'IPA CA', 'C,,')
+            tmpdb.add_cert(old_cert_der, 'IPA CA', EXTERNAL_CA_TRUST_FLAGS)
 
             try:
-                tmpdb.add_cert(new_cert_der, 'IPA CA', 'C,,')
+                tmpdb.add_cert(new_cert_der, 'IPA CA', EXTERNAL_CA_TRUST_FLAGS)
             except ipautil.CalledProcessError as e:
                 raise admintool.ScriptError(
                     "Not compatible with the current CA certificate: %s" % e)
@@ -242,7 +257,8 @@ class CACertManage(admintool.AdminTool):
             ca_certs = x509.load_certificate_list_from_file(ca_file.name)
             for ca_cert in ca_certs:
                 data = ca_cert.public_bytes(serialization.Encoding.DER)
-                tmpdb.add_cert(data, str(DN(ca_cert.subject)), 'C,,')
+                tmpdb.add_cert(
+                    data, str(DN(ca_cert.subject)), EXTERNAL_CA_TRUST_FLAGS)
 
             try:
                 tmpdb.verify_ca_cert_validity('IPA CA')
@@ -259,7 +275,11 @@ class CACertManage(admintool.AdminTool):
                 except RuntimeError:
                     break
                 certstore.put_ca_cert_nss(
-                    conn, api.env.basedn, ca_cert, nickname, ',,')
+                    conn,
+                    api.env.basedn,
+                    ca_cert,
+                    nickname,
+                    EMPTY_TRUST_FLAGS)
 
         dn = DN(('cn', self.cert_nickname), ('cn', 'ca_renewal'),
                 ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
@@ -282,15 +302,15 @@ class CACertManage(admintool.AdminTool):
         except errors.NotFound:
             raise admintool.ScriptError("CA renewal master not found")
 
-        self.resubmit_request(ca, 'ipaRetrieval')
+        self.resubmit_request('dogtag-ipa-ca-renew-agent-reuse')
 
         print("CA certificate successfully renewed")
 
-    def resubmit_request(self, ca, profile):
+    def resubmit_request(self, ca='dogtag-ipa-ca-renew-agent', profile=''):
         timeout = api.env.startup_timeout + 60
 
         self.log.debug("resubmitting certmonger request '%s'", self.request_id)
-        certmonger.resubmit_request(self.request_id, profile=profile)
+        certmonger.resubmit_request(self.request_id, ca=ca, profile=profile)
         try:
             state = certmonger.wait_for_request(self.request_id, timeout)
         except RuntimeError:
@@ -304,7 +324,9 @@ class CACertManage(admintool.AdminTool):
                 "please check the request manually" % self.request_id)
 
         self.log.debug("modifying certmonger request '%s'", self.request_id)
-        certmonger.modify(self.request_id, profile='ipaCACertRenewal')
+        certmonger.modify(self.request_id,
+                          ca='dogtag-ipa-ca-renew-agent',
+                          profile='')
 
     def install(self):
         print("Installing CA certificate, please wait")
@@ -330,7 +352,7 @@ class CACertManage(admintool.AdminTool):
 
         with certs.NSSDatabase() as tmpdb:
             tmpdb.create_db()
-            tmpdb.add_cert(cert, nickname, 'C,,')
+            tmpdb.add_cert(cert, nickname, EXTERNAL_CA_TRUST_FLAGS)
             for ca_cert, ca_nickname, ca_trust_flags in ca_certs:
                 tmpdb.add_cert(ca_cert, ca_nickname, ca_trust_flags)
 
@@ -342,10 +364,24 @@ class CACertManage(admintool.AdminTool):
                     "http://www.freeipa.org/page/Troubleshooting for "
                     "troubleshooting guide)" % e)
 
-        trust_flags = options.trust_flags
-        if ((set(trust_flags) - set(',CPTcgpuw')) or
-            len(trust_flags.split(',')) != 3):
+        trust_flags = options.trust_flags.split(',')
+        if (set(options.trust_flags) - set(',CPTcgpuw') or
+                len(trust_flags) not in [3, 4]):
             raise admintool.ScriptError("Invalid trust flags")
+
+        extra_flags = trust_flags[3:]
+        extra_usages = set()
+        if extra_flags:
+            if 'C' in extra_flags[0]:
+                extra_usages.add(x509.EKU_PKINIT_KDC)
+            if 'T' in extra_flags[0]:
+                extra_usages.add(x509.EKU_PKINIT_CLIENT_AUTH)
+
+        trust_flags = parse_trust_flags(','.join(trust_flags[:3]))
+        trust_flags = TrustFlags(trust_flags.has_key,
+                                 trust_flags.trusted,
+                                 trust_flags.ca,
+                                 trust_flags.usages | extra_usages)
 
         try:
             certstore.put_ca_cert_nss(

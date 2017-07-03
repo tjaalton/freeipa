@@ -166,7 +166,6 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
     """
     description = "Server"
 
-    force_join = False
     kinit_attempts = 1
     fixed_primary = True
     ntp_servers = None
@@ -332,23 +331,38 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
         if not os.path.exists(value):
             raise ValueError("File %s does not exist." % value)
 
+    def _is_promote(self):
+        """
+        :returns: True if domain level options correspond to domain level > 0
+        """
+        raise NotImplementedError()
+
     def __init__(self, **kwargs):
         super(ServerInstallInterface, self).__init__(**kwargs)
+
+        # pkinit is not supported on DL0, don't allow related options
+        if not self._is_promote():
+            if (self.no_pkinit or self.pkinit_cert_files is not None or
+                    self.pkinit_pin is not None):
+                raise RuntimeError(
+                    "pkinit on domain level 0 is not supported. Please "
+                    "don't use any pkinit-related options.")
+            self.no_pkinit = True
 
         # If any of the key file options are selected, all are required.
         cert_file_req = (self.dirsrv_cert_files, self.http_cert_files)
         cert_file_opt = (self.pkinit_cert_files,)
         if not self.no_pkinit:
             cert_file_req += cert_file_opt
-        if any(cert_file_req + cert_file_opt) and not all(cert_file_req):
-            raise RuntimeError(
-                "--dirsrv-cert-file, --http-cert-file, and --pkinit-cert-file "
-                "or --no-pkinit are required if any key file options are used."
-            )
         if self.no_pkinit and self.pkinit_cert_files:
             raise RuntimeError(
                 "--no-pkinit and --pkinit-cert-file cannot be specified "
                 "together"
+            )
+        if any(cert_file_req + cert_file_opt) and not all(cert_file_req):
+            raise RuntimeError(
+                "--dirsrv-cert-file, --http-cert-file, and --pkinit-cert-file "
+                "or --no-pkinit are required if any key file options are used."
             )
 
         if not self.interactive:
@@ -455,16 +469,8 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
                     "idmax (%s) cannot be smaller than idstart (%s)" %
                     (self.idmax, self.idstart))
         else:
-            cert_file_req = (self.dirsrv_cert_files, self.http_cert_files)
-            cert_file_opt = (self.pkinit_cert_files,)
-
+            # replica installers
             if self.replica_file is None:
-                # If any of the PKCS#12 options are selected, all are required.
-                if any(cert_file_req + cert_file_opt) and not all(cert_file_req):
-                    raise RuntimeError(
-                        "--dirsrv-cert-file and --http-cert-file are required "
-                        "if any PKCS#12 options are used")
-
                 if self.servers and not self.domain_name:
                     raise RuntimeError(
                         "The --server option cannot be used without providing "
@@ -519,6 +525,7 @@ class ServerMasterInstall(ServerMasterInstallInterface):
     Server master installer
     """
 
+    force_join = False
     servers = None
     no_wait_for_dns = True
     host_password = None
@@ -557,6 +564,9 @@ class ServerMasterInstall(ServerMasterInstallInterface):
     add_sids = True
     add_agents = False
 
+    def _is_promote(self):
+        return self.domain_level > constants.DOMAIN_LEVEL_0
+
     def __init__(self, **kwargs):
         super(ServerMasterInstall, self).__init__(**kwargs)
         master_init(self)
@@ -589,6 +599,9 @@ class ServerReplicaInstall(ServerReplicaInstallInterface):
         ServerReplicaInstallInterface.admin_password,
         description="Kerberos password for the specified admin principal",
     )
+
+    def _is_promote(self):
+        return self.replica_file is None
 
     def __init__(self, **kwargs):
         super(ServerReplicaInstall, self).__init__(**kwargs)

@@ -38,6 +38,7 @@ import os
 import locale
 import base64
 import json
+import re
 import socket
 import gzip
 
@@ -51,7 +52,7 @@ from six.moves import urllib
 from ipalib.backend import Connectible
 from ipalib.constants import LDAP_GENERALIZED_TIME_FORMAT
 from ipalib.errors import (public_errors, UnknownError, NetworkError,
-    KerberosError, XMLRPCMarshallError, JSONError)
+                           XMLRPCMarshallError, JSONError)
 from ipalib import errors, capabilities
 from ipalib.request import context, Connection
 from ipapython.ipa_log_manager import root_logger
@@ -78,6 +79,13 @@ except ImportError:
     # pylint: disable=import-error
     from xmlrpc.client import (Binary, Fault, DateTime, dumps, loads, ServerProxy,
             Transport, ProtocolError, MININT, MAXINT)
+
+# pylint: disable=import-error
+if six.PY3:
+    from http.client import RemoteDisconnected
+else:
+    from httplib import BadStatusLine as RemoteDisconnected
+# pylint: enable=import-error
 
 
 if six.PY3:
@@ -531,6 +539,7 @@ class SSLTransport(LanguageAwareTransport):
         host, self._extra_headers, _x509 = self.get_host_info(host)
 
         if self._connection and host == self._connection[0]:
+            root_logger.debug("HTTP connection keep-alive (%s)", host)
             return self._connection[1]
 
         conn = create_https_connection(
@@ -540,6 +549,7 @@ class SSLTransport(LanguageAwareTransport):
             tls_version_max=api.env.tls_version_max)
 
         conn.connect()
+        root_logger.debug("New HTTP connection (%s)", host)
 
         self._connection = host, conn
         return self._connection[1]
@@ -577,22 +587,33 @@ class KerbTransport(SSLTransport):
         else:
             raise errors.KerberosError(message=unicode(e))
 
-    def get_host_info(self, host):
+    def _get_host(self):
+        return self._connection[0]
+
+    def _remove_extra_header(self, name):
+        for (h, v) in self._extra_headers:
+            if h == name:
+                self._extra_headers.remove((h, v))
+                break
+
+    def get_auth_info(self, use_cookie=True):
         """
         Two things can happen here. If we have a session we will add
         a cookie for that. If not we will set an Authorization header.
         """
-        (host, extra_headers, x509) = SSLTransport.get_host_info(self, host)
+        if not isinstance(self._extra_headers, list):
+            self._extra_headers = []
 
-        if not isinstance(extra_headers, list):
-            extra_headers = []
-
-        session_cookie = getattr(context, 'session_cookie', None)
-        if session_cookie:
-            extra_headers.append(('Cookie', session_cookie))
-            return (host, extra_headers, x509)
+        # Remove any existing Cookie first
+        self._remove_extra_header('Cookie')
+        if use_cookie:
+            session_cookie = getattr(context, 'session_cookie', None)
+            if session_cookie:
+                self._extra_headers.append(('Cookie', session_cookie))
+                return
 
         # Set the remote host principal
+        host = self._get_host()
         service = self.service + "@" + host.split(':')[0]
 
         try:
@@ -607,18 +628,14 @@ class KerbTransport(SSLTransport):
         except gssapi.exceptions.GSSError as e:
             self._handle_exception(e, service=service)
 
-        self._set_auth_header(extra_headers, response)
+        self._set_auth_header(response)
 
-        return (host, extra_headers, x509)
-
-    def _set_auth_header(self, extra_headers, token):
-        for (h, v) in extra_headers:
-            if h == 'Authorization':
-                extra_headers.remove((h, v))
-                break
+    def _set_auth_header(self, token):
+        # Remove any existing authorization header first
+        self._remove_extra_header('Authorization')
 
         if token:
-            extra_headers.append(
+            self._extra_headers.append(
                 ('Authorization', 'negotiate %s' % base64.b64encode(token).decode('ascii'))
             )
 
@@ -636,23 +653,28 @@ class KerbTransport(SSLTransport):
                     except (TypeError, UnicodeError):
                         pass
             if not token:
-                raise KerberosError(
+                raise errors.KerberosError(
                     message=u"No valid Negotiate header in server response")
             token = self._sec_context.step(token=token)
             if self._sec_context.complete:
                 self._sec_context = None
                 return True
-            self._set_auth_header(self._extra_headers, token)
+            self._set_auth_header(token)
+            return False
+        elif response.status == 401:
+            self.get_auth_info(use_cookie=False)
             return False
         return True
 
     def single_request(self, host, handler, request_body, verbose=0):
         # Based on Python 2.7's xmllib.Transport.single_request
         try:
-            h = SSLTransport.make_connection(self, host)
+            h = self.make_connection(host)
 
             if verbose:
                 h.set_debuglevel(1)
+
+            self.get_auth_info()
 
             while True:
                 if six.PY2:
@@ -686,8 +708,18 @@ class KerbTransport(SSLTransport):
                 return self.parse_response(response)
         except gssapi.exceptions.GSSError as e:
             self._handle_exception(e)
-        finally:
+        except RemoteDisconnected:
+            # keep-alive connection was terminated by remote peer, close
+            # connection and let transport handle reconnect for us.
             self.close()
+            root_logger.debug("HTTP server has closed connection (%s)", host)
+            raise
+        except BaseException as e:
+            # Unexpected exception may leave connections in a bad state.
+            self.close()
+            root_logger.debug("HTTP connection destroyed (%s)",
+                              host, exc_info=True)
+            raise
 
     if six.PY3:
         def __send_request(self, connection, host, handler, request_body, debug):
@@ -705,6 +737,20 @@ class KerbTransport(SSLTransport):
             self.send_headers(connection, headers)  # pylint: disable=E1101
             self.send_content(connection, request_body)
             return connection
+
+    # Find all occurrences of the expiry component
+    expiry_re = re.compile(r'.*?(&expiry=\d+).*?')
+
+    def _slice_session_cookie(self, session_cookie):
+        # Keep only the cookie value and strip away all other info.
+        # This is to reduce the churn on FILE ccaches which grow every time we
+        # set new data. The expiration time for the cookie is set in the
+        # encrypted data anyway and will be enforced by the server
+        http_cookie = session_cookie.http_cookie()
+        # We also remove the "expiry" part from the data which is not required
+        for exp in self.expiry_re.findall(http_cookie):
+            http_cookie = http_cookie.replace(exp, '')
+        return http_cookie
 
     def store_session_cookie(self, cookie_header):
         '''
@@ -756,7 +802,7 @@ class KerbTransport(SSLTransport):
         if session_cookie is None:
             return
 
-        cookie_string = str(session_cookie)
+        cookie_string = self._slice_session_cookie(session_cookie)
         root_logger.debug("storing cookie '%s' for principal %s", cookie_string, principal)
         try:
             update_persistent_client_session_data(principal, cookie_string)
@@ -849,7 +895,10 @@ class RPCClient(Connectible):
             session_cookie = Cookie.get_named_cookie_from_string(
                 cookie_string, COOKIE_NAME,
                 timestamp=datetime.datetime.utcnow())
-        except Exception:
+        except Exception as e:
+            self.log.debug(
+                'Error retrieving cookie from the persistent storage: {err}'
+                .format(err=e))
             return None
 
         return session_cookie
@@ -930,8 +979,10 @@ class RPCClient(Connectible):
             delegate = self.api.env.delegate
         if ca_certfile is None:
             ca_certfile = self.api.env.tls_ca_cert
+        context.ca_certfile = ca_certfile
+
+        rpc_uri = self.env[self.env_rpc_uri_key]
         try:
-            rpc_uri = self.env[self.env_rpc_uri_key]
             principal = get_principal(ccache_name=ccache)
             stored_principal = getattr(context, 'principal', None)
             if principal != stored_principal:
@@ -947,73 +998,86 @@ class RPCClient(Connectible):
         except (errors.CCacheError, ValueError):
             # No session key, do full Kerberos auth
             pass
-        context.ca_certfile = ca_certfile
         urls = self.get_url_list(rpc_uri)
-        serverproxy = None
-        for url in urls:
-            kw = dict(allow_none=True, encoding='UTF-8')
-            kw['verbose'] = verbose
-            if url.startswith('https://'):
-                if delegate:
-                    transport_class = DelegatedKerbTransport
-                else:
-                    transport_class = KerbTransport
-            else:
-                transport_class = LanguageAwareTransport
-            kw['transport'] = transport_class(protocol=self.protocol,
-                                              service='HTTP', ccache=ccache)
-            self.log.info('trying %s' % url)
-            setattr(context, 'request_url', url)
-            serverproxy = self.server_proxy_class(url, **kw)
-            if len(urls) == 1:
-                # if we have only 1 server and then let the
-                # main requester handle any errors. This also means it
-                # must handle a 401 but we save a ping.
-                return serverproxy
-            try:
-                command = getattr(serverproxy, 'ping')
-                try:
-                    command([], {})
-                except Fault as e:
-                    e = decode_fault(e)
-                    if e.faultCode in errors_by_code:
-                        error = errors_by_code[e.faultCode]
-                        raise error(message=e.faultString)
-                    else:
-                        raise UnknownError(
-                            code=e.faultCode,
-                            error=e.faultString,
-                            server=url,
-                        )
-                # We don't care about the response, just that we got one
-                break
-            except KerberosError as krberr:
-                # kerberos error on one server is likely on all
-                raise errors.KerberosError(message=unicode(krberr))
-            except ProtocolError as e:
-                if hasattr(context, 'session_cookie') and e.errcode == 401:
-                    # Unauthorized. Remove the session and try again.
-                    delattr(context, 'session_cookie')
-                    try:
-                        delete_persistent_client_session_data(principal)
-                    except Exception as e:
-                        # This shouldn't happen if we have a session but it isn't fatal.
-                        pass
-                    return self.create_connection(ccache, verbose, fallback, delegate)
-                if not fallback:
-                    raise
-                serverproxy = None
-            except Exception as e:
-                if not fallback:
-                    raise
-                else:
-                    self.log.info('Connection to %s failed with %s', url, e)
-                serverproxy = None
 
-        if serverproxy is None:
-            raise NetworkError(uri=_('any of the configured servers'),
-                error=', '.join(urls))
-        return serverproxy
+        proxy_kw = {
+            'allow_none': True,
+            'encoding': 'UTF-8',
+            'verbose': verbose
+        }
+
+        for url in urls:
+            # should we get ProtocolError (=> error in HTTP response) and
+            # 401 (=> Unauthorized), we'll be re-trying with new session
+            # cookies several times
+            for _try_num in range(0, 5):
+                if url.startswith('https://'):
+                    if delegate:
+                        transport_class = DelegatedKerbTransport
+                    else:
+                        transport_class = KerbTransport
+                else:
+                    transport_class = LanguageAwareTransport
+                proxy_kw['transport'] = transport_class(
+                    protocol=self.protocol, service='HTTP', ccache=ccache)
+                self.log.info('trying %s' % url)
+                setattr(context, 'request_url', url)
+                serverproxy = self.server_proxy_class(url, **proxy_kw)
+                if len(urls) == 1:
+                    # if we have only 1 server and then let the
+                    # main requester handle any errors. This also means it
+                    # must handle a 401 but we save a ping.
+                    return serverproxy
+                try:
+                    command = getattr(serverproxy, 'ping')
+                    try:
+                        command([], {})
+                    except Fault as e:
+                        e = decode_fault(e)
+                        if e.faultCode in errors_by_code:
+                            error = errors_by_code[e.faultCode]
+                            raise error(message=e.faultString)
+                        else:
+                            raise UnknownError(
+                                code=e.faultCode,
+                                error=e.faultString,
+                                server=url,
+                            )
+                    # We don't care about the response, just that we got one
+                    return serverproxy
+                except errors.KerberosError:
+                    # kerberos error on one server is likely on all
+                    raise
+                except ProtocolError as e:
+                    if hasattr(context, 'session_cookie') and e.errcode == 401:
+                        # Unauthorized. Remove the session and try again.
+                        delattr(context, 'session_cookie')
+                        try:
+                            delete_persistent_client_session_data(principal)
+                        except Exception:
+                            # This shouldn't happen if we have a session but
+                            # it isn't fatal.
+                            pass
+                        # try the same url once more with a new session cookie
+                        continue
+                    if not fallback:
+                        raise
+                    else:
+                        self.log.info(
+                            'Connection to %s failed with %s', url, e)
+                    # try the next url
+                    break
+                except Exception as e:
+                    if not fallback:
+                        raise
+                    else:
+                        self.log.info(
+                            'Connection to %s failed with %s', url, e)
+                    # try the next url
+                    break
+        # finished all tries but no serverproxy was found
+        raise NetworkError(uri=_('any of the configured servers'),
+                           error=', '.join(urls))
 
     def destroy_connection(self):
         conn = getattr(context, self.id, None)
@@ -1039,50 +1103,63 @@ class RPCClient(Connectible):
         :param kw: Keyword arguments to pass to remote command.
         """
         server = getattr(context, 'request_url', None)
-        self.log.info("Forwarding '%s' to %s server '%s'",
-                      name, self.protocol, server)
         command = getattr(self.conn, name)
         params = [args, kw]
-        try:
-            return self._call_command(command, params)
-        except Fault as e:
-            e = decode_fault(e)
-            self.debug('Caught fault %d from server %s: %s', e.faultCode,
-                server, e.faultString)
-            if e.faultCode in errors_by_code:
-                error = errors_by_code[e.faultCode]
-                raise error(message=e.faultString)
-            raise UnknownError(
-                code=e.faultCode,
-                error=e.faultString,
-                server=server,
-            )
-        except SSLError as e:
-            raise NetworkError(uri=server, error=str(e))
-        except ProtocolError as e:
-            # By catching a 401 here we can detect the case where we have
-            # a single IPA server and the session is invalid. Otherwise
-            # we always have to do a ping().
-            session_cookie = getattr(context, 'session_cookie', None)
-            if session_cookie and e.errcode == 401:
-                # Unauthorized. Remove the session and try again.
-                delattr(context, 'session_cookie')
-                try:
-                    principal = getattr(context, 'principal', None)
-                    delete_persistent_client_session_data(principal)
-                except Exception as e:
-                    # This shouldn't happen if we have a session but it isn't fatal.
-                    pass
 
-                # Create a new serverproxy with the non-session URI
-                serverproxy = self.create_connection(os.environ.get('KRB5CCNAME'), self.env.verbose, self.env.fallback, self.env.delegate)
-                setattr(context, self.id, Connection(serverproxy, self.disconnect))
-                return self.forward(name, *args, **kw)
-            raise NetworkError(uri=server, error=e.errmsg)
-        except socket.error as e:
-            raise NetworkError(uri=server, error=str(e))
-        except (OverflowError, TypeError) as e:
-            raise XMLRPCMarshallError(error=str(e))
+        # we'll be trying to connect multiple times with a new session cookie
+        # each time should we be getting UNAUTHORIZED error from the server
+        max_tries = 5
+        for try_num in range(0, max_tries):
+            self.log.info("[try %d]: Forwarding '%s' to %s server '%s'",
+                          try_num+1, name, self.protocol, server)
+            try:
+                return self._call_command(command, params)
+            except Fault as e:
+                e = decode_fault(e)
+                self.debug('Caught fault %d from server %s: %s', e.faultCode,
+                           server, e.faultString)
+                if e.faultCode in errors_by_code:
+                    error = errors_by_code[e.faultCode]
+                    raise error(message=e.faultString)
+                raise UnknownError(
+                    code=e.faultCode,
+                    error=e.faultString,
+                    server=server,
+                )
+            except ProtocolError as e:
+                # By catching a 401 here we can detect the case where we have
+                # a single IPA server and the session is invalid. Otherwise
+                # we always have to do a ping().
+                session_cookie = getattr(context, 'session_cookie', None)
+                if session_cookie and e.errcode == 401:
+                    # Unauthorized. Remove the session and try again.
+                    delattr(context, 'session_cookie')
+                    try:
+                        principal = getattr(context, 'principal', None)
+                        delete_persistent_client_session_data(principal)
+                    except Exception as e:
+                        # This shouldn't happen if we have a session
+                        # but it isn't fatal.
+                        self.debug("Error trying to remove persisent session "
+                                   "data: {err}".format(err=e))
+
+                    # Create a new serverproxy with the non-session URI
+                    serverproxy = self.create_connection(
+                        os.environ.get('KRB5CCNAME'), self.env.verbose,
+                        self.env.fallback, self.env.delegate)
+
+                    setattr(context, self.id,
+                            Connection(serverproxy, self.disconnect))
+                    # try to connect again with the new session cookie
+                    continue
+                raise NetworkError(uri=server, error=e.errmsg)
+            except (SSLError, socket.error) as e:
+                raise NetworkError(uri=server, error=str(e))
+            except (OverflowError, TypeError) as e:
+                raise XMLRPCMarshallError(error=str(e))
+        raise NetworkError(
+            uri=server,
+            error=_("Exceeded number of tries to forward a request."))
 
 
 class xmlclient(RPCClient):

@@ -31,14 +31,17 @@ import fnmatch
 
 import ldap
 
+from ipalib import x509
 from ipalib.install import certmonger, certstore
+from ipapython.certdb import (IPA_CA_TRUST_FLAGS,
+                              EXTERNAL_CA_TRUST_FLAGS,
+                              TrustFlags)
 from ipapython.ipa_log_manager import root_logger
 from ipapython import ipautil, ipaldap
 from ipapython import dogtag
 from ipaserver.install import service
 from ipaserver.install import installutils
 from ipaserver.install import certs
-from ipaserver.install import ldapupdate
 from ipaserver.install import replication
 from ipaserver.install import sysupgrade
 from ipaserver.install import upgradeinstance
@@ -158,16 +161,6 @@ def is_ds_running(server_id=''):
     return services.knownservices.dirsrv.is_running(instance_name=server_id)
 
 
-def create_ds_user():
-    """Create DS user/group if it doesn't exist yet."""
-    tasks.create_system_user(
-        name=DS_USER,
-        group=DS_USER,
-        homedir=paths.VAR_LIB_DIRSRV,
-        shell=paths.NOLOGIN,
-    )
-
-
 def get_domain_level(api=api):
     ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=api.env.realm)
     conn = ipaldap.LDAPClient(ldap_uri)
@@ -256,9 +249,8 @@ class DsInstance(service.Service):
 
     subject_base = ipautil.dn_attribute_property('_subject_base')
 
-    def __common_setup(self, enable_ssl=False):
+    def __common_setup(self):
 
-        self.step("creating directory server user", create_ds_user)
         self.step("creating directory server instance", self.__create_instance)
         self.step("enabling ldapi", self.__enable_ldapi)
         self.step("configure autobind for root", self.__root_autobind)
@@ -279,8 +271,6 @@ class DsInstance(service.Service):
         self.step("configuring topology plugin", self.__config_topology_module)
         self.step("creating indices", self.__create_indices)
         self.step("enabling referential integrity plugin", self.__add_referint_module)
-        if enable_ssl:
-            self.step("configuring TLS for DS instance", self.__enable_ssl)
         self.step("configuring certmap.conf", self.__certmap_conf)
         self.step("configure new location for managed entries", self.__repoint_managed_entries)
         self.step("configure dirsrv ccache", self.configure_dirsrv_ccache)
@@ -294,8 +284,6 @@ class DsInstance(service.Service):
         self.step("configuring Posix uid/gid generation",
                   self.__config_uidgid_gen)
         self.step("adding replication acis", self.__add_replication_acis)
-        self.step("enabling compatibility plugin",
-                  self.__enable_compat_plugin)
         self.step("activating sidgen plugin", self._add_sidgen_plugin)
         self.step("activating extdom plugin", self._add_extdom_plugin)
         self.step("tuning directory server", self.__tuning)
@@ -304,7 +292,8 @@ class DsInstance(service.Service):
 
     def init_info(self, realm_name, fqdn, domain_name, dm_password,
                   subject_base, ca_subject,
-                  idstart, idmax, pkcs12_info, ca_file=None):
+                  idstart, idmax, pkcs12_info, ca_file=None,
+                  setup_pkinit=False):
         self.realm = realm_name.upper()
         self.serverid = installutils.realm_to_serverid(self.realm)
         self.suffix = ipautil.realm_to_suffix(self.realm)
@@ -318,6 +307,7 @@ class DsInstance(service.Service):
         self.pkcs12_info = pkcs12_info
         if pkcs12_info:
             self.ca_is_configured = False
+        self.setup_pkinit = setup_pkinit
         self.ca_file = ca_file
 
         self.__setup_sub_dict()
@@ -326,11 +316,12 @@ class DsInstance(service.Service):
                         dm_password, pkcs12_info=None,
                         idstart=1100, idmax=999999,
                         subject_base=None, ca_subject=None,
-                        hbac_allow=True, ca_file=None):
+                        hbac_allow=True, ca_file=None, setup_pkinit=False):
         self.init_info(
             realm_name, fqdn, domain_name, dm_password,
             subject_base, ca_subject,
-            idstart, idmax, pkcs12_info, ca_file=ca_file)
+            idstart, idmax, pkcs12_info, ca_file=ca_file,
+            setup_pkinit=setup_pkinit)
 
         self.__common_setup()
         self.step("restarting directory server", self.__restart_instance)
@@ -356,8 +347,12 @@ class DsInstance(service.Service):
         self.steps = []
 
         self.step("configuring TLS for DS instance", self.__enable_ssl)
+        if self.master_fqdn is None:
+            self.step("adding CA certificate entry", self.__upload_ca_cert)
+        else:
+            self.step("importing CA certificates from LDAP",
+                      self.__import_ca_certs)
         self.step("restarting directory server", self.__restart_instance)
-        self.step("adding CA certificate entry", self.__upload_ca_cert)
 
         self.start_creation()
 
@@ -365,7 +360,8 @@ class DsInstance(service.Service):
                        domain_name, dm_password,
                        subject_base, ca_subject,
                        api, pkcs12_info=None, ca_file=None,
-                       ca_is_configured=None, promote=False):
+                       ca_is_configured=None, promote=False,
+                       setup_pkinit=False):
         # idstart and idmax are configured so that the range is seen as
         # depleted by the DNA plugin and the replica will go and get a
         # new range from the master.
@@ -383,7 +379,8 @@ class DsInstance(service.Service):
             idstart=idstart,
             idmax=idmax,
             pkcs12_info=pkcs12_info,
-            ca_file=ca_file
+            ca_file=ca_file,
+            setup_pkinit=setup_pkinit,
         )
         self.master_fqdn = master_fqdn
         if ca_is_configured is not None:
@@ -391,24 +388,16 @@ class DsInstance(service.Service):
         self.promote = promote
         self.api = api
 
-        self.__common_setup(enable_ssl=(not self.promote))
+        self.__common_setup()
         self.step("restarting directory server", self.__restart_instance)
 
         self.step("creating DS keytab", self.request_service_keytab)
-        if self.promote:
-            if self.pkcs12_info:
-                self.step("configuring TLS for DS instance", self.__enable_ssl)
-            else:
-                self.step("retrieving DS Certificate", self.__get_ds_cert)
-            self.step("restarting directory server", self.__restart_instance)
-
         self.step("setting up initial replication", self.__setup_replica)
         self.step("adding sasl mappings to the directory", self.__configure_sasl_mappings)
         self.step("updating schema", self.__update_schema)
         # See LDIFs for automember configuration during replica install
         self.step("setting Auto Member configuration", self.__add_replica_automember_config)
         self.step("enabling S4U2Proxy delegation", self.__setup_s4u2proxy)
-        self.step("importing CA certificates from LDAP", self.__import_ca_certs)
 
         self.__common_post_setup()
 
@@ -723,12 +712,6 @@ class DsInstance(service.Service):
     def __add_winsync_module(self):
         self._ldap_mod("ipa-winsync-conf.ldif")
 
-    def __enable_compat_plugin(self):
-        ld = ldapupdate.LDAPUpdate(dm_password=self.dm_password, sub_dict=self.sub_dict)
-        rv = ld.update([paths.SCHEMA_COMPAT_ULDIF])
-        if not rv:
-            raise RuntimeError("Enabling compatibility plugin failed")
-
     def __config_version_module(self):
         self._ldap_mod("version-conf.ldif")
 
@@ -792,9 +775,9 @@ class DsInstance(service.Service):
         )
         if self.pkcs12_info:
             if self.ca_is_configured:
-                trust_flags = 'CT,C,C'
+                trust_flags = IPA_CA_TRUST_FLAGS
             else:
-                trust_flags = None
+                trust_flags = EXTERNAL_CA_TRUST_FLAGS
             dsdb.create_from_pkcs12(self.pkcs12_info[0], self.pkcs12_info[1],
                                     ca_file=self.ca_file,
                                     trust_flags=trust_flags)
@@ -810,18 +793,23 @@ class DsInstance(service.Service):
                 dsdb.track_server_cert(
                     self.nickname, self.principal, dsdb.passwd_fname,
                     'restart_dirsrv %s' % self.serverid)
+
+            self.add_cert_to_service()
         else:
             dsdb.create_from_cacert()
-            ca_args = [
-                paths.CERTMONGER_DOGTAG_SUBMIT,
-                '--ee-url', 'https://%s:8443/ca/ee/ca' % self.fqdn,
-                '--certfile', paths.RA_AGENT_PEM,
-                '--keyfile', paths.RA_AGENT_KEY,
-                '--cafile', paths.IPA_CA_CRT,
-                '--agent-submit'
-            ]
-            helper = " ".join(ca_args)
-            prev_helper = certmonger.modify_ca_helper('IPA', helper)
+            if self.master_fqdn is None:
+                ca_args = [
+                    paths.CERTMONGER_DOGTAG_SUBMIT,
+                    '--ee-url', 'https://%s:8443/ca/ee/ca' % self.fqdn,
+                    '--certfile', paths.RA_AGENT_PEM,
+                    '--keyfile', paths.RA_AGENT_KEY,
+                    '--cafile', paths.IPA_CA_CRT,
+                    '--agent-submit'
+                ]
+                helper = " ".join(ca_args)
+                prev_helper = certmonger.modify_ca_helper('IPA', helper)
+            else:
+                prev_helper = None
             try:
                 cmd = 'restart_dirsrv %s' % self.serverid
                 certmonger.request_and_wait_for_cert(
@@ -835,10 +823,19 @@ class DsInstance(service.Service):
                     dns=[self.fqdn],
                     post_command=cmd)
             finally:
-                certmonger.modify_ca_helper('IPA', prev_helper)
+                if prev_helper is not None:
+                    certmonger.modify_ca_helper('IPA', prev_helper)
+
+            # restart_dirsrv in the request above restarts DS, reconnect ldap2
+            api.Backend.ldap2.disconnect()
+            api.Backend.ldap2.connect()
 
             self.dercert = dsdb.get_cert_from_db(self.nickname, pem=False)
-            dsdb.create_pin_file()
+
+            if prev_helper is not None:
+                self.add_cert_to_service()
+
+        dsdb.create_pin_file()
 
         self.cacert_name = dsdb.cacert_name
 
@@ -893,8 +890,17 @@ class DsInstance(service.Service):
 
         nickname = self.cacert_name
         cert = dsdb.get_cert_from_db(nickname, pem=False)
+        cacert_flags = trust_flags[nickname]
+        if self.setup_pkinit:
+            cacert_flags = TrustFlags(
+                cacert_flags.has_key,
+                cacert_flags.trusted,
+                cacert_flags.ca,
+                (cacert_flags.usages |
+                    {x509.EKU_PKINIT_CLIENT_AUTH, x509.EKU_PKINIT_KDC}),
+            )
         certstore.put_ca_cert_nss(conn, self.suffix, cert, nickname,
-                                  trust_flags[nickname],
+                                  cacert_flags,
                                   config_ipa=self.ca_is_configured,
                                   config_compat=self.master_fqdn is None)
 
@@ -1077,7 +1083,7 @@ class DsInstance(service.Service):
         certdb.cacert_name = cacert_name
         status = True
         try:
-            certdb.load_cacert(cacert_fname, 'C,,')
+            certdb.load_cacert(cacert_fname, EXTERNAL_CA_TRUST_FLAGS)
         except ipautil.CalledProcessError as e:
             root_logger.critical("Error importing CA cert file named [%s]: %s" %
                                          (cacert_fname, str(e)))
@@ -1230,46 +1236,6 @@ class DsInstance(service.Service):
         vardict = {"KRB5_KTNAME": self.keytab}
         ipautil.config_replace_variables(paths.SYSCONFIG_DIRSRV,
                                          replacevars=vardict)
-
-    def __get_ds_cert(self):
-        nssdb_dir = config_dirname(self.serverid)
-        db = certs.CertDB(
-            self.realm,
-            nssdir=nssdb_dir,
-            subject_base=self.subject_base,
-            ca_subject=self.ca_subject,
-        )
-        db.create_from_cacert()
-        db.request_service_cert(self.nickname, self.principal, self.fqdn)
-        db.create_pin_file()
-
-        # Connect to self over ldapi as Directory Manager and configure SSL
-        ldap_uri = ipaldap.get_ldap_uri(protocol='ldapi', realm=self.realm)
-        conn = ipaldap.LDAPClient(ldap_uri)
-        conn.external_bind()
-
-        mod = [(ldap.MOD_REPLACE, "nsSSLClientAuth", "allowed"),
-               (ldap.MOD_REPLACE, "nsSSL3Ciphers", "default"),
-               (ldap.MOD_REPLACE, "allowWeakCipher", "off")]
-        conn.modify_s(DN(('cn', 'encryption'), ('cn', 'config')), mod)
-
-        mod = [(ldap.MOD_ADD, "nsslapd-security", "on")]
-        conn.modify_s(DN(('cn', 'config')), mod)
-
-        entry = conn.make_entry(
-            DN(('cn', 'RSA'), ('cn', 'encryption'), ('cn', 'config')),
-            objectclass=["top", "nsEncryptionModule"],
-            cn=["RSA"],
-            nsSSLPersonalitySSL=[self.nickname],
-            nsSSLToken=["internal (software)"],
-            nsSSLActivation=["on"],
-        )
-        conn.add_entry(entry)
-
-        conn.unbind()
-
-        # check for open secure port 636 from now on
-        self.open_ports.append(636)
 
 
 def write_certmap_conf(realm, ca_subject):

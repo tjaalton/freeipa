@@ -29,6 +29,7 @@ from ipalib.util import (
     validate_domain_name,
     network_ip_address_warning,
     broadcast_ip_address_warning,
+    no_matching_interface_for_ip_address_warning,
 )
 import ipaclient.install.ntpconf
 from ipaserver.install import (
@@ -39,7 +40,7 @@ from ipaserver.install import (
 from ipaserver.install.installutils import (
     IPA_MODULES, BadHostError, get_fqdn, get_server_ip_address,
     is_ipa_configured, load_pkcs12, read_password, verify_fqdn,
-    update_hosts_file, create_ipaapi_user)
+    update_hosts_file)
 
 if six.PY3:
     unicode = str
@@ -513,11 +514,6 @@ def install_check(installer):
         dirsrv_pkcs12_info = (dirsrv_pkcs12_file.name, dirsrv_pin)
 
     if options.pkinit_cert_files:
-        if not options.no_pkinit:
-            raise ScriptError("Cannot create KDC PKINIT certificate and use "
-                              "provided external PKINIT certificate at the "
-                              "same time. Please choose one of them.")
-
         if options.pkinit_pin is None:
             options.pkinit_pin = read_password(
                 "Enter Kerberos KDC private key unlock",
@@ -525,18 +521,25 @@ def install_check(installer):
             if options.pkinit_pin is None:
                 raise ScriptError(
                     "Kerberos KDC private key unlock password required")
-        pkinit_pkcs12_file, pkinit_pin, _pkinit_ca_cert = load_pkcs12(
+        pkinit_pkcs12_file, pkinit_pin, pkinit_ca_cert = load_pkcs12(
             cert_files=options.pkinit_cert_files,
             key_password=options.pkinit_pin,
             key_nickname=options.pkinit_cert_name,
             ca_cert_files=options.ca_cert_files,
-            host_name=host_name)
+            realm_name=realm_name)
         pkinit_pkcs12_info = (pkinit_pkcs12_file.name, pkinit_pin)
 
     if (options.http_cert_files and options.dirsrv_cert_files and
             http_ca_cert != dirsrv_ca_cert):
         raise ScriptError(
             "Apache Server SSL certificate and Directory Server SSL "
+            "certificate are not signed by the same CA certificate")
+
+    if (options.http_cert_files and
+            options.pkinit_cert_files and
+            http_ca_cert != pkinit_ca_cert):
+        raise ScriptError(
+            "Apache Server SSL certificate and PKINIT KDC "
             "certificate are not signed by the same CA certificate")
 
     if not options.dm_password:
@@ -615,6 +618,7 @@ def install_check(installer):
         # check addresses here, dns module is doing own check
         network_ip_address_warning(ip_addresses)
         broadcast_ip_address_warning(ip_addresses)
+        no_matching_interface_for_ip_address_warning(ip_addresses)
 
     if options.setup_adtrust:
         adtrust.install_check(False, options, api)
@@ -721,11 +725,7 @@ def install(installer):
         update_hosts_file(ip_addresses, host_name, fstore)
 
     # Make sure tmpfiles dir exist before installing components
-    create_ipaapi_user()
     tasks.create_tmpfiles_dirs()
-
-    # Create DS user/group if it doesn't exist yet
-    dsinstance.create_ds_user()
 
     # Create a directory server instance
     if not options.external_cert_files:
@@ -746,7 +746,8 @@ def install(installer):
                                idstart=options.idstart, idmax=options.idmax,
                                subject_base=options.subject_base,
                                ca_subject=options.ca_subject,
-                               hbac_allow=not options.no_hbac_allow)
+                               hbac_allow=not options.no_hbac_allow,
+                               setup_pkinit=not options.no_pkinit)
         else:
             ds = dsinstance.DsInstance(fstore=fstore,
                                        domainlevel=options.domainlevel,
@@ -757,7 +758,8 @@ def install(installer):
                                idstart=options.idstart, idmax=options.idmax,
                                subject_base=options.subject_base,
                                ca_subject=options.ca_subject,
-                               hbac_allow=not options.no_hbac_allow)
+                               hbac_allow=not options.no_hbac_allow,
+                               setup_pkinit=not options.no_pkinit)
 
         ntpinstance.ntp_ldap_enable(host_name, ds.suffix, realm_name)
 
@@ -768,7 +770,20 @@ def install(installer):
         installer._ds = ds
         ds.init_info(
             realm_name, host_name, domain_name, dm_password,
-            options.subject_base, options.ca_subject, 1101, 1100, None)
+            options.subject_base, options.ca_subject, 1101, 1100, None,
+            setup_pkinit=not options.no_pkinit)
+
+    krb = krbinstance.KrbInstance(fstore)
+    if not options.external_cert_files:
+        krb.create_instance(realm_name, host_name, domain_name,
+                            dm_password, master_password,
+                            setup_pkinit=not options.no_pkinit,
+                            pkcs12_info=pkinit_pkcs12_info,
+                            subject_base=options.subject_base)
+    else:
+        krb.init_info(realm_name, host_name,
+                      setup_pkinit=not options.no_pkinit,
+                      subject_base=options.subject_base)
 
     if setup_ca:
         if not options.external_cert_files and options.external_ca:
@@ -790,26 +805,21 @@ def install(installer):
         x509.write_certificate(http_ca_cert, paths.IPA_CA_CRT)
         os.chmod(paths.IPA_CA_CRT, 0o444)
 
+        if not options.no_pkinit:
+            x509.write_certificate(http_ca_cert, paths.KDC_CA_BUNDLE_PEM)
+        else:
+            with open(paths.KDC_CA_BUNDLE_PEM, 'w'):
+                pass
+        os.chmod(paths.KDC_CA_BUNDLE_PEM, 0o444)
+
+        x509.write_certificate(http_ca_cert, paths.CA_BUNDLE_PEM)
+        os.chmod(paths.CA_BUNDLE_PEM, 0o444)
+
     # we now need to enable ssl on the ds
     ds.enable_ssl()
 
-    krb = krbinstance.KrbInstance(fstore)
-    krb.create_instance(realm_name, host_name, domain_name,
-                        dm_password, master_password,
-                        setup_pkinit=not options.no_pkinit,
-                        pkcs12_info=pkinit_pkcs12_info,
-                        subject_base=options.subject_base)
-
-    # restart DS to enable ipa-pwd-extop plugin
-    print("Restarting directory server to enable password extension plugin")
-    ds.restart()
-
     if setup_ca:
         ca.install_step_1(False, None, options)
-
-    # The DS instance is created before the keytab, add the SSL cert we
-    # generated
-    ds.add_cert_to_service()
 
     otpd = otpdinstance.OtpdInstance()
     otpd.create_instance('OTPD', host_name,
@@ -822,13 +832,13 @@ def install(installer):
     http = httpinstance.HTTPInstance(fstore)
     if options.http_cert_files:
         http.create_instance(
-            realm_name, host_name, domain_name,
+            realm_name, host_name, domain_name, dm_password,
             pkcs12_info=http_pkcs12_info, subject_base=options.subject_base,
             auto_redirect=not options.no_ui_redirect,
             ca_is_configured=setup_ca)
     else:
         http.create_instance(
-            realm_name, host_name, domain_name,
+            realm_name, host_name, domain_name, dm_password,
             subject_base=options.subject_base,
             auto_redirect=not options.no_ui_redirect,
             ca_is_configured=setup_ca)
@@ -1041,6 +1051,10 @@ def uninstall(installer):
     sstore = installer._sstore
 
     rv = 0
+
+    # further steps assumes that temporary directories exists so rather
+    # ensure they are created
+    tasks.create_tmpfiles_dirs()
 
     print("Shutting down all IPA services")
     try:

@@ -46,6 +46,8 @@ When the IPA CA is not configured, this command is not available.
 .RS
 This command can be used to install the certificate contained in \fICERTFILE\fR as an additional CA certificate to IPA.
 .sp
+Important: this does not replace IPA CA but adds the provided certificate as a known CA. This is useful for instance when using ipa-server-certinstall to replace HTTP/LDAP certificates with third-party certificates signed by this additional CA.
+.sp
 Please do not forget to run ipa-certupdate on the master, all the replicas and all the clients after this command in order to update IPA certificates databases.
 .RE
 .SH "COMMON OPTIONS"
@@ -76,6 +78,9 @@ Sign the renewed certificate by itself.
 \fB\-\-external\-ca\fR
 Sign the renewed certificate by external CA.
 .TP
+\fB\-\-external\-ca\-type\fR=\fITYPE\fR
+Type of the external CA. Possible values are "generic", "ms-cs". Default value is "generic". Use "ms-cs" to include template name required by Microsoft Certificate Services (MS CS) in the generated CSR.
+.TP
 \fB\-\-external\-cert\-file\fR=\fIFILE\fR
 File containing the IPA CA certificate and the external CA certificate chain. The file is accepted in PEM and DER certificate and PKCS#7 certificate chain formats. This option may be used multiple times.
 .RE
@@ -85,7 +90,7 @@ File containing the IPA CA certificate and the external CA certificate chain. Th
 Nickname for the certificate.
 .TP
 \fB\-t\fR \fITRUST_FLAGS\fR, \fB\-\-trust\-flags\fR=\fITRUST_FLAGS\fR
-Trust flags for the certificate in certutil format. Trust flags are of the form "X,Y,Z" where X is for SSL, Y is for S/MIME, and Z is for code signing. Use ",," for no explicit trust.
+Trust flags for the certificate in certutil format. Trust flags are of the form "A,B,C" or "A,B,C,D" where A is for SSL, B is for S/MIME, C is for code signing, and D is for PKINIT. Use ",," for no explicit trust.
 .sp
 The supported trust flags are:
 .RS

@@ -23,11 +23,11 @@ import ipaclient.install.ntpconf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
 from ipapython import ipaldap, ipautil
+from ipapython.certdb import IPA_CA_TRUST_FLAGS, EXTERNAL_CA_TRUST_FLAGS
 from ipapython.dn import DN
 from ipapython.ipa_log_manager import root_logger
 from ipapython.admintool import ScriptError
 from ipaplatform import services
-from ipaplatform.constants import constants as pconstants
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
 from ipalib import api, constants, create_api, errors, rpc, x509
@@ -35,6 +35,7 @@ from ipalib.config import Env
 from ipalib.util import (
     network_ip_address_warning,
     broadcast_ip_address_warning,
+    no_matching_interface_for_ip_address_warning,
 )
 from ipaclient.install.client import configure_krb5_conf, purge_host_keytab
 from ipaserver.install import (
@@ -42,8 +43,7 @@ from ipaserver.install import (
     installutils, kra, krbinstance,
     ntpinstance, otpdinstance, custodiainstance, service)
 from ipaserver.install.installutils import (
-    create_replica_config, ReplicaConfig, load_pkcs12, is_ipa_configured,
-    create_ipaapi_user)
+    create_replica_config, ReplicaConfig, load_pkcs12, is_ipa_configured)
 from ipaserver.install.replication import (
     ReplicationManager, replica_conn_check)
 import SSSDConfig
@@ -77,18 +77,6 @@ def make_pkcs12_info(directory, cert_name, password_name):
         return None
 
 
-def install_http_certs(host_name, realm_name, subject_base):
-    principal = 'HTTP/%s@%s' % (host_name, realm_name)
-    subject = subject_base or DN(('O', realm_name))
-    db = certs.CertDB(realm_name, nssdir=paths.HTTPD_ALIAS_DIR,
-                      subject_base=subject, user="root",
-                      group=pconstants.HTTPD_GROUP, truncate=True)
-    db.request_service_cert('Server-Cert', principal, host_name)
-    # Obtain certificate for the HTTP service
-    http = httpinstance.HTTPInstance()
-    http.create_password_conf()
-
-
 def install_replica_ds(config, options, ca_is_configured, remote_api,
                        ca_file, promote=False, pkcs12_info=None):
     dsinstance.check_ports()
@@ -120,17 +108,19 @@ def install_replica_ds(config, options, ca_is_configured, remote_api,
         ca_file=ca_file,
         promote=promote,  # we need promote because of replication setup
         api=remote_api,
+        setup_pkinit=not options.no_pkinit,
     )
 
     return ds
 
 
-def install_krb(config, setup_pkinit=False, promote=False):
+def install_krb(config, setup_pkinit=False, pkcs12_info=None, promote=False):
     krb = krbinstance.KrbInstance()
 
     # pkinit files
-    pkcs12_info = make_pkcs12_info(config.dir, "pkinitcert.p12",
-                                   "pkinit_pin.txt")
+    if pkcs12_info is None:
+        pkcs12_info = make_pkcs12_info(config.dir, "pkinitcert.p12",
+                                       "pkinit_pin.txt")
 
     krb.create_replica(config.realm_name,
                        config.master_host_name, config.host_name,
@@ -174,8 +164,10 @@ def install_http(config, auto_redirect, ca_is_configured, ca_file,
     http = httpinstance.HTTPInstance()
     http.create_instance(
         config.realm_name, config.host_name, config.domain_name,
-        pkcs12_info, auto_redirect=auto_redirect, ca_file=ca_file,
-        ca_is_configured=ca_is_configured, promote=promote)
+        config.dirman_password, pkcs12_info,
+        auto_redirect=auto_redirect, ca_file=ca_file,
+        ca_is_configured=ca_is_configured, promote=promote,
+        subject_base=config.subject_base, master_fqdn=config.master_host_name)
 
     return http
 
@@ -750,9 +742,9 @@ def install_check(installer):
                                   nssdir=tmp_db_dir,
                                   subject_base=config.subject_base)
             if ca_enabled:
-                trust_flags = 'CT,C,C'
+                trust_flags = IPA_CA_TRUST_FLAGS
             else:
-                trust_flags = None
+                trust_flags = EXTERNAL_CA_TRUST_FLAGS
             tmp_db.create_from_pkcs12(pkcs12_info[0], pkcs12_info[1],
                                       ca_file=cafile,
                                       trust_flags=trust_flags)
@@ -908,50 +900,51 @@ def install_check(installer):
 
 
 def ensure_enrolled(installer):
-    # Call client install script
-    service.print_msg("Configuring client side components")
+    args = [paths.IPA_CLIENT_INSTALL, "--unattended", "--no-ntp"]
+    stdin = None
+    nolog = []
+
+    if installer.domain_name:
+        args.extend(["--domain", installer.domain_name])
+    if installer.server:
+        args.extend(["--server", installer.server])
+    if installer.realm_name:
+        args.extend(["--realm", installer.realm_name])
+    if installer.host_name:
+        args.extend(["--hostname", installer.host_name])
+
+    if installer.password:
+        args.extend(["--password", installer.password])
+        nolog.append(installer.password)
+    else:
+        if installer.admin_password:
+            # Always set principal if password was set explicitly,
+            # the password itself gets passed directly via stdin
+            args.extend(["--principal", installer.principal or "admin"])
+            stdin = installer.admin_password
+        if installer.keytab:
+            args.extend(["--keytab", installer.keytab])
+
+    if installer.no_dns_sshfp:
+        args.append("--no-dns-sshfp")
+    if installer.ssh_trust_dns:
+        args.append("--ssh-trust-dns")
+    if installer.no_ssh:
+        args.append("--no-ssh")
+    if installer.no_sshd:
+        args.append("--no-sshd")
+    if installer.mkhomedir:
+        args.append("--mkhomedir")
+    if installer.force_join:
+        args.append("--force-join")
+
     try:
+        # Call client install script
+        service.print_msg("Configuring client side components")
         installer._enrollment_performed = True
-
-        args = [paths.IPA_CLIENT_INSTALL, "--unattended", "--no-ntp"]
-        stdin = None
-        nolog = []
-
-        if installer.domain_name:
-            args.extend(["--domain", installer.domain_name])
-        if installer.server:
-            args.extend(["--server", installer.server])
-        if installer.realm_name:
-            args.extend(["--realm", installer.realm_name])
-        if installer.host_name:
-            args.extend(["--hostname", installer.host_name])
-
-        if installer.password:
-            args.extend(["--password", installer.password])
-            nolog.append(installer.password)
-        else:
-            if installer.admin_password:
-                # Always set principal if password was set explicitly,
-                # the password itself gets passed directly via stdin
-                args.extend(["--principal", installer.principal or "admin"])
-                stdin = installer.admin_password
-            if installer.keytab:
-                args.extend(["--keytab", installer.keytab])
-
-        if installer.no_dns_sshfp:
-            args.append("--no-dns-sshfp")
-        if installer.ssh_trust_dns:
-            args.append("--ssh-trust-dns")
-        if installer.no_ssh:
-            args.append("--no-ssh")
-        if installer.no_sshd:
-            args.append("--no-sshd")
-        if installer.mkhomedir:
-            args.append("--mkhomedir")
-
         ipautil.run(args, stdin=stdin, nolog=nolog, redirect_output=True)
         print()
-    except Exception:
+    except ipautil.CalledProcessError:
         raise ScriptError("Configuration of client side components failed!")
 
 
@@ -1079,12 +1072,12 @@ def promote_check(installer):
             if options.pkinit_pin is None:
                 raise ScriptError(
                     "Kerberos KDC private key unlock password required")
-        pkinit_pkcs12_file, pkinit_pin, _pkinit_ca_cert = load_pkcs12(
+        pkinit_pkcs12_file, pkinit_pin, pkinit_ca_cert = load_pkcs12(
             cert_files=options.pkinit_cert_files,
             key_password=options.pkinit_pin,
             key_nickname=options.pkinit_cert_name,
             ca_cert_files=options.ca_cert_files,
-            host_name=config.host_name)
+            realm_name=config.realm_name)
         pkinit_pkcs12_info = (pkinit_pkcs12_file.name, pkinit_pin)
 
     if (options.http_cert_files and options.dirsrv_cert_files and
@@ -1092,6 +1085,13 @@ def promote_check(installer):
         raise RuntimeError("Apache Server SSL certificate and Directory "
                            "Server SSL certificate are not signed by the same"
                            " CA certificate")
+
+    if (options.http_cert_files and
+            options.pkinit_cert_files and
+            http_ca_cert != pkinit_ca_cert):
+        raise RuntimeError("Apache Server SSL certificate and PKINIT KDC "
+                           "certificate are not signed by the same CA "
+                           "certificate")
 
     installutils.verify_fqdn(config.host_name, options.no_host_dns)
     installutils.verify_fqdn(config.master_host_name, options.no_host_dns)
@@ -1286,6 +1286,7 @@ def promote_check(installer):
             # check addresses here, dns module is doing own check
             network_ip_address_warning(config.ips)
             broadcast_ip_address_warning(config.ips)
+            no_matching_interface_for_ip_address_warning(config.ips)
 
         if options.setup_adtrust:
             adtrust.install_check(False, options, remote_api)
@@ -1353,13 +1354,13 @@ def install(installer):
     cafile = installer._ca_file
     dirsrv_pkcs12_info = installer._dirsrv_pkcs12_info
     http_pkcs12_info = installer._http_pkcs12_info
+    pkinit_pkcs12_info = installer._pkinit_pkcs12_info
 
     remote_api = installer._remote_api
     conn = remote_api.Backend.ldap2
     ccache = os.environ['KRB5CCNAME']
 
     # Make sure tmpfiles dir exist before installing components
-    create_ipaapi_user()
     tasks.create_tmpfiles_dirs()
 
     if promote:
@@ -1388,12 +1389,23 @@ def install(installer):
         ntp = ntpinstance.NTPInstance()
         ntp.create_instance()
 
-    dsinstance.create_ds_user()
-
     try:
-        conn.connect(ccache=ccache)
+        if promote:
+            conn.connect(ccache=ccache)
+        else:
+            # dmlvl 0 replica install should always use DM credentials
+            # to create remote LDAP connection. Since ACIs permitting hosts
+            # to manage their own services were added in 4.2 release,
+            # the master denies this operations.
+            conn.connect(bind_dn=ipaldap.DIRMAN_DN, cacert=cafile,
+                         bind_pw=config.dirman_password)
+
         # Update and istall updated CA file
         cafile = install_ca_cert(conn, api.env.basedn, api.env.realm, cafile)
+        install_ca_cert(conn, api.env.basedn, api.env.realm, cafile,
+                        destfile=paths.KDC_CA_BUNDLE_PEM)
+        install_ca_cert(conn, api.env.basedn, api.env.realm, cafile,
+                        destfile=paths.CA_BUNDLE_PEM)
 
         # Configure dirsrv
         ds = install_replica_ds(config, options, ca_enabled,
@@ -1404,12 +1416,6 @@ def install(installer):
 
         # Always try to install DNS records
         install_dns_records(config, options, remote_api)
-
-        if promote and ca_enabled:
-            # we need to install http certs to setup ssl for httpd
-            install_http_certs(config.host_name,
-                               config.realm_name,
-                               config.subject_base)
 
         ntpinstance.ntp_ldap_enable(config.host_name, ds.suffix,
                                     remote_api.env.realm)
@@ -1429,11 +1435,11 @@ def install(installer):
     krb = install_krb(
         config,
         setup_pkinit=not options.no_pkinit,
+        pkcs12_info=pkinit_pkcs12_info,
         promote=promote)
 
-    # restart DS to enable ipa-pwd-extop plugin
-    print("Restarting directory server to enable password extension plugin")
-    ds.restart()
+    # we now need to enable ssl on the ds
+    ds.enable_ssl()
 
     install_http(
         config,

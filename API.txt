@@ -2163,7 +2163,7 @@ output: ListOfEntries('result')
 output: Output('summary', type=[<type 'unicode'>, <type 'NoneType'>])
 output: Output('truncated', type=[<type 'bool'>])
 command: hbacrule_mod/1
-args: 1,16,3
+args: 1,17,3
 arg: Str('cn', cli_name='name')
 option: StrEnum('accessruletype?', autofill=False, cli_name='type', default=u'allow', values=[u'allow', u'deny'])
 option: Str('addattr*', cli_name='addattr')
@@ -2175,6 +2175,7 @@ option: StrEnum('hostcategory?', autofill=False, cli_name='hostcat', values=[u'a
 option: Bool('ipaenabledflag?', autofill=False)
 option: Flag('no_members', autofill=True, default=False)
 option: Flag('raw', autofill=True, cli_name='raw', default=False)
+option: Str('rename?', cli_name='rename')
 option: Flag('rights', autofill=True, default=False)
 option: StrEnum('servicecategory?', autofill=False, cli_name='servicecat', values=[u'all'])
 option: Str('setattr*', cli_name='setattr')
@@ -3735,11 +3736,20 @@ command: ping/1
 args: 0,1,1
 option: Str('version?')
 output: Output('summary', type=[<type 'unicode'>, <type 'NoneType'>])
-command: pkinit_anonymous/1
-args: 1,1,1
-arg: Str('action')
+command: pkinit_status/1
+args: 1,7,4
+arg: Str('criteria?')
+option: Flag('all', autofill=True, cli_name='all', default=False)
+option: Flag('raw', autofill=True, cli_name='raw', default=False)
+option: Str('server_server?', autofill=False, cli_name='server')
+option: Int('sizelimit?', autofill=False)
+option: StrEnum('status?', autofill=False, cli_name='status', values=[u'enabled', u'disabled'])
+option: Int('timelimit?', autofill=False)
 option: Str('version?')
-output: Output('result')
+output: Output('count', type=[<type 'int'>])
+output: ListOfEntries('result')
+output: Output('summary', type=[<type 'unicode'>, <type 'NoneType'>])
+output: Output('truncated', type=[<type 'bool'>])
 command: plugins/1
 args: 0,3,3
 option: Flag('all', autofill=True, cli_name='all', default=True)
@@ -5402,7 +5412,7 @@ output: ListOfEntries('result')
 output: Output('summary', type=[<type 'unicode'>, <type 'NoneType'>])
 output: Output('truncated', type=[<type 'bool'>])
 command: sudorule_mod/1
-args: 1,20,3
+args: 1,21,3
 arg: Str('cn', cli_name='sudorule_name')
 option: Str('addattr*', cli_name='addattr')
 option: Flag('all', autofill=True, cli_name='all', default=False)
@@ -5419,6 +5429,7 @@ option: StrEnum('ipasudorunasgroupcategory?', autofill=False, cli_name='runasgro
 option: StrEnum('ipasudorunasusercategory?', autofill=False, cli_name='runasusercat', values=[u'all'])
 option: Flag('no_members', autofill=True, default=False)
 option: Flag('raw', autofill=True, cli_name='raw', default=False)
+option: Str('rename?', cli_name='rename')
 option: Flag('rights', autofill=True, default=False)
 option: Str('setattr*', cli_name='setattr')
 option: Int('sudoorder?', autofill=False, cli_name='order', default=0)
@@ -5758,11 +5769,12 @@ output: ListOfEntries('result')
 output: Output('summary', type=[<type 'unicode'>, <type 'NoneType'>])
 output: Output('truncated', type=[<type 'bool'>])
 command: trust_mod/1
-args: 1,9,3
+args: 1,10,3
 arg: Str('cn', cli_name='realm')
 option: Str('addattr*', cli_name='addattr')
 option: Flag('all', autofill=True, cli_name='all', default=False)
 option: Str('delattr*', cli_name='delattr')
+option: Str('ipantadditionalsuffixes*', autofill=False, cli_name='upn_suffixes')
 option: Str('ipantsidblacklistincoming*', autofill=False, cli_name='sid_blacklist_incoming')
 option: Str('ipantsidblacklistoutgoing*', autofill=False, cli_name='sid_blacklist_outgoing')
 option: Flag('raw', autofill=True, cli_name='raw', default=False)
@@ -5917,7 +5929,7 @@ option: Str('manager?')
 option: Str('mobile*')
 option: Flag('no_members', autofill=True, default=False)
 option: Flag('noprivate', autofill=True, cli_name='noprivate', default=False)
-option: Bool('nsaccountlock?', cli_name='disabled')
+option: Bool('nsaccountlock?', cli_name='disabled', default=False)
 option: Str('ou?', cli_name='orgunit')
 option: Str('pager*')
 option: Str('postalcode?')
@@ -6045,7 +6057,7 @@ option: Str('not_in_hbacrule*', cli_name='not_in_hbacrules')
 option: Str('not_in_netgroup*', cli_name='not_in_netgroups')
 option: Str('not_in_role*', cli_name='not_in_roles')
 option: Str('not_in_sudorule*', cli_name='not_in_sudorules')
-option: Bool('nsaccountlock?', autofill=False, cli_name='disabled')
+option: Bool('nsaccountlock?', autofill=False, cli_name='disabled', default=False)
 option: Str('ou?', autofill=False, cli_name='orgunit')
 option: Str('pager*', autofill=False)
 option: Flag('pkey_only?', autofill=True, default=False)
@@ -6101,7 +6113,7 @@ option: Str('mail*', autofill=False, cli_name='email')
 option: Str('manager?', autofill=False)
 option: Str('mobile*', autofill=False)
 option: Flag('no_members', autofill=True, default=False)
-option: Bool('nsaccountlock?', autofill=False, cli_name='disabled')
+option: Bool('nsaccountlock?', autofill=False, cli_name='disabled', default=False)
 option: Str('ou?', autofill=False, cli_name='orgunit')
 option: Str('pager*', autofill=False)
 option: Str('postalcode?', autofill=False)
@@ -6801,7 +6813,7 @@ default: permission_remove_member/1
 default: permission_show/1
 default: ping/1
 default: pkinit/1
-default: pkinit_anonymous/1
+default: pkinit_status/1
 default: plugins/1
 default: privilege/1
 default: privilege_add/1

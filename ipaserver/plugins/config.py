@@ -256,6 +256,12 @@ class config(LDAPObject):
             flags={'virtual_attribute', 'no_create'}
         ),
         Str(
+            'pkinit_server_server*',
+            label=_('IPA master capable of PKINIT'),
+            doc=_('IPA master which can process PKINIT requests'),
+            flags={'virtual_attribute', 'no_create', 'no_update'}
+        ),
+        Str(
             'ipadomainresolutionorder?',
             cli_name='domain_resolution_order',
             label=_('Domain resolution order'),
@@ -267,15 +273,21 @@ class config(LDAPObject):
     def get_dn(self, *keys, **kwargs):
         return DN(('cn', 'ipaconfig'), ('cn', 'etc'), api.env.basedn)
 
-    def show_servroles_attributes(self, entry_attrs, **options):
+    def update_entry_with_role_config(self, role_name, entry_attrs):
+        backend = self.api.Backend.serverroles
+
+        role_config = backend.config_retrieve(role_name)
+        for key, value in role_config.items():
+            if value:
+                entry_attrs.update({key: value})
+
+
+    def show_servroles_attributes(self, entry_attrs, *roles, **options):
         if options.get('raw', False):
             return
 
-        backend = self.api.Backend.serverroles
-
-        for role in ("CA server", "IPA master", "NTP server"):
-            config = backend.config_retrieve(role)
-            entry_attrs.update(config)
+        for role in roles:
+            self.update_entry_with_role_config(role, entry_attrs)
 
     def gather_trusted_domains(self):
         """
@@ -358,6 +370,11 @@ class config(LDAPObject):
             return
 
         domain_resolution_order = entry_attrs[attr_name]
+
+        # setting up an empty string means that the previous configuration has
+        # to be cleaned up/removed. So, do nothing and let it pass
+        if not domain_resolution_order:
+            return
 
         # empty resolution order is signalized by single separator, do nothing
         # and let it pass
@@ -520,7 +537,8 @@ class config_mod(LDAPUpdate):
             keys, options, exc, call_func, *call_args, **call_kwargs)
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
-        self.obj.show_servroles_attributes(entry_attrs, **options)
+        self.obj.show_servroles_attributes(
+            entry_attrs, "CA server", "IPA master", "NTP server", **options)
         return dn
 
 
@@ -529,5 +547,6 @@ class config_show(LDAPRetrieve):
     __doc__ = _('Show the current configuration.')
 
     def post_callback(self, ldap, dn, entry_attrs, *keys, **options):
-        self.obj.show_servroles_attributes(entry_attrs, **options)
+        self.obj.show_servroles_attributes(
+            entry_attrs, "CA server", "IPA master", "NTP server", **options)
         return dn

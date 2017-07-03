@@ -31,7 +31,6 @@ if __name__ == '__main__':
     ipasetup(
         name="ipaclient",
         doc=__doc__,
-        scripts=['../ipa'],
         package_dir={'ipaclient': ''},
         packages=[
             "ipaclient",
@@ -55,14 +54,17 @@ if __name__ == '__main__':
             "ipalib",
             "ipapython",
             "jinja2",
-            "python-yubico",
-            "pyusb",
             "qrcode",
             "six",
         ],
+        entry_points={
+            'console_scripts': [
+                'ipa = ipaclient.__main__:main'
+            ]
+        },
         extras_require={
             "install": ["ipaplatform"],
-            "otptoken_yubikey": ["yubico", "usb"]
+            "otptoken_yubikey": ["python-yubico", "pyusb"],
         },
         zip_safe=False,
     )

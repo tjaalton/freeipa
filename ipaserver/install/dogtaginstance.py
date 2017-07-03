@@ -156,22 +156,10 @@ class DogtagInstance(service.Service):
                       ignore_errors=True)
 
     def restart_instance(self):
-        try:
-            self.restart('pki-tomcat')
-        except Exception:
-            self.log.debug(traceback.format_exc())
-            self.log.critical(
-                "Failed to restart the Dogtag instance."
-                "See the installation log for details.")
+        self.restart('pki-tomcat')
 
     def start_instance(self):
-        try:
-            self.start('pki-tomcat')
-        except Exception:
-            self.log.debug(traceback.format_exc())
-            self.log.critical(
-                "Failed to restart the Dogtag instance."
-                "See the installation log for details.")
+        self.start('pki-tomcat')
 
     def stop_instance(self):
         try:
@@ -179,7 +167,7 @@ class DogtagInstance(service.Service):
         except Exception:
             self.log.debug(traceback.format_exc())
             self.log.critical(
-                "Failed to restart the Dogtag instance."
+                "Failed to stop the Dogtag instance."
                 "See the installation log for details.")
 
     def enable_client_auth_to_db(self, config):
@@ -265,12 +253,15 @@ class DogtagInstance(service.Service):
         obj = bus.get_object('org.fedorahosted.certmonger',
                              '/org/fedorahosted/certmonger')
         iface = dbus.Interface(obj, 'org.fedorahosted.certmonger')
-        path = iface.find_ca_by_nickname('dogtag-ipa-ca-renew-agent')
-        if not path:
-            iface.add_known_ca(
-                'dogtag-ipa-ca-renew-agent',
-                paths.DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT,
-                dbus.Array([], dbus.Signature('s')))
+        for suffix, args in [('', ''), ('-reuse', ' --reuse-existing')]:
+            name = 'dogtag-ipa-ca-renew-agent' + suffix
+            path = iface.find_ca_by_nickname(name)
+            if not path:
+                command = paths.DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT + args
+                iface.add_known_ca(
+                    name,
+                    command,
+                    dbus.Array([], dbus.Signature('s')))
 
     def __get_pin(self):
         try:
@@ -284,7 +275,7 @@ class DogtagInstance(service.Service):
         """ Configure certmonger to renew system certs """
         pin = self.__get_pin()
 
-        for nickname, profile in self.tracking_reqs:
+        for nickname in self.tracking_reqs:
             try:
                 certmonger.start_tracking(
                     certpath=self.nss_db,
@@ -293,7 +284,7 @@ class DogtagInstance(service.Service):
                     pin=pin,
                     pre_command='stop_pkicad',
                     post_command='renew_ca_cert "%s"' % nickname,
-                    profile=profile)
+                )
             except RuntimeError as e:
                 self.log.error(
                     "certmonger failed to start tracking certificate: %s", e)
@@ -328,7 +319,7 @@ class DogtagInstance(service.Service):
         services.knownservices.messagebus.start()
         cmonger.start()
 
-        nicknames = [nickname for nickname, _profile in self.tracking_reqs]
+        nicknames = list(self.tracking_reqs)
         if self.server_cert_name is not None:
             nicknames.append(self.server_cert_name)
 

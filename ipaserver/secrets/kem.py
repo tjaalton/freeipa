@@ -24,6 +24,7 @@ import ldap
 
 IPA_REL_BASE_DN = 'cn=custodia,cn=ipa,cn=etc'
 IPA_KEYS_QUERY = '(&(ipaKeyUsage={usage:s})(memberPrincipal={princ:s}))'
+IPA_CHECK_QUERY = '(cn=enc/{host:s})'
 RFC5280_USAGE_MAP = {KEY_USAGE_SIG: 'digitalSignature',
                      KEY_USAGE_ENC: 'dataEncipherment'}
 
@@ -71,12 +72,22 @@ class KEMLdap(iSecLdap):
                                          'princ': principal})
         r = conn.search_s(self.keysbase, scope, ldap_filter)
         if len(r) != 1:
-            raise ValueError("Incorrect number of results (%d) searching for"
+            raise ValueError("Incorrect number of results (%d) searching for "
                              "public key for %s" % (len(r), principal))
         ipa_public_key = r[0][1]['ipaPublicKey'][0]
         jwk = self._parse_public_key(ipa_public_key)
         jwk['use'] = KEY_USAGE_MAP[usage]
         return json_encode(jwk)
+
+    def check_host_keys(self, host):
+        conn = self.connect()
+        scope = ldap.SCOPE_SUBTREE
+
+        ldap_filter = self.build_filter(IPA_CHECK_QUERY, {'host': host})
+        r = conn.search_s(self.keysbase, scope, ldap_filter)
+        if not r:
+            raise ValueError("No public keys were found for %s" % host)
+        return True
 
     def _format_public_key(self, key):
         if isinstance(key, str):

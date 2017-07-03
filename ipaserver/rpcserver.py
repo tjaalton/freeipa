@@ -602,7 +602,8 @@ class KerberosSession(HTTP_Status):
         try:
             target = self.api.env.host
             r = requests.get('http://{0}/ipa/session/cookie'.format(target),
-                             auth=NegotiateAuth(target, ccache_name))
+                             auth=NegotiateAuth(target, ccache_name),
+                             verify=paths.IPA_CA_CRT)
             session_cookie = r.cookies.get("ipa_session")
             if not session_cookie:
                 raise ValueError('No session cookie found')
@@ -776,8 +777,17 @@ class jsonserver_session(jsonserver, KerberosSession):
             self.debug('no ccache, need login')
             return self.need_login(start_response)
 
+        # If we have a ccache, make sure we have a GSS_NAME and use
+        # it to resolve the ccache name (Issue: 6972 )
+        principal = environ.get('GSS_NAME')
+        if principal is None:
+            self.debug('no GSS Name, need login')
+            return self.need_login(start_response)
+        gss_name = gssapi.Name(principal, gssapi.NameType.kerberos_principal)
+
         # Redirect to login if Kerberos credentials are expired
-        creds = get_credentials_if_valid(ccache_name=ccache_name)
+        creds = get_credentials_if_valid(name=gss_name,
+                                         ccache_name=ccache_name)
         if not creds:
             self.debug('ccache expired, deleting session, need login')
             # The request is finished with the ccache, destroy it.
@@ -842,7 +852,7 @@ class login_x509(KerberosLogin):
                 environ, start_response, 'KRB5CCNAME not set',
                 'Authentication failed')
 
-        super(login_x509, self).__call__(environ, start_response)
+        return super(login_x509, self).__call__(environ, start_response)
 
 
 class login_password(Backend, KerberosSession):
@@ -944,7 +954,10 @@ class login_password(Backend, KerberosSession):
         self.debug('Obtaining armor in ccache %s', armor_path)
 
         try:
-            kinit_armor(armor_path)
+            kinit_armor(
+                armor_path,
+                pkinit_anchors=[paths.KDC_CERT, paths.KDC_CA_BUNDLE_PEM],
+            )
         except RuntimeError as e:
             self.error("Failed to obtain armor cache")
             # We try to continue w/o armor, 2FA will be impacted
@@ -956,7 +969,8 @@ class login_password(Backend, KerberosSession):
                 password,
                 ccache_name,
                 armor_ccache_name=armor_path,
-                enterprise=True)
+                enterprise=True,
+                lifetime=self.api.env.kinit_lifetime)
 
             if armor_path:
                 self.debug('Cleanup the armor ccache')

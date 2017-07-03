@@ -20,13 +20,10 @@
 from __future__ import print_function
 
 import base64
-import collections
 import errno
-import getpass
 import io
 import json
 import os
-import sys
 import tempfile
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -83,29 +80,6 @@ def validated_read(argname, filename, mode='r', encoding=None):
 register = Registry()
 
 MAX_VAULT_DATA_SIZE = 2**20  # = 1 MB
-
-
-def get_new_password():
-    """
-    Gets new password from user and verify it.
-    """
-    while True:
-        password = getpass.getpass('New password: ').decode(
-            sys.stdin.encoding)
-        password2 = getpass.getpass('Verify password: ').decode(
-            sys.stdin.encoding)
-
-        if password == password2:
-            return password
-
-        print('  ** Passwords do not match! **')
-
-
-def get_existing_password():
-    """
-    Gets existing password from user.
-    """
-    return getpass.getpass('Password: ').decode(sys.stdin.encoding)
 
 
 def generate_symmetric_key(password, salt):
@@ -305,7 +279,8 @@ class vault_add(Local):
                 password = password.rstrip('\n')
 
             else:
-                password = get_new_password()
+                password = self.api.Backend.textui.prompt_password(
+                    'New password')
 
             # generate vault salt
             options['ipavaultsalt'] = os.urandom(16)
@@ -558,74 +533,79 @@ class vault_mod(Local):
         return response
 
 
-class _TransportCertCache(collections.MutableMapping):
+class _TransportCertCache(object):
     def __init__(self):
         self._dirname = os.path.join(
-                USER_CACHE_PATH, 'ipa', 'kra-transport-certs')
-        self._transport_certs = {}
+                USER_CACHE_PATH, 'ipa', 'kra-transport-certs'
+        )
 
     def _get_filename(self, domain):
         basename = DNSName(domain).ToASCII() + '.pem'
         return os.path.join(self._dirname, basename)
 
-    def __getitem__(self, domain):
-        try:
-            transport_cert = self._transport_certs[domain]
-        except KeyError:
-            transport_cert = None
+    def load_cert(self, domain):
+        """Load cert from cache
 
-            filename = self._get_filename(domain)
-            try:
-                try:
-                    transport_cert = x509.load_certificate_from_file(filename)
-                except EnvironmentError as e:
-                    if e.errno != errno.ENOENT:
-                        raise
-            except Exception:
-                logger.warning("Failed to load %s: %s", filename,
-                               exc_info=True)
-
-            if transport_cert is None:
-                raise KeyError(domain)
-
-            self._transport_certs[domain] = transport_cert
-
-        return transport_cert
-
-    def __setitem__(self, domain, transport_cert):
+        :param domain: IPA domain
+        :return: cryptography.x509.Certificate or None
+        """
         filename = self._get_filename(domain)
-        transport_cert_der = (
-            transport_cert.public_bytes(serialization.Encoding.DER))
+        try:
+            try:
+                return x509.load_certificate_from_file(filename)
+            except EnvironmentError as e:
+                if e.errno != errno.ENOENT:
+                    raise
+        except Exception:
+            logger.warning("Failed to load %s", filename, exc_info=True)
+
+    def store_cert(self, domain, transport_cert):
+        """Store a new cert or override existing cert
+
+        :param domain: IPA domain
+        :param transport_cert: cryptography.x509.Certificate
+        :return: True if cert was stored successfully
+        """
+        filename = self._get_filename(domain)
+        pem = transport_cert.public_bytes(serialization.Encoding.PEM)
         try:
             try:
                 os.makedirs(self._dirname)
             except EnvironmentError as e:
                 if e.errno != errno.EEXIST:
                     raise
-            fd, tmpfilename = tempfile.mkstemp(dir=self._dirname)
-            os.close(fd)
-            x509.write_certificate(transport_cert_der, tmpfilename)
-            os.rename(tmpfilename, filename)
+            with tempfile.NamedTemporaryFile(dir=self._dirname, delete=False,
+                                             mode='wb') as f:
+                try:
+                    f.write(pem)
+                    f.flush()
+                    os.fdatasync(f.fileno())
+                    f.close()
+                    os.rename(f.name, filename)
+                except Exception:
+                    os.unlink(f.name)
+                    raise
         except Exception:
             logger.warning("Failed to save %s", filename, exc_info=True)
+            return False
+        else:
+            return True
 
-        self._transport_certs[domain] = transport_cert
+    def remove_cert(self, domain):
+        """Remove a cert from cache, ignores errors
 
-    def __delitem__(self, domain):
+        :param domain: IPA domain
+        :return: True if cert was found and removed
+        """
         filename = self._get_filename(domain)
         try:
             os.unlink(filename)
         except EnvironmentError as e:
             if e.errno != errno.ENOENT:
                 logger.warning("Failed to remove %s", filename, exc_info=True)
-
-        del self._transport_certs[domain]
-
-    def __len__(self):
-        return len(self._transport_certs)
-
-    def __iter__(self):
-        return iter(self._transport_certs)
+            return False
+        else:
+            return True
 
 
 _transport_cert_cache = _TransportCertCache()
@@ -646,7 +626,10 @@ class vaultconfig_show(MethodOverride):
         # cache transport certificate
         transport_cert = x509.load_certificate(
                 response['result']['transport_cert'], x509.DER)
-        _transport_cert_cache[self.api.env.domain] = transport_cert
+
+        _transport_cert_cache.store_cert(
+            self.api.env.domain, transport_cert
+        )
 
         if file:
             with open(file, 'w') as f:
@@ -680,7 +663,7 @@ class ModVaultData(Local):
         except (errors.InternalError,
                 errors.ExecutionError,
                 errors.GenericError):
-            _transport_cert_cache.pop(self.api.env.domain, None)
+            _transport_cert_cache.remove_cert(self.api.env.domain)
             if raise_unexpected:
                 raise
 
@@ -691,17 +674,17 @@ class ModVaultData(Local):
         domain = self.api.env.domain
 
         # try call with cached transport certificate
-        transport_cert = _transport_cert_cache.get(domain)
+        transport_cert = _transport_cert_cache.load_cert(domain)
         if transport_cert is not None:
             result = self._do_internal(algo, transport_cert, False,
                                        *args, **options)
             if result is not None:
                 return result
 
-        # retrieve and cache transport certificate
-        self.api.Command.vaultconfig_show()
-        transport_cert = _transport_cert_cache[domain]
-
+        # retrieve transport certificate (cached by vaultconfig_show)
+        response = self.api.Command.vaultconfig_show()
+        transport_cert = x509.load_certificate(
+            response['result']['transport_cert'], x509.DER)
         # call with the retrieved transport certificate
         return self._do_internal(algo, transport_cert, True,
                                  *args, **options)
@@ -880,9 +863,11 @@ class vault_archive(ModVaultData):
 
             else:
                 if override_password:
-                    password = get_new_password()
+                    password = self.api.Backend.textui.prompt_password(
+                        'New password')
                 else:
-                    password = get_existing_password()
+                    password = self.api.Backend.textui.prompt_password(
+                        'Password', confirm=False)
 
             if not override_password:
                 # verify password by retrieving existing data
@@ -1105,7 +1090,8 @@ class vault_retrieve(ModVaultData):
                 password = password.rstrip('\n')
 
             else:
-                password = get_existing_password()
+                password = self.api.Backend.textui.prompt_password(
+                    'Password', confirm=False)
 
             # generate encryption key from password
             encryption_key = generate_symmetric_key(password, salt)

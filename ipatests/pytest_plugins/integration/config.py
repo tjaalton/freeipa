@@ -88,11 +88,11 @@ class Config(pytest_multihost.config.Config):
 
     @classmethod
     def from_env(cls, env):
-        from ipatests.test_integration.env_config import config_from_env
+        from ipatests.pytest_plugins.integration.env_config import config_from_env
         return config_from_env(env)
 
     def to_env(self, **kwargs):
-        from ipatests.test_integration.env_config import config_to_env
+        from ipatests.pytest_plugins.integration.env_config import config_to_env
         return config_to_env(self, **kwargs)
 
 
@@ -120,7 +120,7 @@ class Domain(pytest_multihost.config.Domain):
             raise LookupError(self.type)
 
     def get_host_class(self, host_dict):
-        from ipatests.test_integration.host import Host, WinHost
+        from ipatests.pytest_plugins.integration.host import Host, WinHost
 
         if self.type == 'IPA':
             return Host
@@ -155,9 +155,9 @@ class Domain(pytest_multihost.config.Domain):
 
     @classmethod
     def from_env(cls, env, config, index, domain_type):
-        from ipatests.test_integration.env_config import domain_from_env
+        from ipatests.pytest_plugins.integration.env_config import domain_from_env
         return domain_from_env(env, config, index, domain_type)
 
     def to_env(self, **kwargs):
-        from ipatests.test_integration.env_config import domain_to_env
+        from ipatests.pytest_plugins.integration.env_config import domain_to_env
         return domain_to_env(self, **kwargs)

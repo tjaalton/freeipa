@@ -36,11 +36,21 @@
 
 %global alt_name ipa
 %if 0%{?rhel}
-%global samba_version 4.0.5-1
+# 1.15.1-7: certauth (http://krbdev.mit.edu/rt/Ticket/Display.html?id=8561)
+%global krb5_version 1.15.1-4
+# 0.7.16: https://github.com/drkjam/netaddr/issues/71
+%global python_netaddr_version 0.7.5-8
+# Require 4.6.0-4 which brings RC4 for FIPS + trust fixes to priv. separation
+%global samba_version 4.6.0-4
 %global selinux_policy_version 3.12.1-153
 %global slapi_nis_version 0.56.0-4
 %else
-%global samba_version 2:4.0.5-1
+# 1.15.1-7: certauth (http://krbdev.mit.edu/rt/Ticket/Display.html?id=8561)
+%global krb5_version 1.15.1-7
+# 0.7.16: https://github.com/drkjam/netaddr/issues/71
+%global python_netaddr_version 0.7.16
+# Require 4.6.0-4 which brings RC4 for FIPS + trust fixes to priv. separation
+%global samba_version 2:4.6.0-4
 %global selinux_policy_version 3.13.1-158.4
 %global slapi_nis_version 0.56.1
 %endif
@@ -78,12 +88,9 @@ BuildRequires:  openldap-devel
 # will cause the build to fail due to unsatisfied dependencies.
 # DAL version change may cause code crash or memory leaks, it is better to fail early.
 %if 0%{?fedora} > 25
-BuildRequires: krb5-devel >= 1.15-5
 BuildRequires: krb5-kdb-version = 6.1
-%else
-# 1.12: libkrad (http://krbdev.mit.edu/rt/Ticket/Display.html?id=7678)
-BuildRequires:  krb5-devel >= 1.12
 %endif
+BuildRequires:  krb5-devel >= %{krb5_version}
 # 1.27.4: xmlrpc_curl_xportparms.gssapi_delegation
 BuildRequires:  xmlrpc-c-devel >= 1.27.4
 BuildRequires:  popt-devel
@@ -120,8 +127,9 @@ BuildRequires:  libtalloc-devel
 BuildRequires:  libtevent-devel
 BuildRequires:  libuuid-devel
 BuildRequires:  libsss_idmap-devel
-# 1.14.0: sss_nss_getnamebycert (https://fedorahosted.org/sssd/ticket/2897)
-BuildRequires:  libsss_nss_idmap-devel >= 1.14.0
+BuildRequires:  libsss_certmap-devel
+# 1.15.3: sss_nss_getlistbycert (https://pagure.io/SSSD/sssd/issue/3050)
+BuildRequires:  libsss_nss_idmap-devel >= 1.15.3
 BuildRequires:  rhino
 BuildRequires:  libverto-devel
 BuildRequires:  libunistring-devel
@@ -160,8 +168,8 @@ BuildRequires:  python3-wheel
 %if 0%{?with_lint}
 BuildRequires:  samba-python
 # 1.4: the version where Certificate.serial changed to .serial_number
-BuildRequires:  python-cryptography >= 1.4
-BuildRequires:  python-gssapi >= 1.2.0
+BuildRequires:  python2-cryptography >= 1.4
+BuildRequires:  python-gssapi >= 1.2.0-5
 BuildRequires:  pylint >= 1.6
 # workaround for https://bugzilla.redhat.com/show_bug.cgi?id=1096506
 BuildRequires:  python2-polib
@@ -178,7 +186,8 @@ BuildRequires:  pki-base-python2
 BuildRequires:  python-pytest-multihost
 BuildRequires:  python-pytest-sourceorder
 BuildRequires:  python-jwcrypto
-BuildRequires:  python-custodia
+# 0.3: sd_notify (https://pagure.io/freeipa/issue/5825)
+BuildRequires:  python2-custodia >= 0.3.1
 BuildRequires:  dbus-python
 BuildRequires:  python-dateutil
 BuildRequires:  python-enum34
@@ -190,6 +199,7 @@ BuildRequires:  python-nose
 BuildRequires:  python-paste
 BuildRequires:  systemd-python
 BuildRequires:  python2-jinja2
+BuildRequires:  python-augeas
 
 %if 0%{?with_python3}
 # FIXME: this depedency is missing - server will not work
@@ -213,7 +223,8 @@ BuildRequires:  pki-base-python3
 BuildRequires:  python3-pytest-multihost
 BuildRequires:  python3-pytest-sourceorder
 BuildRequires:  python3-jwcrypto
-BuildRequires:  python3-custodia
+# 0.3: sd_notify (https://pagure.io/freeipa/issue/5825)
+BuildRequires:  python3-custodia >= 0.3.1
 BuildRequires:  python3-dbus
 BuildRequires:  python3-dateutil
 BuildRequires:  python3-enum34
@@ -226,6 +237,7 @@ BuildRequires:  python3-nose
 BuildRequires:  python3-paste
 BuildRequires:  python3-systemd
 BuildRequires:  python3-jinja2
+BuildRequires:  python3-augeas
 %endif # with_python3
 %endif # with_lint
 
@@ -260,18 +272,21 @@ Requires: 389-ds-base >= 1.3.5.14
 Requires: openldap-clients > 2.4.35-4
 Requires: nss >= 3.14.3-12.0
 Requires: nss-tools >= 3.14.3-12.0
+Requires(post): krb5-server >= %{krb5_version}
 Requires(post): krb5-server >= %{krb5_base_version}, krb5-server < %{krb5_base_version}.100
-Requires: krb5-pkinit-openssl
+Requires: krb5-pkinit-openssl >= %{krb5_version}
 Requires: cyrus-sasl-gssapi%{?_isa}
 Requires: ntp
 Requires: httpd >= 2.4.6-31
 Requires: mod_wsgi
 Requires: mod_auth_gssapi >= 1.5.0
-Requires: mod_nss >= 1.0.8-26
+# 1.0.14-3: https://bugzilla.redhat.com/show_bug.cgi?id=1431206
+Requires: mod_nss >= 1.0.14-3
 Requires: mod_session
-Requires: mod_lookup_identity
+# 0.9.9: https://github.com/adelton/mod_lookup_identity/pull/3
+Requires: mod_lookup_identity >= 0.9.9
 Requires: python-ldap >= 2.4.15
-Requires: python-gssapi >= 1.2.0
+Requires: python-gssapi >= 1.2.0-5
 Requires: acl
 Requires: systemd-units >= 38
 Requires(pre): shadow-utils
@@ -297,9 +312,10 @@ Requires: systemd-python
 Requires: %{etc_systemd_dir}
 Requires: gzip
 Requires: oddjob
-Requires: gssproxy >= 0.7.0
-# Require 1.15.1 for the certificate identity mapping feature
-Requires: sssd-dbus >= 1.15.1
+# 0.7.0-2: https://pagure.io/gssproxy/pull-request/172
+Requires: gssproxy >= 0.7.0-2
+# 1.15.2: FindByNameAndCertificate (https://pagure.io/SSSD/sssd/issue/3050)
+Requires: sssd-dbus >= 1.15.2
 
 Provides: %{alt_name}-server = %{version}
 Conflicts: %{alt_name}-server
@@ -334,9 +350,10 @@ BuildArch: noarch
 Requires: %{name}-server-common = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python2-ipaclient = %{version}-%{release}
+Requires: python2-custodia >= 0.3.1
 Requires: python-ldap >= 2.4.15
 Requires: python-lxml
-Requires: python-gssapi >= 1.2.0
+Requires: python-gssapi >= 1.2.0-5
 Requires: python-sssdconfig
 Requires: python-pyasn1
 Requires: dbus-python
@@ -344,6 +361,7 @@ Requires: python-dns >= 1.15
 Requires: python-kdcproxy >= 0.3
 Requires: rpm-libs
 Requires: pki-base-python2
+Requires: python-augeas
 
 %description -n python2-ipaserver
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -364,6 +382,7 @@ BuildArch: noarch
 Requires: %{name}-server-common = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python3-ipaclient = %{version}-%{release}
+Requires: python3-custodia >= 0.3.1
 Requires: python3-pyldap >= 2.4.15
 Requires: python3-lxml
 Requires: python3-gssapi >= 1.2.0
@@ -372,6 +391,7 @@ Requires: python3-pyasn1
 Requires: python3-dbus
 Requires: python3-dns >= 1.15
 Requires: python3-kdcproxy >= 0.3
+Requires: python3-augeas
 Requires: rpm-libs
 Requires: pki-base-python3
 
@@ -393,7 +413,7 @@ BuildArch: noarch
 Requires: %{name}-client-common = %{version}-%{release}
 Requires: httpd >= 2.4.6-31
 Requires: systemd-units >= 38
-Requires: custodia
+Requires: custodia >= 0.3.1
 
 Provides: %{alt_name}-server-common = %{version}
 Conflicts: %{alt_name}-server-common
@@ -473,7 +493,7 @@ Requires: python2-ipaclient = %{version}-%{release}
 Requires: python-ldap
 Requires: cyrus-sasl-gssapi%{?_isa}
 Requires: ntp
-Requires: krb5-workstation
+Requires: krb5-workstation >= %{krb5_version}
 Requires: authconfig
 Requires: curl
 # NIS domain name config: /usr/lib/systemd/system/*-domainname.service
@@ -486,7 +506,7 @@ Requires: certmonger >= 0.78
 Requires: nss-tools
 Requires: bind-utils
 Requires: oddjob-mkhomedir
-Requires: python-gssapi >= 1.2.0
+Requires: python-gssapi >= 1.2.0-5
 Requires: libsss_autofs
 Requires: autofs
 Requires: libnfsidmap
@@ -623,13 +643,14 @@ Provides: python2-ipaplatform = %{version}-%{release}
 %{?python_provide:%python_provide python2-ipaplatform}
 %{!?python_provide:Provides: python-ipaplatform = %{version}-%{release}}
 Requires: %{name}-common = %{version}-%{release}
-Requires: python-gssapi >= 1.2.0
+Requires: python-gssapi >= 1.2.0-5
 Requires: gnupg
 Requires: keyutils
 Requires: pyOpenSSL
+Requires: python >= 2.7.9
 Requires: python-nss >= 0.16
-Requires: python-cryptography >= 1.4
-Requires: python-netaddr
+Requires: python2-cryptography >= 1.4
+Requires: python-netaddr >= %{python_netaddr_version}
 Requires: python-libipa_hbac
 Requires: python-qrcode-core >= 5.0.0
 Requires: python-pyasn1
@@ -644,7 +665,6 @@ Requires: python-jwcrypto
 Requires: python-cffi
 Requires: python-ldap >= 2.4.15
 Requires: python-requests
-Requires: python-custodia
 Requires: python-dns >= 1.15
 Requires: python-enum34
 Requires: python-netifaces >= 0.10.4
@@ -679,7 +699,7 @@ Requires: keyutils
 Requires: python3-pyOpenSSL
 Requires: python3-nss >= 0.16
 Requires: python3-cryptography >= 1.4
-Requires: python3-netaddr
+Requires: python3-netaddr >= %{python_netaddr_version}
 Requires: python3-libipa_hbac
 Requires: python3-qrcode-core >= 5.0.0
 Requires: python3-pyasn1
@@ -693,7 +713,6 @@ Requires: python3-six
 Requires: python3-jwcrypto
 Requires: python3-cffi
 Requires: python3-pyldap >= 2.4.15
-Requires: python3-custodia
 Requires: python3-requests
 Requires: python3-dns >= 1.15
 Requires: python3-netifaces >= 0.10.4
@@ -1024,6 +1043,15 @@ if [ -e /usr/sbin/ipa_kpasswd ]; then
 # END
 fi
 
+# create users and groups
+# create kdcproxy group and user
+getent group kdcproxy >/dev/null || groupadd -f -r kdcproxy
+getent passwd kdcproxy >/dev/null || useradd -r -g kdcproxy -s /sbin/nologin -d / -c "IPA KDC Proxy User" kdcproxy
+# create ipaapi group and user
+getent group ipaapi >/dev/null || groupadd -f -r ipaapi
+getent passwd ipaapi >/dev/null || useradd -r -g ipaapi -s /sbin/nologin -d / -c "IPA Framework User" ipaapi
+# add apache to ipaaapi group
+id -Gn apache | grep '\bipaapi\b' >/dev/null || usermod apache -a -G ipaapi
 
 %postun server-trust-ad
 if [ "$1" -ge "1" ]; then
@@ -1070,6 +1098,15 @@ if [ $1 -gt 1 ] ; then
             echo "includedir /var/lib/sss/pubconf/krb5.include.d/" > /etc/krb5.conf.ipanew
             cat /etc/krb5.conf >> /etc/krb5.conf.ipanew
             mv -Z /etc/krb5.conf.ipanew /etc/krb5.conf
+        fi
+    fi
+
+    if [ $restore -ge 2 ]; then
+        if grep -E -q '\s*pkinit_anchors = FILE:/etc/ipa/ca.crt$' /etc/krb5.conf 2>/dev/null; then
+            sed -E 's|(\s*)pkinit_anchors = FILE:/etc/ipa/ca.crt$|\1pkinit_anchors = FILE:/var/lib/ipa-client/pki/kdc-ca-bundle.pem\n\1pkinit_pool = FILE:/var/lib/ipa-client/pki/ca-bundle.pem|' /etc/krb5.conf >/etc/krb5.conf.ipanew
+            mv -Z /etc/krb5.conf.ipanew /etc/krb5.conf
+            cp /etc/ipa/ca.crt /var/lib/ipa-client/pki/kdc-ca-bundle.pem
+            cp /etc/ipa/ca.crt /var/lib/ipa-client/pki/ca-bundle.pem
         fi
     fi
 
@@ -1151,9 +1188,11 @@ fi
 %{_sbindir}/ipa-advise
 %{_sbindir}/ipa-cacert-manage
 %{_sbindir}/ipa-winsync-migrate
+%{_sbindir}/ipa-pkinit-manage
 %{_libexecdir}/certmonger/dogtag-ipa-ca-renew-agent-submit
 %{_libexecdir}/certmonger/ipa-server-guard
 %dir %{_libexecdir}/ipa
+%{_libexecdir}/ipa/ipa-custodia
 %{_libexecdir}/ipa/ipa-dnskeysyncd
 %{_libexecdir}/ipa/ipa-dnskeysync-replica
 %{_libexecdir}/ipa/ipa-ods-exporter
@@ -1164,6 +1203,7 @@ fi
 %attr(0755,root,root) %{_libexecdir}/ipa/oddjob/org.freeipa.server.conncheck
 %config(noreplace) %{_sysconfdir}/dbus-1/system.d/org.freeipa.server.conf
 %config(noreplace) %{_sysconfdir}/oddjobd.conf.d/ipa-server.conf
+%config(noreplace) %{_sysconfdir}/krb5.conf.d/ipa-certauth
 %dir %{_libexecdir}/ipa/certmonger
 %attr(755,root,root) %{_libexecdir}/ipa/certmonger/*
 # NOTE: systemd specific section
@@ -1212,6 +1252,7 @@ fi
 %{_mandir}/man1/ipa-otptoken-import.1*
 %{_mandir}/man1/ipa-cacert-manage.1*
 %{_mandir}/man1/ipa-winsync-migrate.1*
+%{_mandir}/man1/ipa-pkinit-manage.1*
 
 
 %files -n python2-ipaserver
@@ -1327,6 +1368,7 @@ fi
 %dir %{_usr}/share/ipa/schema.d
 %attr(0644,root,root) %{_usr}/share/ipa/schema.d/README
 %attr(0644,root,root) %{_usr}/share/ipa/gssapi.login
+%{_usr}/share/ipa/ipakrb5.aug
 
 %files server-dns
 %defattr(-,root,root,-)
@@ -1379,12 +1421,20 @@ fi
 %license COPYING
 %dir %{python_sitelib}/ipaclient
 %{python_sitelib}/ipaclient/*.py*
+%dir %{python_sitelib}/ipaclient/install
 %{python_sitelib}/ipaclient/install/*.py*
+%dir %{python_sitelib}/ipaclient/plugins
 %{python_sitelib}/ipaclient/plugins/*.py*
+%dir %{python_sitelib}/ipaclient/remote_plugins
 %{python_sitelib}/ipaclient/remote_plugins/*.py*
+%dir %{python_sitelib}/ipaclient/remote_plugins/2_*
 %{python_sitelib}/ipaclient/remote_plugins/2_*/*.py*
+%dir %{python_sitelib}/ipaclient/csrgen
+%dir %{python_sitelib}/ipaclient/csrgen/profiles
 %{python_sitelib}/ipaclient/csrgen/profiles/*.json
+%dir %{python_sitelib}/ipaclient/csrgen/rules
 %{python_sitelib}/ipaclient/csrgen/rules/*.json
+%dir %{python_sitelib}/ipaclient/csrgen/templates
 %{python_sitelib}/ipaclient/csrgen/templates/*.tmpl
 %{python_sitelib}/ipaclient-*.egg-info
 
@@ -1398,16 +1448,24 @@ fi
 %dir %{python3_sitelib}/ipaclient
 %{python3_sitelib}/ipaclient/*.py
 %{python3_sitelib}/ipaclient/__pycache__/*.py*
+%dir %{python3_sitelib}/ipaclient/install
 %{python3_sitelib}/ipaclient/install/*.py
 %{python3_sitelib}/ipaclient/install/__pycache__/*.py*
+%dir %{python3_sitelib}/ipaclient/plugins
 %{python3_sitelib}/ipaclient/plugins/*.py
 %{python3_sitelib}/ipaclient/plugins/__pycache__/*.py*
+%dir %{python3_sitelib}/ipaclient/remote_plugins
 %{python3_sitelib}/ipaclient/remote_plugins/*.py
 %{python3_sitelib}/ipaclient/remote_plugins/__pycache__/*.py*
+%dir %{python3_sitelib}/ipaclient/remote_plugins/2_*
 %{python3_sitelib}/ipaclient/remote_plugins/2_*/*.py
 %{python3_sitelib}/ipaclient/remote_plugins/2_*/__pycache__/*.py*
+%dir %{python3_sitelib}/ipaclient/csrgen
+%dir %{python3_sitelib}/ipaclient/csrgen/profiles
 %{python3_sitelib}/ipaclient/csrgen/profiles/*.json
+%dir %{python3_sitelib}/ipaclient/csrgen/rules
 %{python3_sitelib}/ipaclient/csrgen/rules/*.json
+%dir %{python3_sitelib}/ipaclient/csrgen/templates
 %{python3_sitelib}/ipaclient/csrgen/templates/*.tmpl
 %{python3_sitelib}/ipaclient-*.egg-info
 
@@ -1428,6 +1486,7 @@ fi
 %ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/pwdfile.txt
 %ghost %config(noreplace) %{_sysconfdir}/pki/ca-trust/source/ipa.p11-kit
 %dir %{_localstatedir}/lib/ipa-client
+%dir %{_localstatedir}/lib/ipa-client/pki
 %dir %{_localstatedir}/lib/ipa-client/sysrestore
 %{_mandir}/man5/default.conf.5*
 

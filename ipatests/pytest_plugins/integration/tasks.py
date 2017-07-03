@@ -36,13 +36,14 @@ from ipapython import ipautil
 from ipaplatform.paths import paths
 from ipapython.dn import DN
 from ipapython.ipa_log_manager import log_mgr
-from ipatests.test_integration import util
-from ipatests.test_integration.env_config import env_to_script
-from ipatests.test_integration.host import Host
 from ipalib import errors
 from ipalib.util import get_reverse_zone_default, verify_host_resolvable
-from ipalib.constants import DOMAIN_SUFFIX_NAME
-from ipalib.constants import DOMAIN_LEVEL_0
+from ipalib.constants import (
+    DEFAULT_CONFIG, DOMAIN_SUFFIX_NAME, DOMAIN_LEVEL_0)
+
+from .env_config import env_to_script
+from .host import Host
+
 
 log = log_mgr.get_logger(__name__)
 
@@ -450,7 +451,7 @@ def install_adtrust(host):
     dig_output = '0 100 389 %s.' % host.hostname
     dig_test = lambda x: re.search(re.escape(dig_output), x)
 
-    util.run_repeatedly(host, dig_command, test=dig_test)
+    run_repeatedly(host, dig_command, test=dig_test)
 
 
 def configure_dns_for_trust(master, ad):
@@ -481,12 +482,12 @@ def establish_trust_with_ad(master, ad_domain, extra_args=()):
     master.run_command(['klist'])
     master.run_command(['smbcontrol', 'all', 'debug', '100'])
 
-    util.run_repeatedly(master,
-                        ['ipa', 'trust-add',
-                         '--type', 'ad', ad_domain,
-                         '--admin', 'Administrator',
-                         '--password'] + list(extra_args),
-                        stdin_text=master.config.ad_admin_password)
+    run_repeatedly(master,
+                   ['ipa', 'trust-add',
+                    '--type', 'ad', ad_domain,
+                    '--admin', 'Administrator',
+                    '--password'] + list(extra_args),
+                   stdin_text=master.config.ad_admin_password)
     master.run_command(['smbcontrol', 'all', 'debug', '1'])
     clear_sssd_cache(master)
     master.run_command(['systemctl', 'restart', 'krb5kdc.service'])
@@ -1246,3 +1247,70 @@ def restart_named(*args):
     for host in args:
         host.run_command(["systemctl", "restart", "named-pkcs11.service"])
     time.sleep(20)  # give a time to named to be ready (zone loading)
+
+
+def run_repeatedly(host, command, assert_zero_rc=True, test=None,
+                timeout=30, **kwargs):
+    """
+    Runs command on host repeatedly until it's finished successfully (returns
+    0 exit code and its stdout passes the test function).
+
+    Returns True if the command was executed succesfully, False otherwise.
+
+    This method accepts additional kwargs and passes these arguments
+    to the actual run_command method.
+    """
+
+    time_waited = 0
+    time_step = 2
+
+    # Check that the test is a function
+    if test:
+        assert callable(test)
+
+    while(time_waited <= timeout):
+        result = host.run_command(command, raiseonerr=False, **kwargs)
+
+        return_code_ok = not assert_zero_rc or (result.returncode == 0)
+        test_ok = not test or test(result.stdout_text)
+
+        if return_code_ok and test_ok:
+            # Command successful
+            return True
+        else:
+            # Command not successful
+            time.sleep(time_step)
+            time_waited += time_step
+
+    raise AssertionError("Command: {cmd} repeatedly failed {times} times, "
+                         "exceeding the timeout of {timeout} seconds."
+                         .format(cmd=' '.join(command),
+                                 times=timeout // time_step,
+                                 timeout=timeout))
+
+
+def get_host_ip_with_hostmask(host):
+    """
+    Detects the IP of the host including the hostmask.
+
+    Returns None if the IP could not be detected.
+    """
+
+    ip = host.ip
+    result = host.run_command(['ip', 'addr'])
+    full_ip_regex = r'(?P<full_ip>%s/\d{1,2}) ' % re.escape(ip)
+    match = re.search(full_ip_regex, result.stdout_text)
+
+    if match:
+        return match.group('full_ip')
+
+
+def ldappasswd_user_change(user, oldpw, newpw, master):
+    container_user = dict(DEFAULT_CONFIG)['container_user']
+    basedn = master.domain.basedn
+
+    userdn = "uid={},{},{}".format(user, container_user, basedn)
+
+    args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
+            '-s', newpw, '-x']
+    master.run_command(args)

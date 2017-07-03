@@ -120,7 +120,6 @@ class Backup(admintool.AdminTool):
     )
 
     files = (
-        paths.ANON_KEYTAB,
         paths.NAMED_CONF,
         paths.NAMED_KEYTAB,
         paths.RESOLV_CONF,
@@ -151,6 +150,8 @@ class Backup(admintool.AdminTool):
         paths.SSHD_CONFIG,
         paths.SSH_CONFIG,
         paths.KRB5_CONF,
+        paths.KDC_CA_BUNDLE_PEM,
+        paths.CA_BUNDLE_PEM,
         paths.IPA_CA_CRT,
         paths.IPA_DEFAULT_CONF,
         paths.DS_KEYTAB,
@@ -165,7 +166,9 @@ class Backup(admintool.AdminTool):
         paths.KRB5KDC_KDC_CONF,
         paths.KDC_CERT,
         paths.KDC_KEY,
+        paths.CACERT_PEM,
         paths.SYSTEMD_IPA_SERVICE,
+        paths.SYSTEMD_SYSTEM_HTTPD_IPA_CONF,
         paths.SYSTEMD_SSSD_SERVICE,
         paths.SYSTEMD_CERTMONGER_SERVICE,
         paths.SYSTEMD_PKI_TOMCAT_SERVICE,

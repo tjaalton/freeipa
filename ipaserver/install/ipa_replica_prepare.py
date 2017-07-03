@@ -34,7 +34,7 @@ import dns.resolver
 from six.moves.configparser import SafeConfigParser
 # pylint: enable=import-error
 
-from ipaserver.install import certs, installutils, bindinstance, dsinstance
+from ipaserver.install import certs, installutils, bindinstance, dsinstance, ca
 from ipaserver.install.replication import enable_replication_version_checking
 from ipaserver.install.server.replicainstall import install_ca_cert
 from ipaserver.install.bindinstance import (
@@ -537,12 +537,13 @@ class ReplicaPrepare(admintool.AdminTool):
         """
         hostname = self.replica_fqdn
         subject_base = self.subject_base
+        ca_subject = ca.lookup_ca_subject(api, subject_base)
         nickname = "Server-Cert"
 
         try:
             db = certs.CertDB(
-                api.env.realm, nssdir=self.dir, subject_base=subject_base,
-                host_name=api.env.host)
+                api.env.realm, nssdir=self.dir, host_name=api.env.host,
+                subject_base=subject_base, ca_subject=ca_subject)
             db.create_passwd_file()
             db.create_from_cacert()
             db.create_server_cert(nickname, hostname)
@@ -570,14 +571,15 @@ class ReplicaPrepare(admintool.AdminTool):
     def export_ra_pkcs12(self):
         if (os.path.exists(paths.RA_AGENT_PEM) and
            os.path.exists(paths.RA_AGENT_KEY)):
-            ipautil.run([
-                paths.OPENSSL,
-                "pkcs12", "-export",
-                "-inkey", paths.RA_AGENT_KEY,
-                "-in", paths.RA_AGENT_PEM,
-                "-out", os.path.join(self.dir, "ra.p12"),
-                "-passout", "pass:"
-            ])
+            with ipautil.write_tmp_file(self.dirman_password) as f:
+                ipautil.run([
+                    paths.OPENSSL,
+                    "pkcs12", "-export",
+                    "-inkey", paths.RA_AGENT_KEY,
+                    "-in", paths.RA_AGENT_PEM,
+                    "-out", os.path.join(self.dir, "ra.p12"),
+                    "-passout", "file:{pwfile}".format(pwfile=f.name)
+                ])
 
     def update_pki_admin_password(self):
         dn = DN('uid=admin', 'ou=people', 'o=ipaca')

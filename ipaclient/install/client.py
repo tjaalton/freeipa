@@ -41,6 +41,7 @@ from ipalib.util import (
     broadcast_ip_address_warning,
     network_ip_address_warning,
     normalize_hostname,
+    no_matching_interface_for_ip_address_warning,
     verify_host_resolvable,
 )
 from ipaplatform import services
@@ -710,7 +711,11 @@ def configure_krb5_conf(
         kropts.append(krbconf.setOption('default_domain', cli_domain))
 
     kropts.append(
-        krbconf.setOption('pkinit_anchors', 'FILE: %s' % paths.IPA_CA_CRT))
+        krbconf.setOption('pkinit_anchors',
+                          'FILE:%s' % paths.KDC_CA_BUNDLE_PEM))
+    kropts.append(
+        krbconf.setOption('pkinit_pool',
+                          'FILE:%s' % paths.CA_BUNDLE_PEM))
     ropts = [{
         'name': cli_realm,
         'type': 'subsection',
@@ -1296,6 +1301,7 @@ def update_dns(server, hostname, options):
 
     network_ip_address_warning(update_ips)
     broadcast_ip_address_warning(update_ips)
+    no_matching_interface_for_ip_address_warning(update_ips)
 
     update_txt = "debug\n"
     update_txt += ipautil.template_str(DELETE_TEMPLATE_A,
@@ -1441,7 +1447,7 @@ def check_ip_addresses(options):
     if options.ip_addresses:
         for ip in options.ip_addresses:
             try:
-                ipautil.CheckedIPAddress(ip, match_local=True)
+                ipautil.CheckedIPAddress(ip)
             except ValueError as e:
                 root_logger.error(e)
                 return False
@@ -2318,8 +2324,9 @@ def update_ipa_nssdb():
     if not os.path.exists(os.path.join(ipa_db.secdir, 'cert8.db')):
         create_ipa_nssdb()
 
-    for nickname, trust_flags in (('IPA CA', 'CT,C,C'),
-                                  ('External CA cert', 'C,,')):
+    for nickname, trust_flags in (
+            ('IPA CA', certdb.IPA_CA_TRUST_FLAGS),
+            ('External CA cert', certdb.EXTERNAL_CA_TRUST_FLAGS)):
         try:
             cert = sys_db.get_cert(nickname)
         except RuntimeError:
@@ -2680,7 +2687,9 @@ def _install(options):
             tmp_db.create_db()
 
             for i, cert in enumerate(ca_certs):
-                tmp_db.add_cert(cert, 'CA certificate %d' % (i + 1), 'C,,')
+                tmp_db.add_cert(cert,
+                                'CA certificate %d' % (i + 1),
+                                certdb.EXTERNAL_CA_TRUST_FLAGS)
         except CalledProcessError:
             raise ScriptError(
                 "Failed to add CA to temporary NSS database.",
@@ -2766,6 +2775,13 @@ def _install(options):
                                                   ca_subject)
     ca_certs_trust = [(c, n, certstore.key_policy_to_trust_flags(t, True, u))
                       for (c, n, t, u) in ca_certs]
+
+    x509.write_certificate_list(
+        [c for c, n, t, u in ca_certs if t is not False],
+        paths.KDC_CA_BUNDLE_PEM)
+    x509.write_certificate_list(
+        [c for c, n, t, u in ca_certs if t is not False],
+        paths.CA_BUNDLE_PEM)
 
     # Add the CA certificates to the IPA NSS database
     root_logger.debug("Adding CA certificates to the IPA NSS database.")
@@ -2893,6 +2909,14 @@ def _install(options):
 
         # Check that nss is working properly
         if not options.on_master:
+            user = options.principal
+            if user is None:
+                user = "admin@%s" % cli_domain
+                root_logger.info("Principal is not set when enrolling with OTP"
+                                 "; using principal '%s' for 'getent passwd'",
+                                 user)
+            elif '@' not in user:
+                user = "%s@%s" % (user, cli_domain)
             n = 0
             found = False
             # Loop for up to 10 seconds to see if nss is working properly.
@@ -2901,16 +2925,15 @@ def _install(options):
             # Particulary, SSSD might take longer than 6-8 seconds.
             while n < 10 and not found:
                 try:
-                    ipautil.run(["getent", "passwd", "admin@%s" % cli_domain])
+                    ipautil.run(["getent", "passwd", user])
                     found = True
                 except Exception as e:
                     time.sleep(1)
                     n = n + 1
 
             if not found:
-                root_logger.error(
-                    "Unable to find 'admin' user with "
-                    "'getent passwd admin@%s'!" % cli_domain)
+                root_logger.error("Unable to find '%s' user with 'getent "
+                                  "passwd %s'!" % (user.split("@")[0], user))
                 if conf:
                     root_logger.info("Recognized configuration: %s", conf)
                 else:
@@ -3314,6 +3337,8 @@ def uninstall(options):
 
     # Remove the CA cert
     remove_file(paths.IPA_CA_CRT)
+    remove_file(paths.KDC_CA_BUNDLE_PEM)
+    remove_file(paths.CA_BUNDLE_PEM)
 
     root_logger.info("Client uninstall complete.")
 

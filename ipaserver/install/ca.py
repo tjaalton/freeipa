@@ -183,6 +183,8 @@ def install_check(standalone, replica_config, options):
             realm_name, nssdir=dirname, subject_base=options._subject_base)
 
         for db in (cadb, dsdb):
+            if not db.exists():
+                continue
             for nickname, _trust_flags in db.list_certs():
                 if nickname == certdb.get_ca_nickname(realm_name):
                     raise ScriptError(
@@ -318,7 +320,7 @@ def install_step_1(standalone, replica_config, options):
             realm_name, nssdir=dirname, subject_base=subject_base)
         cacert = cadb.get_cert_from_db('caSigningCert cert-pki-ca', pem=False)
         nickname = certdb.get_ca_nickname(realm_name)
-        trust_flags = 'CT,C,C'
+        trust_flags = certdb.IPA_CA_TRUST_FLAGS
         dsdb.add_cert(cacert, nickname, trust_flags)
         certstore.put_ca_cert_nss(api.Backend.ldap2, api.env.basedn,
                                   cacert, nickname, trust_flags,

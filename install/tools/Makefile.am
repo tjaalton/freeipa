@@ -28,10 +28,12 @@ dist_sbin_SCRIPTS =		\
 	ipa-advise		\
 	ipa-cacert-manage	\
 	ipa-winsync-migrate	\
+	ipa-pkinit-manage	\
 	$(NULL)
 
 appdir = $(libexecdir)/ipa/
 dist_app_SCRIPTS =		\
+	ipa-custodia		\
 	ipa-httpd-kdcproxy	\
 	ipa-pki-retrieve-key	\
 	$(NULL)
