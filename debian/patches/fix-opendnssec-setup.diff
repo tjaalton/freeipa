@@ -11,7 +11,7 @@ Description: Fix ODS setup with 2.0.x
  	</RepositoryList>
 --- a/ipaserver/install/opendnssecinstance.py
 +++ b/ipaserver/install/opendnssecinstance.py
-@@ -304,7 +304,7 @@ class OpenDNSSECInstance(service.Service
+@@ -293,7 +293,7 @@ class OpenDNSSECInstance(service.Service
          else:
              # initialize new kasp.db
              command = [
@@ -22,7 +22,7 @@ Description: Fix ODS setup with 2.0.x
  
 --- a/ipaplatform/base/paths.py
 +++ b/ipaplatform/base/paths.py
-@@ -171,7 +171,7 @@ class BasePathNamespace(object):
+@@ -168,7 +168,7 @@ class BasePathNamespace(object):
      NET = "/usr/bin/net"
      BIN_NISDOMAINNAME = "/usr/bin/nisdomainname"
      NSUPDATE = "/usr/bin/nsupdate"
@@ -31,9 +31,9 @@ Description: Fix ODS setup with 2.0.x
      ODS_SIGNER = "/usr/sbin/ods-signer"
      OPENSSL = "/usr/bin/openssl"
      PK12UTIL = "/usr/bin/pk12util"
---- a/ipapython/dnssec/odsmgr.py
-+++ b/ipapython/dnssec/odsmgr.py
-@@ -125,7 +125,7 @@ class ODSMgr(object):
+--- a/ipaserver/dnssec/odsmgr.py
++++ b/ipaserver/dnssec/odsmgr.py
+@@ -133,7 +133,7 @@ class ODSMgr(object):
  
          Raises CalledProcessError if returncode != 0.
          """

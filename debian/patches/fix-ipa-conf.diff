@@ -1,7 +1,7 @@
 Description: Fix paths
 --- a/install/conf/ipa.conf
 +++ b/install/conf/ipa.conf
-@@ -37,7 +37,7 @@ FileETag None
+@@ -47,7 +47,7 @@ FileETag None
  
  # FIXME: WSGISocketPrefix is a server-scope directive.  The mod_wsgi package
  # should really be fixed by adding this its /etc/httpd/conf.d/wsgi.conf:
@@ -10,16 +10,16 @@ Description: Fix paths
  
  
  # Configure mod_wsgi handler for /ipa
-@@ -68,7 +68,7 @@ WSGIScriptReloading Off
+@@ -129,7 +129,7 @@ Alias /ipa/session/cookie "/usr/share/ip
    SessionCookieName ipa_session path=/ipa;httponly;secure;
    SessionHeader IPASESSION
    SessionMaxAge 1800
 -  GssapiSessionKey file:/etc/httpd/alias/ipasession.key
 +  GssapiSessionKey file:/etc/apache2/ipasession.key
  
-   GssapiDelegCcacheDir /var/run/ipa/ccaches
-   GssapiDelegCcachePerms mode:0660 gid:ipaapi
-@@ -112,7 +112,7 @@ Alias /ipa/session/cookie "/usr/share/ip
+   Header unset Set-Cookie
+ </Location>
+@@ -149,7 +149,7 @@ Alias /ipa/session/cookie "/usr/share/ip
  # Custodia stuff is redirected to the custodia daemon
  # after authentication
  <Location "/ipa/keys/">
@@ -28,7 +28,7 @@ Description: Fix paths
      RequestHeader set GSS_NAME %{GSS_NAME}s
      RequestHeader set REMOTE_USER %{REMOTE_USER}s
  </Location>
-@@ -146,8 +146,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+@@ -183,8 +183,8 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  
  #  List explicitly only the fonts we want to serve

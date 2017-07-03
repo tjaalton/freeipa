@@ -1,5 +1,4 @@
 # upstreamed
-fix-pkcs11-helper.diff
 
 # not upstreamable
 hack-libarch.diff
@@ -9,7 +8,6 @@ enable-mod-nss-during-setup.diff
 fix-ipa-conf.diff
 fix-kdcproxy-paths.diff
 fix-replicainstall.diff
-fix-dnssec-services.diff
 create-sysconfig-ods.diff
 fix-named-conf-template.diff
 fix-opendnssec-setup.diff

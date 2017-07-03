@@ -1,15 +1,21 @@
 freeipa (4.5.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
-    - Remove upstreamed patches: add-debian-platform.diff,
+    - Remove upstreamed patches:
+      add-debian-platform.diff,
       ipa-kdb-support-dal-version-5-and-6.diff,
-      purge-firefox-extension.diff, fix-ipa-otpd-install.diff,
-      fix-ipa-otpd-service.diff, purge-firefox-extension.diff,
-      prefix.patch, fix-kdcproxy-path.diff, fix-is-running.diff
+      purge-firefox-extension.diff,
+      fix-ipa-otpd-install.diff,
+      fix-ipa-otpd-service.diff,
+      purge-firefox-extension.diff,
+      prefix.patch,
+      fix-kdcproxy-path.diff,
+      fix-is-running.diff,
+      fix-pkcs11-helper.diff,
+      fix-dnssec-services.diff
     - Remove obsolete patches: fix-memcached.diff,
       fix-oddjobs.diff
-    - Refresh patches: fix-dnssec-services.diff,
-      fix-ipa-conf.diff, fix-replicainstall.diff
+    - Refresh rest of the patches
   * control et al: Memcached is not used anymore.
   * control, server.install: Depend on gssproxy.
   * control: Build-depend on python-jinja2, add CSR files to python-
