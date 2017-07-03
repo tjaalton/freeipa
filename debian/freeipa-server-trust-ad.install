@@ -1,8 +1,6 @@
 etc/dbus-1/system.d/oddjob-ipa-trust.conf
 etc/oddjobd.conf.d/oddjobd-ipa-trust.conf
 usr/lib/*/samba/pdb/ipasam.so
-usr/lib/python*/dist-packages/ipaserver/dcerpc.py
-usr/lib/python*/dist-packages/ipaserver/install/adtrustinstance*
 usr/lib/ipa/oddjob/com.redhat.idm.trust-fetch-domains
 usr/sbin/ipa-adtrust-install
 usr/share/ipa/smb.conf.empty

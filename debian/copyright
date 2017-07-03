@@ -1,6 +1,6 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-name: freeipa
-Source: http://freeipa.org/downloads/src/
+Source: http://releases.pagure.org/freeipa
 
 Files: *
 Copyright: 1999-2011 Red Hat, Inc.

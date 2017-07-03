@@ -1,4 +1,5 @@
-# from upstream
+# upstreamed
+fix-pkcs11-helper.diff
 
 # not upstreamable
 hack-libarch.diff
@@ -11,3 +12,4 @@ fix-replicainstall.diff
 fix-dnssec-services.diff
 create-sysconfig-ods.diff
 fix-named-conf-template.diff
+fix-opendnssec-setup.diff
