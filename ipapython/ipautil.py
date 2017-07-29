@@ -62,6 +62,12 @@ PROTOCOL_NAMES = {
     socket.SOCK_DGRAM: 'udp'
 }
 
+InterfaceDetails = collections.namedtuple(
+    'InterfaceDetails', [
+        'name',  # interface name
+        'ifnet'  # network details of interface
+    ])
+
 
 class UnsafeIPAddress(netaddr.IPAddress):
     """Any valid IP address with or without netmask."""
@@ -129,7 +135,7 @@ class CheckedIPAddress(UnsafeIPAddress):
 
     Reserved or link-local addresses are never accepted.
     """
-    def __init__(self, addr, match_local=False, parse_netmask=True,
+    def __init__(self, addr, parse_netmask=True,
                  allow_loopback=False, allow_multicast=False):
         try:
             super(CheckedIPAddress, self).__init__(addr)
@@ -160,11 +166,6 @@ class CheckedIPAddress(UnsafeIPAddress):
         if not allow_multicast and self.is_multicast():
             raise ValueError("cannot use multicast IP address {}".format(addr))
 
-        if match_local:
-            if not self.get_matching_interface():
-                raise ValueError('no network interface matches the IP address '
-                                 'and netmask {}'.format(addr))
-
         if self._net is None:
             if self.version == 4:
                 self._net = netaddr.IPNetwork(
@@ -193,8 +194,10 @@ class CheckedIPAddress(UnsafeIPAddress):
 
     def get_matching_interface(self):
         """Find matching local interface for address
-        :return: Interface name or None if no interface has this address
+        :return: InterfaceDetails named tuple or None if no interface has
+        this address
         """
+        root_logger.debug("Searching for an interface of IP address: %s", self)
         if self.version == 4:
             family = netifaces.AF_INET
         elif self.version == 6:
@@ -204,7 +207,6 @@ class CheckedIPAddress(UnsafeIPAddress):
                 "Unsupported address family ({})".format(self.version)
             )
 
-        iface = None
         for interface in netifaces.interfaces():
             for ifdata in netifaces.ifaddresses(interface).get(family, []):
 
@@ -212,17 +214,33 @@ class CheckedIPAddress(UnsafeIPAddress):
                 # errors in IPNetwork
                 ifaddr = ifdata['addr'].split(u'%', 1)[0]
 
-                ifnet = netaddr.IPNetwork('{addr}/{netmask}'.format(
-                    addr=ifaddr,
-                    netmask=ifdata['netmask']
-                ))
-                if ifnet == self._net or (
-                                self._net is None and ifnet.ip == self):
-                    self._net = ifnet
-                    iface = interface
-                    break
+                # newer versions of netifaces provide IPv6 netmask in format
+                # 'ffff:ffff:ffff:ffff::/64'. We have to split and use prefix
+                # or the netmask with older versions
+                ifmask = ifdata['netmask'].split(u'/')[-1]
 
-        return iface
+                ifaddrmask = '{addr}/{netmask}'.format(
+                    addr=ifaddr,
+                    netmask=ifmask
+                )
+                root_logger.debug(
+                    "Testing local IP address: %s (interface: %s)",
+                    ifaddrmask, interface)
+
+                ifnet = netaddr.IPNetwork(ifaddrmask)
+
+                if ifnet.ip == self:
+                    return InterfaceDetails(interface, ifnet)
+
+    def set_ip_net(self, ifnet):
+        """Set IP Network details for this address. IPNetwork is valid only
+        locally, so this should be set only for local IP addresses
+
+        :param ifnet: netaddr.IPNetwork object with information about IP
+        network where particula address belongs locally
+        """
+        assert isinstance(ifnet, netaddr.IPNetwork)
+        self._net = ifnet
 
 
 def valid_ip(addr):
