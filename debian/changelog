@@ -14,7 +14,8 @@ freeipa (4.6.0-1) UNRELEASED; urgency=medium
       fix-pkcs11-helper.diff,
       fix-dnssec-services.diff
     - Remove obsolete patches: fix-memcached.diff,
-      fix-oddjobs.diff
+      fix-oddjobs.diff,
+      fix-kdcproxy-paths.diff
     - Refresh rest of the patches
   * control et al: Memcached is not used anymore.
   * control, server.install: Depend on gssproxy.

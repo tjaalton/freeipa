@@ -1,6 +1,6 @@
 --- a/ipaserver/install/opendnssecinstance.py
 +++ b/ipaserver/install/opendnssecinstance.py
-@@ -195,6 +195,9 @@ class OpenDNSSECInstance(service.Service
+@@ -197,6 +197,9 @@ class OpenDNSSECInstance(service.Service
          if not self.fstore.has_file(paths.SYSCONFIG_ODS):
              self.fstore.backup_file(paths.SYSCONFIG_ODS)
  
