@@ -1,0 +1,58 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = configure ]; then
+    if [ -e /usr/share/apache2/apache2-maintscript-helper ]; then
+        . /usr/share/apache2/apache2-maintscript-helper
+	if [ ! -e /etc/apache2/mods-enabled/auth_gssapi.load ]; then
+            apache2_invoke enmod auth_gssapi || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/authz_user.load ]; then
+            apache2_invoke enmod authz_user || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/deflate.load ]; then
+            apache2_invoke enmod deflate || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/expires.load ]; then
+            apache2_invoke enmod expires || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then
+            apache2_invoke enmod headers || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy.load ]; then
+            apache2_invoke enmod proxy || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy_ajp.load ]; then
+            apache2_invoke enmod proxy_ajp || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy_http.load ]; then
+            apache2_invoke enmod proxy_http || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/rewrite.load ]; then
+            apache2_invoke enmod rewrite || exit $?
+        fi
+    fi
+
+    # check if IPA is set up
+    is_configured=`python2 -c 'from ipaserver.install import installutils; print "yes" if installutils.is_ipa_configured() else "no";'`
+    if [ $is_configured = yes ]; then
+        echo "Running ipa-server-upgrade..."
+        ipa-server-upgrade --quiet >/dev/null
+    fi
+fi
+
+if [ ! -e /run/apache2/ipa ]; then
+    mkdir -m 0700 /run/apache2/ipa
+    chown www-data:www-data /run/apache2/ipa
+
+    if [ ! -e /run/apache2/ipa/clientcaches ]; then
+        mkdir -m 0700 /run/apache2/ipa/clientcaches
+        chown www-data:www-data /run/apache2/ipa/clientcaches
+    fi
+    if [ ! -e /run/apache2/ipa/krbcache ]; then
+        mkdir -m 0700 /run/apache2/ipa/krbcache
+        chown www-data:www-data /run/apache2/ipa/krbcache
+    fi
+fi
+
+#DEBHELPER#

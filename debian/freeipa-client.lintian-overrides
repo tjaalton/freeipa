@@ -1,0 +1,3 @@
+# lintian is lying
+python-script-but-no-python-dep
+possible-bashism-in-maintainer-script

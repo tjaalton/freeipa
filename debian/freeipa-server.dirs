@@ -1,0 +1,3 @@
+etc/ipa/custodia
+etc/ipa/dnssec
+var/lib/ipa/backup

@@ -1,0 +1,13 @@
+usr/sbin/ipa-certupdate
+usr/sbin/ipa-client-automount
+usr/sbin/ipa-client-install
+usr/sbin/ipa-getkeytab
+usr/sbin/ipa-join
+usr/sbin/ipa-rmkeytab
+usr/share/man/man1/ipa-certupdate.1*
+usr/share/man/man1/ipa-client-automount.1*
+usr/share/man/man1/ipa-client-install.1*
+usr/share/man/man1/ipa-getkeytab.1*
+usr/share/man/man1/ipa-join.1*
+usr/share/man/man1/ipa-rmkeytab.1*
+usr/share/man/man5/default.conf.5*

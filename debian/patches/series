@@ -1,0 +1,13 @@
+# upstreamed
+
+# not upstreamable
+hack-libarch.diff
+enable-mod-nss-during-setup.diff
+
+# send upstream
+fix-ipa-conf.diff
+fix-kdcproxy-paths.diff
+fix-replicainstall.diff
+create-sysconfig-ods.diff
+fix-named-conf-template.diff
+fix-opendnssec-setup.diff
