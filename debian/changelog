@@ -1,3 +1,9 @@
+freeipa (4.4.4-3) UNRELEASED; urgency=medium
+
+  * fix-opendnssec-setup.diff: Fix a typo. (Closes: #878095)
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Mon, 09 Oct 2017 23:51:31 +0300
+
 freeipa (4.4.4-2) unstable; urgency=medium
 
   * control: Add a dependency on fonts-open-sans. (LP: #1656236)

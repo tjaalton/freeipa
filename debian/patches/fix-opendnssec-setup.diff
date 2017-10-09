@@ -74,7 +74,7 @@ Description: Fix ODS setup with 2.0.x
      def get_ods_zonelist(self):
          stdout = self.ksmutil(['zonelist', 'export'])
 -        reader = ODSZoneListReader(stdout)
-+        with open(paths.OPENDNSSEC_ZONELIST_FILE) as f
++        with open(paths.OPENDNSSEC_ZONELIST_FILE) as f:
 +            reader = ODSZoneListReader(f.read())
          return reader
  
