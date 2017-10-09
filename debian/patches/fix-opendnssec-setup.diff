@@ -1,44 +1,81 @@
 Description: Fix ODS setup with 2.0.x
 --- a/install/share/opendnssec_conf.template
 +++ b/install/share/opendnssec_conf.template
-@@ -8,7 +8,6 @@
+@@ -8,7 +8,7 @@
  			<Module>$SOFTHSM_LIB</Module>
  			<TokenLabel>$TOKEN_LABEL</TokenLabel>
  			<PIN>$PIN</PIN>
 -            <AllowExtraction/>
++			<AllowExtraction/>
  		</Repository>
  
  	</RepositoryList>
 --- a/ipaserver/install/opendnssecinstance.py
 +++ b/ipaserver/install/opendnssecinstance.py
-@@ -304,7 +304,7 @@ class OpenDNSSECInstance(service.Service
+@@ -291,20 +291,15 @@ class OpenDNSSECInstance(service.Service
+ 
+             # regenerate zonelist.xml
+             ods_enforcerd = services.knownservices.ods_enforcerd
+-            cmd = [paths.ODS_KSMUTIL, 'zonelist', 'export']
++            cmd = [paths.ODS_ENFORCER, 'zonelist', 'export']
+             result = ipautil.run(cmd,
+                                  runas=constants.ODS_USER,
+                                  capture_output=True)
+-            with open(paths.OPENDNSSEC_ZONELIST_FILE, 'w') as zonelistf:
+-                zonelistf.write(result.output)
+-                os.chown(paths.OPENDNSSEC_ZONELIST_FILE,
+-                         self.ods_uid, self.ods_gid)
+-                os.chmod(paths.OPENDNSSEC_ZONELIST_FILE, 0o660)
+ 
          else:
              # initialize new kasp.db
              command = [
 -                paths.ODS_KSMUTIL,
-+                '/usr/sbin/ods-enforcer-db-setup',
++                paths.ODS_ENFORCER_SETUP,
                  'setup'
              ]
  
 --- a/ipaplatform/base/paths.py
 +++ b/ipaplatform/base/paths.py
-@@ -171,7 +171,7 @@ class BasePathNamespace(object):
+@@ -171,7 +171,8 @@ class BasePathNamespace(object):
      NET = "/usr/bin/net"
      BIN_NISDOMAINNAME = "/usr/bin/nisdomainname"
      NSUPDATE = "/usr/bin/nsupdate"
 -    ODS_KSMUTIL = "/usr/bin/ods-ksmutil"
-+    ODS_KSMUTIL = "/usr/bin/ods-enforcer"
++    ODS_ENFORCER = "/usr/bin/ods-enforcer"
++    ODS_ENFORCER_SETUP = "/usr/bin/ods-enforcer-db-setup"
      ODS_SIGNER = "/usr/sbin/ods-signer"
      OPENSSL = "/usr/bin/openssl"
      PK12UTIL = "/usr/bin/pk12util"
 --- a/ipapython/dnssec/odsmgr.py
 +++ b/ipapython/dnssec/odsmgr.py
-@@ -125,7 +125,7 @@ class ODSMgr(object):
+@@ -7,6 +7,7 @@ from lxml import etree
+ import dns.name
+ 
+ from ipapython import ipa_log_manager, ipautil
++from ipaplatform.paths import paths
+ 
+ # hack: zone object UUID is stored as path to imaginary zone file
+ ENTRYUUID_PREFIX = "/var/lib/ipa/dns/zone/entryUUID/"
+@@ -121,17 +122,18 @@ class ODSMgr(object):
+         self.zl_ldap = LDAPZoneListReader()
+ 
+     def ksmutil(self, params):
+-        """Call ods-ksmutil with given parameters and return stdout.
++        """Call ods-enforcer with given parameters and return stdout.
  
          Raises CalledProcessError if returncode != 0.
          """
 -        cmd = ['ods-ksmutil'] + params
-+        cmd = ['ods-enforcer'] + params
++        cmd = [paths.ODS_ENFORCER] + params
          result = ipautil.run(cmd, capture_output=True)
          return result.output
  
+     def get_ods_zonelist(self):
+         stdout = self.ksmutil(['zonelist', 'export'])
+-        reader = ODSZoneListReader(stdout)
++        with open(paths.OPENDNSSEC_ZONELIST_FILE) as f
++            reader = ODSZoneListReader(f.read())
+         return reader
+ 
+     def add_ods_zone(self, uuid, name):
