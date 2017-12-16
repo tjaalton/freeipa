@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # hack for lxc
-IP=`ip route get 1.1.1.1 | awk '{print $NF; exit}'`
+IP=`ip route get 1.1.1.1 | sed -n -e's/.*src //; s/ .*//; p; q'`
 HOSTNAME=`cat /etc/hosts| grep '127.0.1.1' | awk '{print $NF; exit}'`
 echo "$IP $HOSTNAME.debci $HOSTNAME" >> /etc/hosts
 
