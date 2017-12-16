@@ -1,3 +1,9 @@
+freeipa (4.4.4-4) UNRELEASED; urgency=medium
+
+  * fix-opendnssec-setup.diff: Use /usr/sbin prefix for ods binaries.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Sun, 15 Oct 2017 09:50:35 +0300
+
 freeipa (4.4.4-3) unstable; urgency=medium
 
   * fix-opendnssec-setup.diff: Fix a typo. (Closes: #878095)
