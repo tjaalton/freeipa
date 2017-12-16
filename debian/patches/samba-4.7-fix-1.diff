@@ -1,0 +1,142 @@
+From 0f450488b0883c3e66cc8dfebd9498e9a5c13a7c Mon Sep 17 00:00:00 2001
+From: Florence Blanc-Renaud <flo@redhat.com>
+Date: Tue, 21 Mar 2017 17:33:20 +0100
+Subject: [PATCH] ipa-sam: create the gidNumber attribute in the trusted domain
+ entry
+
+When a trusted domain entry is created, the uidNumber attribute is created
+but not the gidNumber attribute. This causes samba to log
+	Failed to find a Unix account for DOM-AD$
+because the samu structure does not contain a group_sid and is not put
+in the cache.
+The fix creates the gidNumber attribute in the trusted domain entry,
+and initialises the group_sid field in the samu structure returned
+by ldapsam_getsampwnam. This ensures that the entry is put in the cache.
+
+Note that this is only a partial fix for 6660 as it does not prevent
+_netr_ServerAuthenticate3 from failing with the log
+	_netr_ServerAuthenticate3: netlogon_creds_server_check failed. Rejecting auth request from client VM-AD machine account dom-ad.example.com.
+
+https://pagure.io/freeipa/issue/6827
+
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 40 +++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 37 insertions(+), 3 deletions(-)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index 4c1fda5f82..6a29e8e10b 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -195,6 +195,7 @@ struct ipasam_privates {
+ 	char *trust_dn;
+ 	char *flat_name;
+ 	struct dom_sid fallback_primary_group;
++	char *fallback_primary_group_gid_str;
+ 	char *server_princ;
+ 	char *client_princ;
+ 	struct sss_idmap_ctx *idmap_ctx;
+@@ -2419,6 +2420,9 @@ static NTSTATUS ipasam_set_trusted_domain(struct pdb_methods *methods,
+ 	if (entry == NULL || sid == NULL) {
+ 		smbldap_make_mod(priv2ld(ldap_state), entry, &mods,
+ 				 LDAP_ATTRIBUTE_UIDNUMBER, IPA_MAGIC_ID_STR);
++		smbldap_make_mod(priv2ld(ldap_state), entry, &mods,
++		                 LDAP_ATTRIBUTE_GIDNUMBER,
++				 ldap_state->ipasam_privates->fallback_primary_group_gid_str);
+ 	}
+ 
+ 	if (td->netbios_name != NULL) {
+@@ -2829,6 +2833,7 @@ static bool init_sam_from_td(struct samu *user, struct pdb_trusted_domain *td,
+ {
+ 	NTSTATUS status;
+ 	struct dom_sid *u_sid;
++	struct dom_sid *g_sid;
+ 	char *name;
+ 	char *trustpw = NULL;
+ 	char *trustpw_utf8 = NULL;
+@@ -2884,6 +2889,11 @@ static bool init_sam_from_td(struct samu *user, struct pdb_trusted_domain *td,
+ 	}
+ 	talloc_free(u_sid);
+ 
++	g_sid = &ldap_state->ipasam_privates->fallback_primary_group;
++	if (!pdb_set_group_sid(user, g_sid, PDB_SET)) {
++		return false;
++	}
++
+ 	status = get_trust_pwd(user, &td->trust_auth_incoming, &trustpw, NULL);
+ 	if (!NT_STATUS_IS_OK(status)) {
+ 		return false;
+@@ -3594,14 +3604,17 @@ static void ipasam_free_private_data(void **vp)
+ static struct dom_sid *get_fallback_group_sid(TALLOC_CTX *mem_ctx,
+ 					      struct smbldap_state *ldap_state,
+ 					      struct sss_idmap_ctx *idmap_ctx,
+-					      LDAPMessage *dom_entry)
++					      LDAPMessage *dom_entry,
++					      char **fallback_group_gid_str)
+ {
+ 	char *dn;
+ 	char *sid;
++	char *gidnumber;
+ 	int ret;
+ 	const char *filter = "objectClass=*";
+ 	const char *attr_list[] = {
+ 					LDAP_ATTRIBUTE_SID,
++					LDAP_ATTRIBUTE_GIDNUMBER,
+ 					NULL};
+ 	LDAPMessage *result;
+ 	LDAPMessage *entry;
+@@ -3648,9 +3661,20 @@ static struct dom_sid *get_fallback_group_sid(TALLOC_CTX *mem_ctx,
+ 		talloc_free(sid);
+ 		return NULL;
+ 	}
++	talloc_free(sid);
++
++	gidnumber = get_single_attribute(mem_ctx, ldap_state->ldap_struct,
++					entry, LDAP_ATTRIBUTE_GIDNUMBER);
++	if (gidnumber == NULL) {
++		DEBUG(0, ("Missing mandatory attribute %s.\n",
++			  LDAP_ATTRIBUTE_GIDNUMBER));
++		ldap_msgfree(result);
++		return NULL;
++	}
++
++	*fallback_group_gid_str = gidnumber;
+ 
+ 	ldap_msgfree(result);
+-	talloc_free(sid);
+ 
+ 	return fallback_group_sid;
+ }
+@@ -4443,6 +4467,7 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
+ 	char *domain_sid_string = NULL;
+ 	struct dom_sid *ldap_domain_sid = NULL;
+ 	struct dom_sid *fallback_group_sid = NULL;
++	char *fallback_group_gid_str = NULL;
+ 
+ 	LDAPMessage *result = NULL;
+ 	LDAPMessage *entry = NULL;
+@@ -4586,7 +4611,8 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
+ 	fallback_group_sid = get_fallback_group_sid(ldap_state,
+ 					ldap_state->smbldap_state,
+ 					ldap_state->ipasam_privates->idmap_ctx,
+-					result);
++					result,
++					&fallback_group_gid_str);
+ 	if (fallback_group_sid == NULL) {
+ 		DEBUG(0, ("Cannot find SID of fallback group.\n"));
+ 		ldap_msgfree(result);
+@@ -4596,6 +4622,14 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
+ 		 fallback_group_sid);
+ 	talloc_free(fallback_group_sid);
+ 
++	if (fallback_group_gid_str == NULL) {
++		DEBUG(0, ("Cannot find gidNumber of fallback group.\n"));
++		ldap_msgfree(result);
++		return NT_STATUS_INVALID_PARAMETER;
++	}
++	ldap_state->ipasam_privates->fallback_primary_group_gid_str =
++		fallback_group_gid_str;
++
+ 	domain_sid_string = get_single_attribute(
+ 				ldap_state,
+ 				ldap_state->smbldap_state->ldap_struct,

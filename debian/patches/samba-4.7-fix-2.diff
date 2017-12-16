@@ -1,0 +1,77 @@
+From 64d23dd1382223fd2c0eb4aea0988977118b5799 Mon Sep 17 00:00:00 2001
+From: Sumit Bose <sbose@redhat.com>
+Date: Fri, 16 Jun 2017 16:26:41 +0200
+Subject: [PATCH] ipa-sam: replace encode_nt_key() with E_md4hash()
+
+Since ipa-sam is running as part of smbd is it safe to use the
+E_md4hash() from Samba. This way ipa-sam does not depend on other crypto
+libraries which might depend on other rules like e.g. FIPS mode.
+
+Resolves https://pagure.io/freeipa/issue/7026
+
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+Reviewed-By: Stanislav Laznicka <slaznick@redhat.com>
+---
+ daemons/ipa-sam/ipa_sam.c | 27 ++-------------------------
+ 1 file changed, 2 insertions(+), 25 deletions(-)
+
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index 6a29e8e10b..59d92f37c9 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -110,6 +110,7 @@ char *sid_string_dbg(const struct dom_sid *sid); /* available in libsmbconf.so *
+ char *escape_ldap_string(TALLOC_CTX *mem_ctx, const char *s); /* available in libsmbconf.so */
+ bool secrets_store(const char *key, const void *data, size_t size); /* available in libpdb.so */
+ void idmap_cache_set_sid2unixid(const struct dom_sid *sid, struct unixid *unix_id); /* available in libsmbconf.so */
++bool E_md4hash(const char *passwd, uint8_t p16[16]); /* available in libcliauth-samba4.so */
+ 
+ #define LDAP_OBJ_SAMBASAMACCOUNT "ipaNTUserAttrs"
+ #define LDAP_OBJ_TRUSTED_DOMAIN "ipaNTTrustedDomain"
+@@ -2836,11 +2837,7 @@ static bool init_sam_from_td(struct samu *user, struct pdb_trusted_domain *td,
+ 	struct dom_sid *g_sid;
+ 	char *name;
+ 	char *trustpw = NULL;
+-	char *trustpw_utf8 = NULL;
+-	char *tmp_str = NULL;
+-	int ret;
+ 	uint8_t nt_key[16];
+-	size_t converted_size;
+ 	bool res;
+ 	char *sid_str;
+ 	enum idmap_error_code err;
+@@ -2899,19 +2896,7 @@ static bool init_sam_from_td(struct samu *user, struct pdb_trusted_domain *td,
+ 		return false;
+ 	}
+ 
+-	if (!push_utf8_talloc(user, &trustpw_utf8, trustpw, &converted_size)) {
+-		res = false;
+-		goto done;
+-	}
+-
+-	tmp_str = talloc_strdup_upper(user, trustpw);
+-	if (tmp_str == NULL) {
+-		res = false;
+-		goto done;
+-	}
+-
+-	ret = encode_nt_key(trustpw_utf8, nt_key);
+-	if (ret != 0) {
++	if (!E_md4hash(trustpw, nt_key)) {
+ 		res = false;
+ 		goto done;
+ 	}
+@@ -2927,14 +2912,6 @@ static bool init_sam_from_td(struct samu *user, struct pdb_trusted_domain *td,
+ 		memset(trustpw, 0, strlen(trustpw));
+ 		talloc_free(trustpw);
+ 	}
+-	if (trustpw_utf8 != NULL) {
+-		memset(trustpw_utf8, 0, strlen(trustpw_utf8));
+-		talloc_free(trustpw_utf8);
+-	}
+-	if (tmp_str != NULL) {
+-		memset(tmp_str, 0, strlen(tmp_str));
+-		talloc_free(tmp_str);
+-	}
+ 
+ 	return res;
+ }

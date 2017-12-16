@@ -1,0 +1,52 @@
+From c2fd529cb3ca56ab243e53fb1098748a76c42cde Mon Sep 17 00:00:00 2001
+From: Alexander Bokovoy <abokovoy@redhat.com>
+Date: Mon, 3 Jul 2017 14:38:05 +0300
+Subject: [PATCH] ipa-sam: use smbldap_set_bind_callback for Samba 4.7 or later
+
+Samba 4.7 tightens up smbldap API by making 'struct smbldap_state' an
+opaque. This means ipa-sam module cannot anymore directly set its
+LDAP bind callback.
+
+Use new smbldap API to set the LDAP bind callback.
+
+Fixes https://pagure.io/freeipa/issue/6877
+
+Reviewed-By: Martin Basti <mbasti@redhat.com>
+---
+ daemons/configure.ac      | 5 +++++
+ daemons/ipa-sam/ipa_sam.c | 4 ++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/daemons/configure.ac b/daemons/configure.ac
+index b3fed6e79e..b33fc78298 100644
+--- a/daemons/configure.ac
++++ b/daemons/configure.ac
+@@ -230,6 +230,11 @@ AC_CHECK_LIB([smbldap],[smbldap_get_ldap],
+              [AC_MSG_WARN([libsmbldap is not opaque, not using smbldap_get_ldap])],
+              [$SAMBA40EXTRA_LIBPATH])
+ 
++AC_CHECK_LIB([smbldap],[smbldap_set_bind_callback],
++             [AC_DEFINE([HAVE_SMBLDAP_SET_BIND_CALLBACK], [1], [struct smbldap_state is opaque])],
++             [AC_MSG_WARN([libsmbldap is not opaque, not using smbldap_set_bind_callback])],
++             [$SAMBA40EXTRA_LIBPATH])
++
+ dnl ---------------------------------------------------------------------------
+ dnl Check for libunistring
+ dnl ---------------------------------------------------------------------------
+diff --git a/daemons/ipa-sam/ipa_sam.c b/daemons/ipa-sam/ipa_sam.c
+index fe9913d611..0cd48d845b 100644
+--- a/daemons/ipa-sam/ipa_sam.c
++++ b/daemons/ipa-sam/ipa_sam.c
+@@ -4532,8 +4532,12 @@ static NTSTATUS pdb_init_ipasam(struct pdb_methods **pdb_method,
+ 				      uri, false, NULL, NULL,
+ 				      &ipasam_state->ldap_state);
+ 		if (NT_STATUS_IS_OK(status)) {
++#ifdef HAVE_SMBLDAP_SET_BIND_CALLBACK
++			smbldap_set_bind_callback(ipasam_state->ldap_state, bind_callback, ipasam_state);
++#else
+ 			ipasam_state->ldap_state->bind_callback = bind_callback;
+ 			ipasam_state->ldap_state->bind_callback_data = ipasam_state;
++#endif
+ 		}
+ 	}
+ 

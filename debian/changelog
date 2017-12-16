@@ -2,6 +2,8 @@ freeipa (4.4.4-4) UNRELEASED; urgency=medium
 
   [ Timo Aaltonen ]
   * fix-opendnssec-setup.diff: Use /usr/sbin prefix for ods binaries.
+  * samba-4.7-fix-*: Add backported commits to allow building against
+    samba 4.7. (Closes: #880841)
 
   [ Steve Langasek ]
   * Fix autopkgtest to be robust in the face of changed iproute2 output.
