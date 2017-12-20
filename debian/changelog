@@ -1,4 +1,4 @@
-freeipa (4.6.0-1) UNRELEASED; urgency=medium
+freeipa (4.6.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
     - Remove upstreamed patches:
