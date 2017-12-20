@@ -77,6 +77,7 @@ Depends:
  certmonger (>= 0.78.6-3),
  custodia,
  fonts-font-awesome,
+ fonts-open-sans,
  freeipa-admintools (= ${source:Version}),
  freeipa-client (= ${binary:Version}),
  freeipa-common (= ${source:Version}),
