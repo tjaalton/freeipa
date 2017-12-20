@@ -30,8 +30,7 @@ class CustodiaInstance(SimpleServiceInstance):
     def __init__(self, host_name=None, realm=None):
         super(CustodiaInstance, self).__init__("ipa-custodia")
         self.config_file = paths.IPA_CUSTODIA_CONF
-        self.server_keys = os.path.join(paths.IPA_CUSTODIA_CONF_DIR,
-                                        'server.keys')
+        self.server_keys = paths.IPA_CUSTODIA_KEYS
         self.ldap_uri = None
         self.fqdn = host_name
         self.realm = realm
@@ -40,16 +39,19 @@ class CustodiaInstance(SimpleServiceInstance):
         template_file = os.path.basename(self.config_file) + '.template'
         template = os.path.join(paths.USR_SHARE_IPA_DIR, template_file)
         httpd_info = pwd.getpwnam(constants.HTTPD_USER)
-        sub_dict = dict(IPA_CUSTODIA_CONF_DIR=paths.IPA_CUSTODIA_CONF_DIR,
-                        IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
-                        IPA_CUSTODIA_AUDIT_LOG=paths.IPA_CUSTODIA_AUDIT_LOG,
-                        LDAP_URI=installutils.realm_to_ldapi_uri(self.realm),
-                        UID=httpd_info.pw_uid, GID=httpd_info.pw_gid)
+        sub_dict = dict(
+            IPA_CUSTODIA_CONF_DIR=paths.IPA_CUSTODIA_CONF_DIR,
+            IPA_CUSTODIA_KEYS=paths.IPA_CUSTODIA_KEYS,
+            IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
+            IPA_CUSTODIA_AUDIT_LOG=paths.IPA_CUSTODIA_AUDIT_LOG,
+            LDAP_URI=installutils.realm_to_ldapi_uri(self.realm),
+            UID=httpd_info.pw_uid,
+            GID=httpd_info.pw_gid
+        )
         conf = ipautil.template_file(template, sub_dict)
-        fd = open(self.config_file, "w+")
-        fd.write(conf)
-        fd.flush()
-        fd.close()
+        with open(self.config_file, "w") as f:
+            f.write(conf)
+            ipautil.flush_sync(f)
 
     def create_instance(self):
         suffix = ipautil.realm_to_suffix(self.realm)
@@ -62,10 +64,22 @@ class CustodiaInstance(SimpleServiceInstance):
                                                       realm=self.realm)
         sysupgrade.set_upgrade_state('custodia', 'installed', True)
 
+    def uninstall(self):
+        super(CustodiaInstance, self).uninstall()
+        keystore = IPAKEMKeys({
+            'server_keys': self.server_keys,
+            'ldap_uri': self.ldap_uri
+        })
+        keystore.remove_server_keys()
+        installutils.remove_file(self.config_file)
+        sysupgrade.set_upgrade_state('custodia', 'installed', False)
+
     def __gen_keys(self):
-        KeyStore = IPAKEMKeys({'server_keys': self.server_keys,
-                               'ldap_uri': self.ldap_uri})
-        KeyStore.generate_server_keys()
+        keystore = IPAKEMKeys({
+            'server_keys': self.server_keys,
+            'ldap_uri': self.ldap_uri
+        })
+        keystore.generate_server_keys()
 
     def upgrade_instance(self):
         if not sysupgrade.get_upgrade_state("custodia", "installed"):

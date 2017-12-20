@@ -35,6 +35,10 @@ import dns
 import encodings
 import sys
 import ssl
+import termios
+import fcntl
+import struct
+import subprocess
 
 import netaddr
 from dns import resolver, rdatatype
@@ -55,10 +59,7 @@ from ipalib.constants import (
     TLS_VERSIONS, TLS_VERSION_MINIMAL, TLS_HIGH_CIPHERS
 )
 from ipalib.text import _
-# pylint: disable=ipa-forbidden-import
-from ipalib.install import sysrestore
 from ipaplatform.paths import paths
-# pylint: enable=ipa-forbidden-import
 from ipapython.ssh import SSHPublicKey
 from ipapython.dn import DN, RDN
 from ipapython.dnsutil import DNSName
@@ -67,6 +68,9 @@ from ipapython.admintool import ScriptError
 
 if six.PY3:
     unicode = str
+
+_IPA_CLIENT_SYSRESTORE = "/var/lib/ipa-client/sysrestore"
+_IPA_DEFAULT_CONF = "/etc/ipa/default.conf"
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +157,23 @@ def isvalid_base64(data):
         return False
     else:
         return True
+
+
+def strip_csr_header(csr):
+    """
+    Remove the header and footer (and surrounding material) from a CSR.
+    """
+    headerlen = 40
+    s = csr.find(b"-----BEGIN NEW CERTIFICATE REQUEST-----")
+    if s == -1:
+        headerlen = 36
+        s = csr.find(b"-----BEGIN CERTIFICATE REQUEST-----")
+    if s >= 0:
+        e = csr.find(b"-----END")
+        csr = csr[s + headerlen:e]
+
+    return csr
+
 
 def validate_ipaddr(ipaddr):
     """
@@ -291,6 +312,10 @@ def create_https_connection(
     if cafile is None:
         raise RuntimeError("cafile argument is required to perform server "
                            "certificate verification")
+
+    if not os.path.isfile(cafile) or not os.access(cafile, os.R_OK):
+        raise RuntimeError("cafile \'{file}\' doesn't exist or is unreadable".
+                           format(file=cafile))
 
     # remove the slice of negating protocol options according to options
     tls_span = get_proper_tls_version_span(tls_version_min, tls_version_max)
@@ -1078,8 +1103,9 @@ def check_client_configuration():
     """
     Check if IPA client is configured on the system.
     """
-    fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
-    if not fstore.has_files() and not os.path.exists(paths.IPA_DEFAULT_CONF):
+    if (not os.path.isfile(paths.IPA_DEFAULT_CONF) or
+            not os.path.isdir(paths.IPA_CLIENT_SYSRESTORE) or
+            not os.listdir(paths.IPA_CLIENT_SYSRESTORE)):
         raise ScriptError('IPA client is not configured on this system')
 
 
@@ -1132,3 +1158,40 @@ def no_matching_interface_for_ip_address_warning(addr_list):
                 "{}".format(ip),
                 file=sys.stderr
             )
+
+
+def get_terminal_height(fd=1):
+    """
+    Get current terminal height
+
+    Args:
+        fd (int): file descriptor. Default: 1 (stdout)
+
+    Returns:
+        int: Terminal height
+    """
+    try:
+        return struct.unpack(
+            'hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, b'1234'))[0]
+    except (IOError, OSError, struct.error):
+        return os.environ.get("LINES", 25)
+
+
+def open_in_pager(data):
+    """
+    Open text data in pager
+
+    Args:
+        data (bytes): data to view in pager
+
+    Returns:
+        None
+    """
+    pager = os.environ.get("PAGER", "less")
+    pager_process = subprocess.Popen([pager], stdin=subprocess.PIPE)
+
+    try:
+        pager_process.stdin.write(data)
+        pager_process.communicate()
+    except IOError:
+        pass

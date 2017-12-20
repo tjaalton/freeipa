@@ -424,7 +424,7 @@ class SystemdService(PlatformService):
                                    self.service_instance(instance_name))
 
             try:
-                if not ipautil.dir_exists(srv_tgt):
+                if not os.path.isdir(srv_tgt):
                     os.mkdir(srv_tgt)
                     os.chmod(srv_tgt, 0o755)
                 if os.path.exists(srv_lnk):
@@ -459,7 +459,7 @@ class SystemdService(PlatformService):
                                    self.service_instance(instance_name))
 
             try:
-                if ipautil.dir_exists(srv_tgt):
+                if os.path.isdir(srv_tgt):
                     if os.path.islink(srv_lnk):
                         os.unlink(srv_lnk)
                 ipautil.run([paths.SYSTEMCTL, "--system", "daemon-reload"])
@@ -505,8 +505,12 @@ class SystemdService(PlatformService):
 
 # Objects below are expected to be exported by platform module
 
-service = None
-knownservices = None
+def base_service_class_factory(name, api=None):
+    raise NotImplementedError
+
+
+service = base_service_class_factory
+knownservices = KnownServices({})
 
 # System may support more time&date services. FreeIPA supports ntpd only, other
 # services will be disabled during IPA installation

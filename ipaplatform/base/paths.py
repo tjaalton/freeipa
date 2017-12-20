@@ -171,7 +171,6 @@ class BasePathNamespace(object):
     ODS_SIGNER = "/usr/sbin/ods-signer"
     OPENSSL = "/usr/bin/openssl"
     PK12UTIL = "/usr/bin/pk12util"
-    SIGNTOOL = "/usr/bin/signtool"
     SOFTHSM2_UTIL = "/usr/bin/softhsm2-util"
     SSLGET = "/usr/bin/sslget"
     SSS_SSH_AUTHORIZEDKEYS = "/usr/bin/sss_ssh_authorizedkeys"
@@ -282,8 +281,6 @@ class BasePathNamespace(object):
     CA_BACKUP_KEYS_P12 = "/var/lib/pki/pki-tomcat/alias/ca_backup_keys.p12"
     KRA_BACKUP_KEYS_P12 = "/var/lib/pki/pki-tomcat/alias/kra_backup_keys.p12"
     CA_CS_CFG_PATH = "/var/lib/pki/pki-tomcat/conf/ca/CS.cfg"
-    CAJARSIGNINGCERT_CFG = (
-        "/var/lib/pki/pki-tomcat/ca/profiles/ca/caJarSigningCert.cfg")
     CASIGNEDLOGCERT_CFG = (
         "/var/lib/pki/pki-tomcat/ca/profiles/ca/caSignedLogCert.cfg")
     KRA_CS_CFG_PATH = "/var/lib/pki/pki-tomcat/conf/kra/CS.cfg"
@@ -350,6 +347,7 @@ class BasePathNamespace(object):
     NETWORK_MANAGER_CONFIG_DIR = '/etc/NetworkManager/conf.d'
     IPA_CUSTODIA_CONF_DIR = '/etc/ipa/custodia'
     IPA_CUSTODIA_CONF = '/etc/ipa/custodia/custodia.conf'
+    IPA_CUSTODIA_KEYS = '/etc/ipa/custodia/server.keys'
     IPA_CUSTODIA_SOCKET = '/run/httpd/ipa-custodia.sock'
     IPA_CUSTODIA_AUDIT_LOG = '/var/log/ipa-custodia.audit.log'
     IPA_GETKEYTAB = '/usr/sbin/ipa-getkeytab'
@@ -357,5 +355,8 @@ class BasePathNamespace(object):
     GSSPROXY_CONF = '/etc/gssproxy/10-ipa.conf'
     KRB5CC_HTTPD = '/tmp/krb5cc-httpd'
     IF_INET6 = '/proc/net/if_inet6'
+    AUTHCONFIG = None
+    IPA_SERVER_UPGRADE = '/usr/sbin/ipa-server-upgrade'
 
-path_namespace = BasePathNamespace
+
+paths = BasePathNamespace()

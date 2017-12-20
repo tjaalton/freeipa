@@ -121,9 +121,11 @@ class RemoveRUVParser(ldif.LDIFParser):
             elif name == 'nsuniqueid':
                 nsuniqueid = [x.lower() for x in value]
 
-        if (objectclass and nsuniqueid and
-            'nstombstone' in objectclass and
-            'ffffffff-ffffffff-ffffffff-ffffffff' in nsuniqueid):
+        if (
+            objectclass and nsuniqueid and
+            b'nstombstone' in objectclass and
+            b'ffffffff-ffffffff-ffffffff-ffffffff' in nsuniqueid
+        ):
             logger.debug("Removing RUV entry %s", dn)
             return
 
@@ -314,6 +316,9 @@ class Restore(admintool.AdminTool):
         os.chown(self.dir, pent.pw_uid, pent.pw_gid)
 
         cwd = os.getcwd()
+
+        logger.info("Temporary setting umask to 022")
+        old_umask = os.umask(0o022)
         try:
             dirsrv = services.knownservices.dirsrv
 
@@ -426,6 +431,8 @@ class Restore(admintool.AdminTool):
             except Exception as e:
                 logger.error('Cannot change directory to %s: %s', cwd, e)
             shutil.rmtree(self.top_dir)
+            logger.info("Restoring umask to %s", old_umask)
+            os.umask(old_umask)
 
 
     def get_connection(self):
@@ -547,7 +554,7 @@ class Restore(admintool.AdminTool):
             os.chown(ldifdir, pent.pw_uid, pent.pw_gid)
 
         ipautil.backup_file(ldiffile)
-        with open(ldiffile, 'wb') as out_file:
+        with open(ldiffile, 'w') as out_file:
             ldif_writer = ldif.LDIFWriter(out_file)
             with open(srcldiffile, 'rb') as in_file:
                 ldif_parser = RemoveRUVParser(in_file, ldif_writer)
@@ -834,7 +841,7 @@ class Restore(admintool.AdminTool):
         try:
             dsinstance.DsInstance().stop_tracking_certificates(
                 installutils.realm_to_serverid(api.env.realm))
-        except OSError:
+        except (OSError, IOError):
             # When IPA is not installed, DS NSS DB does not exist
             pass
 

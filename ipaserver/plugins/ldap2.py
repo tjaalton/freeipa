@@ -38,20 +38,7 @@ from ipapython.dn import DN
 from ipapython.ipaldap import (LDAPClient, AUTOBIND_AUTO, AUTOBIND_ENABLED,
                                AUTOBIND_DISABLED)
 
-
-try:
-    from ldap.controls.simple import GetEffectiveRightsControl
-except ImportError:
-    """
-    python-ldap 2.4.x introduced a new API for effective rights control, which
-    needs to be used or otherwise bind dn is not passed correctly. The following
-    class is created for backward compatibility with python-ldap 2.3.x.
-    Relevant BZ: https://bugzilla.redhat.com/show_bug.cgi?id=802675
-    """
-    from ldap.controls import LDAPControl
-    class GetEffectiveRightsControl(LDAPControl):
-        def __init__(self, criticality, authzId=None):
-            LDAPControl.__init__(self, '1.3.6.1.4.1.42.2.27.9.5.2', criticality, authzId)
+from ldap.controls.simple import GetEffectiveRightsControl
 
 from ipalib import Registry, errors, _
 from ipalib.crud import CrudBackend
@@ -353,7 +340,7 @@ class ldap2(CrudBackend, LDAPClient):
 
         attrs = self.get_effective_rights(dn, ["*"])
         if 'entrylevelrights' in attrs:
-            entry_rights = attrs['entrylevelrights'][0].decode('UTF-8')
+            entry_rights = attrs['entrylevelrights'][0]
             if 'd' in entry_rights:
                 return True
 
@@ -366,7 +353,7 @@ class ldap2(CrudBackend, LDAPClient):
         assert isinstance(dn, DN)
         attrs = self.get_effective_rights(dn, ["*"])
         if 'entrylevelrights' in attrs:
-            entry_rights = attrs['entrylevelrights'][0].decode('UTF-8')
+            entry_rights = attrs['entrylevelrights'][0]
             if 'a' in entry_rights:
                 return True
 

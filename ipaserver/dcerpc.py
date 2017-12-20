@@ -31,14 +31,16 @@ from ipalib import errors
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipaserver.install import installutils
+from ipaserver.dcerpc_common import (TRUST_BIDIRECTIONAL,
+                                     TRUST_JOIN_EXTERNAL,
+                                     trust_type_string)
+
 from ipalib.util import normalize_name
 
 import os
 import struct
 import random
 
-# TODO: Remove pylint disable when Python 3 bindings are available.
-# pylint: disable=import-error
 from samba import param
 from samba import credentials
 from samba.dcerpc import security, lsa, drsblobs, nbt, netlogon
@@ -46,10 +48,10 @@ from samba.ndr import ndr_pack, ndr_print
 from samba import net
 from samba import arcfour_encrypt
 import samba
-# pylint: enable=import-error
 
 import ldap as _ldap
 from ipapython import ipaldap
+from ipapython.dnsutil import DNSName
 from dns import resolver, rdatatype
 from dns.exception import DNSException
 import pysss_nss_idmap
@@ -77,15 +79,6 @@ and Samba4 python bindings.
 """)
 
 logger = logging.getLogger(__name__)
-
-# Both constants can be used as masks against trust direction
-# because bi-directional has two lower bits set.
-TRUST_ONEWAY = 1
-TRUST_BIDIRECTIONAL = 3
-
-# Trust join behavior
-# External trust -- allow creating trust to a non-root domain in the forest
-TRUST_JOIN_EXTERNAL = 1
 
 
 def is_sid_valid(sid):
@@ -152,6 +145,7 @@ pysss_type_key_translation_dict = {
     pysss_nss_idmap.ID_BOTH: 'both',
 }
 
+
 class TrustTopologyConflictSolved(Exception):
     """
     Internal trust error: raised when previously detected
@@ -162,11 +156,20 @@ class TrustTopologyConflictSolved(Exception):
     """
     pass
 
-def assess_dcerpc_exception(num=None, message=None):
+
+def assess_dcerpc_error(error):
     """
     Takes error returned by Samba bindings and converts it into
     an IPA error class.
     """
+    if isinstance(error, RuntimeError):
+        error_tuple = error.args
+    else:
+        error_tuple = error
+    if len(error_tuple) != 2:
+        raise RuntimeError("Unable to parse error: {err!r}".format(err=error))
+
+    num, message = error_tuple
     if num and num in dcerpc_error_codes:
         return dcerpc_error_codes[num]
     if message and message in dcerpc_error_messages:
@@ -178,17 +181,13 @@ def assess_dcerpc_exception(num=None, message=None):
 
 
 class ExtendedDNControl(LDAPControl):
-    # This class attempts to implement LDAP control that would work
-    # with both python-ldap 2.4.x and 2.3.x, thus there is mix of properties
-    # from both worlds and encodeControlValue has default parameter
     def __init__(self):
-        self.controlValue = 1
-        self.controlType = "1.2.840.113556.1.4.529"
-        self.criticality = False
-        self.integerValue = 1
-
-    def encodeControlValue(self, value=None):
-        return b'0\x03\x02\x01\x01'
+        LDAPControl.__init__(
+            self,
+            controlType="1.2.840.113556.1.4.529",
+            criticality=False,
+            encodedControlValue=b'0\x03\x02\x01\x01'
+        )
 
 
 class DomainValidator(object):
@@ -812,8 +811,7 @@ class DomainValidator(object):
 
         # Both methods should not fail at the same time
         if finddc_error and len(info['gc']) == 0:
-            num, message = e.args  # pylint: disable=unpacking-non-sequence
-            raise assess_dcerpc_exception(num=num, message=message)
+            raise assess_dcerpc_error(finddc_error)
 
         self._info[domain] = info
         return info
@@ -848,8 +846,7 @@ class TrustDomainInstance(object):
             result = lsa.lsarpc(binding, self.parm, self.creds)
             return result
         except RuntimeError as e:
-            num, message = e.args  # pylint: disable=unpacking-non-sequence
-            raise assess_dcerpc_exception(num=num, message=message)
+            raise assess_dcerpc_error(e)
 
     def init_lsa_pipe(self, remote_host):
         """
@@ -921,8 +918,7 @@ class TrustDomainInstance(object):
             else:
                 result = netrc.finddc(address=remote_host, flags=flags)
         except RuntimeError as e:
-            num, message = e.args  # pylint: disable=unpacking-non-sequence
-            raise assess_dcerpc_exception(num=num, message=message)
+            raise assess_dcerpc_error(e)
 
         if not result:
             return False
@@ -983,8 +979,7 @@ class TrustDomainInstance(object):
             result = self._pipe.QueryInfoPolicy2(self._policy_handle,
                                                  lsa.LSA_POLICY_INFO_DNS)
         except RuntimeError as e:
-            num, message = e.args  # pylint: disable=unpacking-non-sequence
-            raise assess_dcerpc_exception(num=num, message=message)
+            raise assess_dcerpc_error(e)
 
         self.info['name'] = unicode(result.name.string)
         self.info['dns_domain'] = unicode(result.dns_domain.string)
@@ -997,8 +992,7 @@ class TrustDomainInstance(object):
             result = self._pipe.QueryInfoPolicy2(self._policy_handle,
                                                  lsa.LSA_POLICY_INFO_ROLE)
         except RuntimeError as e:
-            num, message = e.args  # pylint: disable=unpacking-non-sequence
-            raise assess_dcerpc_exception(num=num, message=message)
+            raise assess_dcerpc_error(e)
 
         self.info['is_pdc'] = (result.role == lsa.LSA_ROLE_PRIMARY)
 
@@ -1265,13 +1259,32 @@ class TrustDomainInstance(object):
             dname = lsa.String()
             dname.string = another_domain.info['dns_domain']
             res = self._pipe.QueryTrustedDomainInfoByName(
-                                self._policy_handle,
-                                dname,
-                                lsa.LSA_TRUSTED_DOMAIN_INFO_FULL_INFO)
+                self._policy_handle,
+                dname,
+                lsa.LSA_TRUSTED_DOMAIN_INFO_FULL_INFO
+            )
+            if res.info_ex.trust_type != lsa.LSA_TRUST_TYPE_UPLEVEL:
+                msg = _('There is already a trust to {ipa_domain} with '
+                        'unsupported type {trust_type}. Please remove '
+                        'it manually on AD DC side.')
+                ttype = trust_type_string(
+                    res.info_ex.trust_type, res.info_ex.trust_attributes
+                )
+                err = unicode(msg).format(
+                    ipa_domain=another_domain.info['dns_domain'],
+                    trust_type=ttype)
+
+                raise errors.ValidationError(
+                    name=_('AD domain controller'),
+                    error=err
+                )
+
             self._pipe.DeleteTrustedDomain(self._policy_handle,
                                            res.info_ex.sid)
         except RuntimeError as e:
-            num, message = e.args  # pylint: disable=unpacking-non-sequence
+            # pylint: disable=unbalanced-tuple-unpacking
+            num, _message = e.args
+            # pylint: enable=unbalanced-tuple-unpacking
             # Ignore anything but access denied (NT_STATUS_ACCESS_DENIED)
             if num == -1073741790:
                 raise access_denied_error
@@ -1282,8 +1295,7 @@ class TrustDomainInstance(object):
                                            info, self.auth_info,
                                            security.SEC_STD_DELETE)
         except RuntimeError as e:
-            num, message = e.args  # pylint: disable=unpacking-non-sequence
-            raise assess_dcerpc_exception(num=num, message=message)
+            raise assess_dcerpc_error(e)
 
         # We should use proper trustdom handle in order to modify the
         # trust settings. Samba insists this has to be done with LSA
@@ -1349,8 +1361,7 @@ class TrustDomainInstance(object):
                                            data=data)
                 return result
             except RuntimeError as e:
-                num, message = e.args  # pylint: disable=unpacking-non-sequence
-                raise assess_dcerpc_exception(num=num, message=message)
+                raise assess_dcerpc_error(e)
 
         result = retrieve_netlogon_info_2(None, self,
                                           netlogon.NETLOGON_CONTROL_TC_VERIFY,
@@ -1391,7 +1402,7 @@ class TrustDomainInstance(object):
 
                     raise errors.ACIError(info=error_message)
 
-                raise assess_dcerpc_exception(*result.pdc_connection_status)
+                raise assess_dcerpc_error(result.pdc_connection_status)
 
             return True
 
@@ -1430,8 +1441,7 @@ def fetch_domains(api, mydomain, trustdomain, creds=None, server=None):
             result = netrc.finddc(domain=trustdomain,
                                   flags=nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_DS)
     except RuntimeError as e:
-        num, message = e.args  # pylint: disable=unpacking-non-sequence
-        raise assess_dcerpc_exception(num=num, message=message)
+        raise assess_dcerpc_error(e)
 
     td.info['dc'] = unicode(result.pdc_dns_name)
     td.info['name'] = unicode(result.dns_domain)
@@ -1601,7 +1611,22 @@ class TrustDomainJoins(object):
                      entry.single_value.get('modifytimestamp').timetuple()
                 )*1e7+116444736000000000)
 
+        forest = DNSName(self.local_domain.info['dns_forest'])
+        # tforest is IPA forest. keep the line below for future checks
+        # tforest = DNSName(self.remote_domain.info['dns_forest'])
         for dom in realm_domains['associateddomain']:
+            d = DNSName(dom)
+
+            # We should skip all DNS subdomains of our forest
+            # because we are going to add *.<forest> TLN anyway
+            if forest.is_superdomain(d) and forest != d:
+                continue
+
+            # We also should skip single label TLDs as they
+            # cannot be added as TLNs
+            if len(d.labels) == 1:
+                continue
+
             ftinfo = dict()
             ftinfo['rec_name'] = dom
             ftinfo['rec_time'] = trust_timestamp

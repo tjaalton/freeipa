@@ -286,6 +286,9 @@ IPA_CA_CN = u'ipa'
 IPA_CA_RECORD = "ipa-ca"
 IPA_CA_NICKNAME = 'caSigningCert cert-pki-ca'
 RENEWAL_CA_NAME = 'dogtag-ipa-ca-renew-agent'
+RENEWAL_REUSE_CA_NAME = 'dogtag-ipa-ca-renew-agent-reuse'
+# How long dbus clients should wait for CA certificate RPCs [seconds]
+CA_DBUS_TIMEOUT = 120
 
 # regexp definitions
 PATTERN_GROUPUSER_NAME = '^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*[a-zA-Z0-9_.$-]?$'

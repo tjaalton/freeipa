@@ -12,6 +12,7 @@ import os.path
 import pipes
 import subprocess
 import traceback
+import codecs
 
 import pkg_resources
 
@@ -395,7 +396,7 @@ class CSRLibraryAdaptor(object):
     def sign_csr(self, certification_request_info):
         """Sign a CertificationRequestInfo.
 
-        Returns: str, a DER-encoded signed CSR.
+        :returns: bytes, a DER-encoded signed CSR.
         """
         raise NotImplementedError('Use a subclass of CSRLibraryAdaptor')
 
@@ -406,11 +407,11 @@ class OpenSSLAdaptor(object):
         self.password_filename = password_filename
 
     def key(self):
-        with open(self.key_filename, 'r') as key_file:
+        with open(self.key_filename, 'rb') as key_file:
             key_bytes = key_file.read()
         password = None
         if self.password_filename is not None:
-            with open(self.password_filename, 'r') as password_file:
+            with open(self.password_filename, 'rb') as password_file:
                 password = password_file.read().strip()
 
         key = load_pem_private_key(key_bytes, password, default_backend())
@@ -438,7 +439,10 @@ class OpenSSLAdaptor(object):
             padding.PKCS1v15(),
             hashes.SHA256()
         )
-        asn1sig = univ.BitString("'%s'H" % signature.encode('hex'))
+        asn1sig = univ.BitString("'{sig}'H".format(
+                                    sig=codecs.encode(signature, 'hex')
+                                    .decode('ascii'))
+                                 )
         csr.setComponentByName('signature', asn1sig)
         return encoder.encode(csr)
 
@@ -450,7 +454,7 @@ class NSSAdaptor(object):
         self.nickname = base64.b32encode(os.urandom(40))
 
     def get_subject_public_key_info(self):
-        temp_cn = base64.b32encode(os.urandom(40))
+        temp_cn = base64.b32encode(os.urandom(40)).decode('ascii')
 
         password_args = []
         if self.password_filename is not None:

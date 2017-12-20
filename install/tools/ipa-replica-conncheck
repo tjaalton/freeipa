@@ -290,7 +290,7 @@ class PortResponder(threading.Thread):
         self._sockets = []
         self._close = False
         self._close_lock = threading.Lock()
-        self.responder_data = 'FreeIPA'
+        self.responder_data = b'FreeIPA'
         self.ports_opened = False
         self.ports_open_cond = threading.Condition()
 
@@ -318,7 +318,7 @@ class PortResponder(threading.Thread):
             logger.debug('%d %s: Stopped listening', port, proto)
 
     def _is_closing(self):
-        with self._close_lock:
+        with self._close_lock:  # pylint: disable=not-context-manager
             return self._close
 
     def _bind_to_port(self, port, socket_type):
@@ -369,7 +369,7 @@ class PortResponder(threading.Thread):
     def stop(self):
         logger.debug('Stopping listening thread.')
 
-        with self._close_lock:
+        with self._close_lock:  # pylint: disable=not-context-manager
             self._close = True
 
 
@@ -530,6 +530,9 @@ def main():
                 if result.returncode != 0:
                     raise RuntimeError("Could not get ticket for master server: %s" %
                                         result.error_output)
+                # Now that the cred cache file is initialized,
+                # use it for the IPA API calls
+                os.environ['KRB5CCNAME'] = CCACHE_FILE
 
             try:
                 logger.info("Check RPC connection to remote master")

@@ -91,6 +91,22 @@ def setup_server_logs_collecting(host):
     # setup_sssd_debugging)
 
 
+def collect_logs(func):
+    def wrapper(*args):
+        try:
+            func(*args)
+        finally:
+            if hasattr(args[0], 'master'):
+                setup_server_logs_collecting(args[0].master)
+            if hasattr(args[0], 'replicas') and args[0].replicas:
+                for replica in args[0].replicas:
+                    setup_server_logs_collecting(replica)
+            if hasattr(args[0], 'clients') and args[0].clients:
+                for client in args[0].clients:
+                    setup_server_logs_collecting(client)
+    return wrapper
+
+
 def check_arguments_are(slice, instanceof):
     """
     :param: slice - tuple of integers denoting the beginning and the end
@@ -228,7 +244,7 @@ def restore_files(host):
 def restore_hostname(host):
     backupname = os.path.join(host.config.test_dir, 'backup_hostname')
     try:
-        hostname = host.get_file_contents(backupname)
+        hostname = host.get_file_contents(backupname, encoding='utf-8')
     except IOError:
         logger.debug('No hostname backed up on %s', host.hostname)
     else:
@@ -236,14 +252,14 @@ def restore_hostname(host):
         host.run_command(['rm', backupname])
 
 
-def enable_replication_debugging(host):
-    logger.info('Enable LDAP replication logging')
+def enable_replication_debugging(host, log_level=0):
+    logger.info('Set LDAP debug level')
     logging_ldif = textwrap.dedent("""
         dn: cn=config
         changetype: modify
         replace: nsslapd-errorlog-level
-        nsslapd-errorlog-level: 8192
-        """)
+        nsslapd-errorlog-level: {log_level}
+        """.format(log_level=log_level))
     host.run_command(['ldapmodify', '-x',
                       '-D', str(host.config.dirman_dn),
                       '-w', host.config.dirman_password,
@@ -472,7 +488,7 @@ def establish_trust_with_ad(master, ad_domain, extra_args=()):
     on the presence of SfU (Services for Unix) support on the AD.
 
     Use extra arguments to pass extra arguments to the trust-add command, such
-    as --range-type="ipa-ad-trust" to enfroce a particular range type.
+    as --range-type="ipa-ad-trust" to enforce a particular range type.
     """
 
     # Force KDC to reload MS-PAC info by trying to get TGT for HTTP
@@ -1045,7 +1061,7 @@ def _entries_to_ldif(entries):
     io = StringIO()
     writer = LDIFWriter(io)
     for entry in entries:
-        writer.unparse(str(entry.dn), dict(entry))
+        writer.unparse(str(entry.dn), dict(entry.raw))
     return io.getvalue()
 
 
@@ -1096,11 +1112,11 @@ def add_a_records_for_hosts_in_master_domain(master):
         # domain
         try:
             verify_host_resolvable(host.hostname)
-            logger.debug("The host (%s) is resolvable.", host.domain.name)
+            logger.debug("The host (%s) is resolvable.", host.hostname)
         except errors.DNSNotARecordError:
             logger.debug("Hostname (%s) does not have A/AAAA record. Adding "
                          "new one.",
-                         master.hostname)
+                         host.hostname)
             add_a_record(master, host)
 
 
@@ -1163,12 +1179,15 @@ def install_kra(host, domain_level=None, first_instance=False, raiseonerr=True):
     if domain_level == DOMAIN_LEVEL_0 and not first_instance:
         replica_file = get_replica_filename(host)
         command.append(replica_file)
-    result = host.run_command(command, raiseonerr=raiseonerr)
-    setup_server_logs_collecting(host)
+    try:
+        result = host.run_command(command, raiseonerr=raiseonerr)
+    finally:
+        setup_server_logs_collecting(host)
     return result
 
 
-def install_ca(host, domain_level=None, first_instance=False, raiseonerr=True):
+def install_ca(host, domain_level=None, first_instance=False,
+               external_ca=False, cert_files=None, raiseonerr=True):
     if domain_level is None:
         domain_level = domainlevel(host)
     command = ["ipa-ca-install", "-U", "-p", host.config.dirman_password,
@@ -1176,8 +1195,17 @@ def install_ca(host, domain_level=None, first_instance=False, raiseonerr=True):
     if domain_level == DOMAIN_LEVEL_0 and not first_instance:
         replica_file = get_replica_filename(host)
         command.append(replica_file)
-    result = host.run_command(command, raiseonerr=raiseonerr)
-    setup_server_logs_collecting(host)
+    # First step of ipa-ca-install --external-ca
+    if external_ca:
+        command.append('--external-ca')
+    # Continue with ipa-ca-install --external-ca
+    if cert_files:
+        for fname in cert_files:
+            command.extend(['--external-cert-file', fname])
+    try:
+        result = host.run_command(command, raiseonerr=raiseonerr)
+    finally:
+        setup_server_logs_collecting(host)
     return result
 
 
@@ -1318,7 +1346,34 @@ def ldappasswd_user_change(user, oldpw, newpw, master):
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_user, basedn)
+    master_ldap_uri = "ldap://{}".format(master.external_hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
-            '-s', newpw, '-x']
+            '-s', newpw, '-x', '-H', master_ldap_uri]
     master.run_command(args)
+
+
+def add_dns_zone(master, zone, skip_overlap_check=False,
+                 dynamic_update=False, add_a_record_hosts=None):
+    """
+    Add DNS zone if it is not already added.
+    """
+
+    result = master.run_command(
+        ['ipa', 'dnszone-show', zone], raiseonerr=False)
+
+    if result.returncode != 0:
+        command = ['ipa', 'dnszone-add', zone]
+        if skip_overlap_check:
+            command.append('--skip-overlap-check')
+        if dynamic_update:
+            command.append('--dynamic-update=True')
+
+        master.run_command(command)
+
+        if add_a_record_hosts:
+            for host in add_a_record_hosts:
+                master.run_command(['ipa', 'dnsrecord-add', zone,
+                                    host.hostname + ".", '--a-rec', host.ip])
+    else:
+        logger.debug('Zone %s already added.', zone)

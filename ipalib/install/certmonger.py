@@ -32,6 +32,7 @@ import shlex
 import subprocess
 import tempfile
 from ipalib import api
+from ipalib.constants import CA_DBUS_TIMEOUT
 from ipapython.dn import DN
 from ipaplatform.paths import paths
 from ipaplatform import services
@@ -507,37 +508,53 @@ def stop_tracking(secdir=None, request_id=None, nickname=None, certfile=None):
         request.parent.obj_if.remove_request(request.path)
 
 
-def modify(request_id, ca=None, profile=None):
-    if ca or profile:
+def modify(request_id, ca=None, profile=None, template_v2=None):
+    update = {}
+    if ca is not None:
+        cm = _certmonger()
+        update['CA'] = cm.obj_if.find_ca_by_nickname(ca)
+    if profile is not None:
+        update['template-profile'] = profile
+    if template_v2 is not None:
+        update['template-ms-certificate-template'] = template_v2
+
+    if len(update) > 0:
         request = _get_request({'nickname': request_id})
+        request.obj_if.modify(update)
+
+
+def resubmit_request(
+        request_id,
+        ca=None,
+        profile=None,
+        template_v2=None,
+        is_ca=False):
+    """
+    :param request_id: the certmonger numeric request ID
+    :param ca: the nickname for the certmonger CA, e.g. IPA or SelfSign
+    :param profile: the profile to use, e.g. SubCA.  For requests using the
+                    Dogtag CA, this is the profile to use.  This also causes
+                    the Microsoft certificate tempalte name extension to the
+                    CSR (for telling AD CS what template to use).
+    :param template_v2: Microsoft V2 template specifier extension value.
+                        Format: <oid>:<major-version>[:<minor-version>]
+    :param is_ca: boolean that if True adds the CA basic constraint
+    """
+    request = _get_request({'nickname': request_id})
+    if request:
         update = {}
         if ca is not None:
             cm = _certmonger()
             update['CA'] = cm.obj_if.find_ca_by_nickname(ca)
         if profile is not None:
             update['template-profile'] = profile
-        request.obj_if.modify(update)
+        if template_v2 is not None:
+            update['template-ms-certificate-template'] = template_v2
+        if is_ca:
+            update['template-is-ca'] = True
+            update['template-ca-path-length'] = -1  # no path length
 
-
-def resubmit_request(request_id, ca=None, profile=None, is_ca=False):
-    """
-    :param request_id: the certmonger numeric request ID
-    :param ca: the nickname for the certmonger CA, e.g. IPA or SelfSign
-    :param profile: the dogtag template profile to use, e.g. SubCA
-    :param is_ca: boolean that if True adds the CA basic constraint
-    """
-    request = _get_request({'nickname': request_id})
-    if request:
-        if ca or profile or is_ca:
-            update = {}
-            if ca is not None:
-                cm = _certmonger()
-                update['CA'] = cm.obj_if.find_ca_by_nickname(ca)
-            if profile is not None:
-                update['template-profile'] = profile
-            if is_ca:
-                update['template-is-ca'] = True
-                update['template-ca-path-length'] = -1  # no path length
+        if len(update) > 0:
             request.obj_if.modify(update)
         request.obj_if.resubmit()
 
@@ -604,7 +621,9 @@ def modify_ca_helper(ca_name, helper):
         old_helper = ca_iface.Get('org.fedorahosted.certmonger.ca',
                                   'external-helper')
         ca_iface.Set('org.fedorahosted.certmonger.ca',
-                     'external-helper', helper)
+                     'external-helper', helper,
+                     # Give dogtag extra time to generate cert
+                     timeout=CA_DBUS_TIMEOUT)
         return old_helper
 
 

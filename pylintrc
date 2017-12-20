@@ -92,8 +92,6 @@ disable=
     useless-super-delegation,  # new in pylint 1.7
     redefined-argument-from-local,  # new in pylint 1.7
     consider-merging-isinstance,  # new in pylint 1.7
-    unsupported-assignment-operation  # new in pylint 1.7
-    consider-iterating-dictionary,  # wontfix for better python2/3 code
 
 
 [REPORTS]
@@ -118,9 +116,9 @@ dummy-variables-rgx=_.+
 [IPA]
 forbidden-imports=
     client/:ipaserver,
-    ipaclient/:ipaclient.install:ipalib.install:ipaplatform:ipaserver,
+    ipaclient/:ipaclient.install:ipalib.install:ipaserver,
     ipaclient/install/:ipaserver,
-    ipalib/:ipaclient.install:ipalib.install:ipaplatform:ipaserver,
+    ipalib/:ipaclient.install:ipalib.install:ipaserver,
     ipalib/install/:ipaserver,
     ipaplatform/:ipaclient:ipalib:ipaserver,
-    ipapython/:ipaclient:ipalib:ipaplatform:ipaserver
+    ipapython/:ipaclient:ipalib:ipaserver

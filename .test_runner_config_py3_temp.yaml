@@ -26,13 +26,24 @@ server:
   realm: IPA.TEST
 steps:
   build:
-  - make V=0 ${make_target}
+  - make V=0 ${make_target} LOG_COMPILE='gdb -return-child-result -ex run -ex "thread apply all bt" -ex "quit" --args'
   builddep:
   - rm -rf /var/cache/dnf/*
-  - "dnf makecache fast || :"
+  - "dnf makecache || :"
   - dnf builddep -y ${builddep_opts} --spec freeipa.spec.in --best --allowerasing
+  - dnf install -y gdb
   cleanup:
   - chown -R ${uid}:${gid} ${container_working_dir}
+  - >
+      tar --ignore-failed-read -cvf ${container_working_dir}/var_log.tar
+      /var/log/dirsrv
+      /var/log/httpd
+      /var/log/ipa*
+      /var/log/krb5kdc.log
+      /var/log/pki
+      systemd_journal.log
+      `find daemons -name '*.log' -print`
+  - chown ${uid}:${gid} ${container_working_dir}/var_log.tar
   configure:
   - ./autogen.sh
   install_packages:

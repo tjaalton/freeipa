@@ -44,6 +44,7 @@ from ipalib.request import context
 from ipapython.dn import DN
 from ipapython.ipautil import run
 
+
 try:
     # not available with client-only wheel packages
     from ipalib.install.kinit import kinit_keytab, kinit_password
@@ -70,6 +71,18 @@ def check_ipaclient_unittests(reason="Skip in ipaclient unittest mode"):
     if pytest.config.getoption('ipaclient_unittests', False):
         if PYTEST_VERSION[0] >= 3:
             # pytest 3+ does no longer allow pytest.skip() on module level
+            # pylint: disable=unexpected-keyword-arg
+            raise pytest.skip.Exception(reason, allow_module_level=True)
+            # pylint: enable=unexpected-keyword-arg
+        else:
+            raise pytest.skip(reason)
+
+
+def check_no_ipaapi(reason="Skip tests that needs an IPA API"):
+    """Call this in a package to skip the package in no-ipaapi mode
+    """
+    if pytest.config.getoption('skip_ipaapi', False):
+        if PYTEST_VERSION[0] >= 3:
             # pylint: disable=unexpected-keyword-arg
             raise pytest.skip.Exception(reason, allow_module_level=True)
             # pylint: enable=unexpected-keyword-arg
@@ -246,6 +259,8 @@ class Fuzzy(object):
     >>> fuzzy  # doctest:+ELLIPSIS
     Fuzzy('.+', <... 'str'>, <function <lambda> at 0x...>)
     """
+
+    __hash__ = None
 
     def __init__(self, regex=None, type=None, test=None):
         """
@@ -748,7 +763,7 @@ def unlock_principal_password(user, oldpw, newpw):
         user, api.env.container_user, api.env.basedn)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
-            '-s', newpw, '-x']
+            '-s', newpw, '-x', '-H', api.env.ldap_uri]
     return run(args)
 
 

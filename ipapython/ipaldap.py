@@ -29,6 +29,7 @@ import contextlib
 import collections
 import os
 import pwd
+import warnings
 
 # pylint: disable=import-error
 from six.moves.urllib.parse import urlparse
@@ -74,6 +75,20 @@ TRUNCATED_TIME_LIMIT = object()
 TRUNCATED_ADMIN_LIMIT = object()
 
 DIRMAN_DN = DN(('cn', 'directory manager'))
+
+
+if six.PY2:
+    # XXX silence python-ldap's BytesWarnings
+    warnings.filterwarnings(
+        action="ignore",
+        message="Under Python 2, python-ldap uses bytes",
+        category=BytesWarning
+    )
+    warnings.filterwarnings(
+        action="ignore",
+        message="Received non-bytes value",
+        category=BytesWarning
+    )
 
 
 class _ServerSchema(object):
@@ -173,6 +188,8 @@ class LDAPEntry(collections.MutableMapping):
     __slots__ = ('_conn', '_dn', '_names', '_nice', '_raw', '_sync',
                  '_not_list', '_orig_raw', '_raw_view',
                  '_single_value_view')
+
+    __hash__ = None
 
     def __init__(self, _conn, _dn=None, _obj=None, **kwargs):
         """

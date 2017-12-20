@@ -29,7 +29,6 @@ import math
 import os
 import sys
 import copy
-import stat
 import shutil
 import socket
 import re
@@ -245,6 +244,25 @@ class CheckedIPAddress(UnsafeIPAddress):
         self._net = ifnet
 
 
+class CheckedIPAddressLoopback(CheckedIPAddress):
+    """IPv4 or IPv6 address with additional constraints with
+    possibility to use a loopback IP.
+    Reserved or link-local addresses are never accepted.
+    """
+    def __init__(self, addr, parse_netmask=True, allow_multicast=False):
+
+        super(CheckedIPAddressLoopback, self).__init__(
+                addr, parse_netmask=parse_netmask,
+                allow_multicast=allow_multicast,
+                allow_loopback=True)
+
+        if self.is_loopback():
+            # print is being used instead of a logger, because at this
+            # moment, in execution process, there is no logger configured
+            print("WARNING: You are using a loopback IP: {}".format(addr),
+                  file=sys.stderr)
+
+
 def valid_ip(addr):
     return netaddr.valid_ipv4(addr) or netaddr.valid_ipv6(addr)
 
@@ -307,6 +325,25 @@ def write_tmp_file(txt):
     fd.flush()
 
     return fd
+
+
+def flush_sync(f):
+    """Flush and fsync file to disk
+
+    :param f: a file object with fileno and name
+    """
+    # flush file buffer to file descriptor
+    f.flush()
+    # flush Kernel buffer to disk
+    os.fsync(f.fileno())
+    # sync metadata in directory
+    dirname = os.path.dirname(os.path.abspath(f.name))
+    dirfd = os.open(dirname, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(dirfd)
+    finally:
+        os.close(dirfd)
+
 
 def shell_quote(string):
     if isinstance(string, str):
@@ -543,31 +580,16 @@ def nolog_replace(string, nolog):
     return string
 
 
-def file_exists(filename):
-    try:
-        mode = os.stat(filename)[stat.ST_MODE]
-        return bool(stat.S_ISREG(mode))
-    except Exception:
-        return False
-
-def dir_exists(filename):
-    try:
-        mode = os.stat(filename)[stat.ST_MODE]
-        return bool(stat.S_ISDIR(mode))
-    except Exception:
-        return False
-
-
 def install_file(fname, dest):
     # SELinux: use copy to keep the right context
-    if file_exists(dest):
+    if os.path.isfile(dest):
         os.rename(dest, dest + ".orig")
     shutil.copy(fname, dest)
     os.remove(fname)
 
 
 def backup_file(fname):
-    if file_exists(fname):
+    if os.path.isfile(fname):
         os.rename(fname, fname + ".orig")
 
 

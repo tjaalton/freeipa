@@ -132,7 +132,7 @@ class cert_request(CertRetrieveOverride):
             response = self.api.Command.cert_get_requestdata(
                 profile_id=profile_id,
                 principal=options.get('principal'),
-                public_key_info=unicode(pubkey_info_b64))
+                public_key_info=pubkey_info_b64)
 
             req_info_b64 = response['result']['request_info']
             req_info = base64.b64decode(req_info_b64)
@@ -143,9 +143,6 @@ class cert_request(CertRetrieveOverride):
                 raise errors.CertificateOperationError(
                     error=(_('Generated CSR was empty')))
 
-            # cert_request requires the CSR to be base64-encoded (but PEM
-            # header and footer are not required)
-            csr = unicode(base64.b64encode(csr))
         else:
             if database is not None or private_key is not None:
                 raise errors.MutuallyExclusiveError(reason=_(
@@ -209,6 +206,7 @@ class cert_find(MethodOverride):
                 raise errors.MutuallyExclusiveError(
                     reason=_("cannot specify both raw certificate and file"))
             if 'certificate' not in options and 'file' in options:
-                options['certificate'] = x509.strip_header(options.pop('file'))
+                options['certificate'] = x509.load_unknown_x509_certificate(
+                                            options.pop('file'))
 
         return super(cert_find, self).forward(*args, **options)

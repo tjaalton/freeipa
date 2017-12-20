@@ -68,7 +68,7 @@ def make_pkcs12_info(directory, cert_name, password_name):
     :return: a (full cert path, password) tuple, or None if cert is not found
     """
     cert_path = os.path.join(directory, cert_name)
-    if ipautil.file_exists(cert_path):
+    if os.path.isfile(cert_path):
         password_file = os.path.join(directory, password_name)
         password = open(password_file).read().strip()
         return cert_path, password
@@ -434,30 +434,27 @@ def promote_sssd(host_name):
     sssdconfig.import_config()
     domains = sssdconfig.list_active_domains()
 
-    ipa_domain = None
-
     for name in domains:
         domain = sssdconfig.get_domain(name)
         try:
             hostname = domain.get_option('ipa_hostname')
             if hostname == host_name:
-                ipa_domain = domain
+                break
         except SSSDConfig.NoOptionError:
             continue
-
-    if ipa_domain is None:
-        raise RuntimeError("Couldn't find IPA domain in sssd.conf")
     else:
-        domain.set_option('ipa_server', host_name)
-        domain.set_option('ipa_server_mode', True)
-        sssdconfig.save_domain(domain)
-        sssdconfig.write()
+        raise RuntimeError("Couldn't find IPA domain in sssd.conf")
 
-        sssd = services.service('sssd', api)
-        try:
-            sssd.restart()
-        except CalledProcessError:
-            logger.warning("SSSD service restart was unsuccessful.")
+    domain.set_option('ipa_server', host_name)
+    domain.set_option('ipa_server_mode', True)
+    sssdconfig.save_domain(domain)
+    sssdconfig.write()
+
+    sssd = services.service('sssd', api)
+    try:
+        sssd.restart()
+    except CalledProcessError:
+        logger.warning("SSSD service restart was unsuccessful.")
 
 
 def promote_openldap_conf(hostname, master):
@@ -712,7 +709,7 @@ def install_check(installer):
     installer._top_dir = config.top_dir
     installer._config = config
 
-    ca_enabled = ipautil.file_exists(os.path.join(config.dir, "cacert.p12"))
+    ca_enabled = os.path.isfile(os.path.join(config.dir, "cacert.p12"))
     # Create the management framework config file
     # Note: We must do this before bootstraping and finalizing ipalib.api
     create_ipa_conf(fstore, config, ca_enabled)
@@ -723,7 +720,7 @@ def install_check(installer):
     installutils.verify_fqdn(config.master_host_name, options.no_host_dns)
 
     cafile = os.path.join(config.dir, "ca.crt")
-    if not ipautil.file_exists(cafile):
+    if not os.path.isfile(cafile):
         raise RuntimeError("CA cert file is not available. Please run "
                            "ipa-replica-prepare to create a new replica file.")
 
@@ -1099,7 +1096,7 @@ def promote_check(installer):
                  ccache)
 
     cafile = paths.IPA_CA_CRT
-    if not ipautil.file_exists(cafile):
+    if not os.path.isfile(cafile):
         raise RuntimeError("CA cert file is not available! Please reinstall"
                            "the client and try again.")
 

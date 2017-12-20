@@ -1,7 +1,9 @@
 # Copyright (C) 2015  IPA Project Contributors, see COPYING for license
 
 from __future__ import print_function
+# pylint: disable=relative-import
 from custodia.message.kem import KEMClient, KEY_USAGE_SIG, KEY_USAGE_ENC
+# pylint: enable=relative-import
 from jwcrypto.common import json_decode
 from jwcrypto.jwk import JWK
 from ipaserver.secrets.kem import IPAKEMKeys
@@ -11,6 +13,7 @@ from base64 import b64encode
 import ldapurl
 import gssapi
 import os
+import urllib3
 import requests
 
 
@@ -63,8 +66,9 @@ class CustodiaClient(object):
 
         self.keystore = self._keystore(realm, ldap_uri, auth_type)
 
-        # FIXME: Remove warnings about missig subjAltName
-        requests.packages.urllib3.disable_warnings()
+        # FIXME: Remove warnings about missing subjAltName for the
+        #        requests module
+        urllib3.disable_warnings()
 
     def init_creds(self):
         name = gssapi.Name(self.client_service,

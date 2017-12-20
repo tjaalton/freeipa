@@ -197,6 +197,10 @@ def xml_wrap(value, version):
         return base64.b64encode(
             value.public_bytes(x509_Encoding.DER)).decode('ascii')
 
+    if isinstance(value, crypto_x509.CertificateSigningRequest):
+        return base64.b64encode(
+            value.public_bytes(x509_Encoding.DER)).decode('ascii')
+
     assert type(value) in (unicode, float, bool, type(None)) + six.integer_types
     return value
 
@@ -325,6 +329,7 @@ class _JSONPrimer(dict):
             tuple: self._enc_list,
             dict: self._enc_dict,
             crypto_x509.Certificate: self._enc_certificate,
+            crypto_x509.CertificateSigningRequest: self._enc_certificate,
         })
         # int, long
         for t in six.integer_types:
@@ -556,7 +561,7 @@ class SSLTransport(LanguageAwareTransport):
 
         conn = create_https_connection(
             host, 443,
-            api.env.tls_ca_cert,
+            getattr(context, 'ca_certfile', None),
             tls_version_min=api.env.tls_version_min,
             tls_version_max=api.env.tls_version_max)
 

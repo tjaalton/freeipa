@@ -40,8 +40,10 @@ from ipapython import ipautil
 from ipapython.certdb import EMPTY_TRUST_FLAGS, IPA_CA_TRUST_FLAGS
 from ipapython.certdb import get_ca_nickname, find_cert_from_txt, NSSDatabase
 from ipapython.dn import DN
-from ipalib import pkcs10, x509, api
+from ipalib import x509, api
 from ipalib.errors import CertificateOperationError
+from ipalib.install import certstore
+from ipalib.util import strip_csr_header
 from ipalib.text import _
 from ipaplatform.paths import paths
 
@@ -225,16 +227,8 @@ class CertDB(object):
     def run_certutil(self, args, stdin=None, **kwargs):
         return self.nssdb.run_certutil(args, stdin, **kwargs)
 
-    def run_signtool(self, args, stdin=None):
-        with open(self.passwd_fname, "r") as f:
-            password = f.readline()
-        new_args = [paths.SIGNTOOL, "-d", self.secdir, "-p", password]
-
-        new_args = new_args + args
-        ipautil.run(new_args, stdin)
-
     def create_noise_file(self):
-        if ipautil.file_exists(self.noise_fname):
+        if os.path.isfile(self.noise_fname):
             os.remove(self.noise_fname)
         with open(self.noise_fname, "w") as f:
             self.set_perms(f)
@@ -416,11 +410,11 @@ class CertDB(object):
         if self.host_name is None:
             raise RuntimeError("CA Host is not set.")
 
-        with open(certreq_fname, "r") as f:
+        with open(certreq_fname, "rb") as f:
             csr = f.read()
 
-        # We just want the CSR bits, make sure there is nothing else
-        csr = pkcs10.strip_header(csr)
+        # We just want the CSR bits, make sure there is no thing else
+        csr = strip_csr_header(csr).decode('utf8')
 
         params = {'profileId': dogtag.DEFAULT_PROFILE,
                 'cert_request_type': 'pkcs10',
@@ -437,7 +431,7 @@ class CertDB(object):
             client_keyfile=paths.RA_AGENT_KEY,
             **params)
         http_status, _http_headers, http_body = result
-        logger.debug("CA answer: %s", http_body)
+        logger.debug("CA answer: %r", http_body)
 
         if http_status != 200:
             raise CertificateOperationError(
@@ -455,50 +449,6 @@ class CertDB(object):
             doc.unlink()
 
         # base64-decode the result for uniformity
-        cert = base64.b64decode(cert)
-
-        # Write the certificate to a file. It will be imported in a later
-        # step. This file will be read later to be imported.
-        with open(cert_fname, "wb") as f:
-            f.write(cert)
-
-    def issue_signing_cert(self, certreq_fname, cert_fname):
-        self.setup_cert_request()
-
-        if self.host_name is None:
-            raise RuntimeError("CA Host is not set.")
-
-        with open(certreq_fname, "r") as f:
-            csr = f.read()
-
-        # We just want the CSR bits, make sure there is no thing else
-        csr = pkcs10.strip_header(csr)
-
-        params = {'profileId': 'caJarSigningCert',
-                'cert_request_type': 'pkcs10',
-                'requestor_name': 'IPA Installer',
-                'cert_request': csr,
-                'xmlOutput': 'true'}
-
-        # Send the request to the CA
-        result = dogtag.https_request(
-            self.host_name, 8443,
-            url="/ca/ee/ca/profileSubmitSSLClient",
-            cafile=api.env.tls_ca_cert,
-            client_certfile=paths.RA_AGENT_PEM,
-            client_keyfile=paths.RA_AGENT_KEY,
-            **params)
-        http_status, _http_headers, http_body = result
-        if http_status != 200:
-            raise RuntimeError("Unable to submit cert request")
-
-        # The result is an XML blob. Pull the certificate out of that
-        doc = xml.dom.minidom.parseString(http_body)
-        item_node = doc.getElementsByTagName("b64")
-        cert = item_node[0].childNodes[0].data
-        doc.unlink()
-
-        # base64-decode the cert for uniformity
         cert = base64.b64decode(cert)
 
         # Write the certificate to a file. It will be imported in a later
@@ -572,7 +522,7 @@ class CertDB(object):
 
     def create_from_cacert(self):
         cacert_fname = paths.IPA_CA_CRT
-        if ipautil.file_exists(self.certdb_fname):
+        if os.path.isfile(self.certdb_fname):
             # We already have a cert db, see if it is for the same CA.
             # If it is we leave things as they are.
             with open(cacert_fname, "r") as f:
@@ -658,6 +608,31 @@ class CertDB(object):
                                              principal=principal,
                                              subject=host,
                                              passwd_fname=self.passwd_fname)
+
+    def is_ipa_issued_cert(self, api, nickname):
+        """
+        Return True if the certificate contained in the CertDB with the
+        provided nickname has been issued by IPA.
+
+        Note that this method can only be executed if api has been initialized
+        """
+        # This method needs to compare the cert issuer (from the NSS DB
+        # and the subject from the CA (from LDAP), because nicknames are not
+        # always aligned.
+
+        cacert_subject = certstore.get_ca_subject(
+            api.Backend.ldap2,
+            api.env.container_ca,
+            api.env.basedn)
+
+        # The cert can be issued directly by IPA. In this case, the cert
+        # issuer is IPA CA subject.
+        cert = self.get_cert_from_db(nickname)
+        if cert is None:
+            raise RuntimeError("Could not find the cert %s in %s"
+                               % (nickname, self.secdir))
+
+        return DN(cert.issuer) == cacert_subject
 
 
 class _CrossProcessLock(object):

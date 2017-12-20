@@ -191,7 +191,7 @@ var IPA = function () {
             }
         }));
 
-        batch.add_command(that.get_whoami_command(true));
+        batch.add_command(that.get_whoami_command());
 
         batch.add_command(rpc.command({
             method: 'env',
@@ -259,25 +259,24 @@ var IPA = function () {
     /**
      * Prepares `user-find --whoami` command
      * @protected
-     * @param {boolean} batch - Specifies if it will be used as single command or
-     *                          in a batch.
      */
-    that.get_whoami_command = function(batch) {
+    that.get_whoami_command = function() {
         return rpc.command({
             method: 'whoami',
             on_success: function(data, text_status, xhr) {
-                that.whoami.metadata = data;
+                that.whoami.metadata = data.result || data;
+                var wa_data = that.whoami.metadata;
 
                 rpc.command({
-                    method: data.details || data.command,
-                    args: data.arguments,
+                    method: wa_data.details || wa_data.command,
+                    args: wa_data.arguments,
                     options: function() {
-                        var options = data.options || [];
+                        var options = wa_data.options || [];
                         $.extend(options, {all: true});
                         return options;
                     }(),
                     on_success: function(data, text_status, xhr) {
-                        that.whoami.data = false ? data.result[0] : data.result.result;
+                        that.whoami.data = data.result.result;
                         var entity = that.whoami.metadata.object;
 
                         if (entity === 'user') {

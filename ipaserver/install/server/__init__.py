@@ -437,6 +437,11 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
                     "You cannot specify --external-ca-type without "
                     "--external-ca")
 
+            if self.external_ca_profile and not self.external_ca:
+                raise RuntimeError(
+                    "You cannot specify --external-ca-profile without "
+                    "--external-ca")
+
             if self.uninstalling:
                 if (self.realm_name or self.admin_password or
                         self.master_password):
@@ -477,7 +482,7 @@ class ServerInstallInterface(ServerCertificateInstallInterface,
                         "domain via the --domain option")
 
             else:
-                if not ipautil.file_exists(self.replica_file):
+                if not os.path.isfile(self.replica_file):
                     raise RuntimeError(
                         "Replica file %s does not exist" % self.replica_file)
 

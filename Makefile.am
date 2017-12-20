@@ -8,22 +8,23 @@ if WITH_IPATESTS
     IPATESTS_SUBDIRS = ipatests
 endif
 
-IPACLIENT_SUBDIRS = ipaclient ipalib ipapython
-IPA_PLACEHOLDERS = freeipa ipa ipaplatform ipaserver ipatests
+IPACLIENT_SUBDIRS = ipaclient ipalib ipaplatform ipapython
+IPA_PLACEHOLDERS = freeipa ipa ipaserver ipatests
 SUBDIRS = asn1 util client contrib po pypi \
-	$(IPACLIENT_SUBDIRS) ipaplatform $(IPATESTS_SUBDIRS) $(SERVER_SUBDIRS)
+	$(IPACLIENT_SUBDIRS) $(IPATESTS_SUBDIRS) $(SERVER_SUBDIRS)
+
+GENERATED_PYTHON_FILES = \
+	$(top_builddir)/ipaplatform/override.py \
+	$(top_builddir)/ipapython/version.py
 
 MOSTLYCLEANFILES = ipasetup.pyc ipasetup.pyo \
-		   ignore_import_errors.pyc ignore_import_errors.pyo \
-		   ipasetup.pyc ipasetup.pyo \
 		   pylint_plugins.pyc pylint_plugins.pyo
 
 # user-facing scripts
 dist_bin_SCRIPTS = ipa
 
 # files required for build but not installed
-dist_noinst_SCRIPTS = ignore_import_errors.py \
-		      makeapi \
+dist_noinst_SCRIPTS = makeapi \
 		      makeaci \
 		      make-doc \
 		      make-test \
@@ -136,7 +137,7 @@ _srpms-body: _rpms-prep
 	rm -f rm -f $(top_builddir)/.version
 
 .PHONY: lite-server
-lite-server: $(top_builddir)/ipapython/version.py
+lite-server: $(GENERATED_PYTHON_FILES)
 	+$(MAKE) -C $(top_builddir)/install/ui
 	PYTHONPATH=$(top_srcdir) $(PYTHON) -bb \
 	    contrib/lite-server.py $(LITESERVER_ARGS)
@@ -168,13 +169,13 @@ if ! WITH_PYTHON2
 	@echo "ERROR: python2 not available"; exit 1
 endif
 	@ # run all linters, tests, and check with Python 2
-	PYTHONPATH=$(top_srcdir) $(PYTHON2) ipatests/ipa-run-tests \
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON2) ipatests/ipa-run-tests \
 	    --ipaclient-unittests
 	$(MAKE) $(AM_MAKEFLAGS) acilint apilint polint jslint check
 	$(MAKE) $(AM_MAKEFLAGS) PYTHON=$(PYTHON2) pylint
 if WITH_PYTHON3
 	@ # just tests and pylint on Python 3
-	PYTHONPATH=$(top_srcdir) $(PYTHON3) ipatests/ipa-run-tests \
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON3) ipatests/ipa-run-tests \
 	    --ipaclient-unittests
 	$(MAKE) $(AM_MAKEFLAGS) PYTHON=$(PYTHON3) pylint
 else
@@ -182,16 +183,63 @@ else
 endif
 	@echo "All tests passed."
 
+.PHONY: fastcheck fasttest fastlint
+fastcheck:
+if WITH_PYTHON2
+	@$(MAKE) -j1 $(AM_MAKEFLAGS) PYTHON=$(PYTHON2) fastlint fasttest
+endif
+if WITH_PYTHON3
+	@$(MAKE) -j1 $(AM_MAKEFLAGS) PYTHON=$(PYTHON3) fastlint fasttest
+endif
+
+fasttest: $(GENERATED_PYTHON_FILES) ipasetup.py
+	@ # --ignore doubles speed of total test run compared to pytest.skip()
+	@ # on module.
+	PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON3) ipatests/ipa-run-tests \
+	    --skip-ipaapi \
+	    --ignore $(abspath $(top_srcdir))/ipatests/test_integration \
+	    --ignore $(abspath $(top_srcdir))/ipatests/test_xmlrpc
+
+fastlint: $(GENERATED_PYTHON_FILES) ipasetup.py
+if ! WITH_PYLINT
+	@echo "ERROR: pylint not available"; exit 1
+endif
+	@echo "Fast linting with $(PYTHON) from branch '$(GIT_BRANCH)'"
+
+	@MERGEBASE=$$(git merge-base --fork-point $(GIT_BRANCH)); \
+	FILES=$$(git diff --name-only $${MERGEBASE} \
+	    | grep -E '\.py$$'); \
+	if [ -n "$${FILES}" ]; then \
+		echo "Fast linting files: $${FILES}"; \
+		echo "pylint"; \
+		echo "------"; \
+	    PYTHONPATH=$(abspath $(top_srcdir)) $(PYTHON) -m pylint \
+	        --rcfile=$(top_srcdir)/pylintrc \
+	        --load-plugins pylint_plugins \
+	        $${FILES} || exit $?; \
+	    echo "pycodestyle"; \
+	    echo "-----------"; \
+	    git diff $${MERGEBASE} | \
+	        $(PYTHON) -m pycodestyle --diff || exit $?; \
+	else \
+	    echo "No modified Python files found"; \
+	fi
+
+
+.PHONY: $(top_builddir)/ipaplatform/override.py
+$(top_builddir)/ipaplatform/override.py:
+	(cd $(top_builddir)/ipaplatform && make override.py)
+
 .PHONY: $(top_builddir)/ipapython/version.py
 $(top_builddir)/ipapython/version.py:
 	(cd $(top_builddir)/ipapython && make version.py)
 
 .PHONY: acilint
-acilint: $(top_builddir)/ipapython/version.py
+acilint: $(GENERATED_PYTHON_FILES)
 	cd $(srcdir); ./makeaci --validate
 
 .PHONY: apilint
-apilint: $(top_builddir)/ipapython/version.py
+apilint: $(GENERATED_PYTHON_FILES)
 	cd $(srcdir); ./makeapi --validate
 
 .PHONY: polint
@@ -206,7 +254,7 @@ polint:
 .PHONY: pylint
 
 if WITH_PYLINT
-pylint: $(top_builddir)/ipapython/version.py ipasetup.py
+pylint: $(GENERATED_PYTHON_FILES) ipasetup.py
 	FILES=`find $(top_srcdir) \
 		-type d -exec test -e '{}/__init__.py' \; -print -prune -o \
 		-path './rpmbuild' -prune -o \

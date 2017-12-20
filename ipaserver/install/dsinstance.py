@@ -84,7 +84,7 @@ DS_INSTANCE_PREFIX = 'slapd-'
 
 
 def find_server_root():
-    if ipautil.dir_exists(paths.USR_LIB_DIRSRV_64):
+    if os.path.isdir(paths.USR_LIB_DIRSRV_64):
         return paths.USR_LIB_DIRSRV_64
     else:
         return paths.USR_LIB_DIRSRV
@@ -288,7 +288,6 @@ class DsInstance(service.Service):
         self.step("adding replication acis", self.__add_replication_acis)
         self.step("activating sidgen plugin", self._add_sidgen_plugin)
         self.step("activating extdom plugin", self._add_extdom_plugin)
-        self.step("tuning directory server", self.__tuning)
 
         self.step("configuring directory to start on boot", self.__enable)
 
@@ -394,7 +393,21 @@ class DsInstance(service.Service):
         self.step("restarting directory server", self.__restart_instance)
 
         self.step("creating DS keytab", self.request_service_keytab)
+
+        # 389-ds allows to ignore time skew during replication. It is disabled
+        # by default to avoid issues with non-contiguous CSN values which
+        # derived from a time stamp when the change occurs. However, there are
+        # cases when we are interested only in the changes coming from the
+        # other side and should therefore allow ignoring the time skew.
+        #
+        # This helps with initial replication or force-sync because
+        # the receiving side has no valuable changes itself yet.
+        self.step("ignore time skew for initial replication",
+                  self.__replica_ignore_initial_time_skew)
+
         self.step("setting up initial replication", self.__setup_replica)
+        self.step("prevent time skew after initial replication",
+                  self.replica_manage_time_skew)
         self.step("adding sasl mappings to the directory", self.__configure_sasl_mappings)
         self.step("updating schema", self.__update_schema)
         # See LDIFs for automember configuration during replica install
@@ -596,6 +609,7 @@ class DsInstance(service.Service):
                 parser.parse()
             new_dse_ldif.flush()
         shutil.copy2(temp_filename, dse_filename)
+        tasks.restore_context(dse_filename)
         try:
             os.remove(temp_filename)
         except OSError as e:
@@ -933,8 +947,35 @@ class DsInstance(service.Service):
     def __add_replication_acis(self):
         self._ldap_mod("replica-acis.ldif", self.sub_dict)
 
+    def __replica_ignore_initial_time_skew(self):
+        self.replica_manage_time_skew(prevent=False)
+
+    def replica_manage_time_skew(self, prevent=True):
+        if prevent:
+            self.sub_dict['SKEWVALUE'] = 'off'
+        else:
+            self.sub_dict['SKEWVALUE'] = 'on'
+        self._ldap_mod("replica-prevent-time-skew.ldif", self.sub_dict)
+
     def __setup_s4u2proxy(self):
-        self._ldap_mod("replica-s4u2proxy.ldif", self.sub_dict)
+
+        def __add_principal(last_cn, principal, self):
+            dn = DN(('cn', last_cn), ('cn', 's4u2proxy'),
+                    ('cn', 'etc'), self.suffix)
+
+            value = '{principal}/{fqdn}@{realm}'.format(fqdn=self.fqdn,
+                                                        realm=self.realm,
+                                                        principal=principal)
+
+            entry = api.Backend.ldap2.get_entry(dn, ['memberPrincipal'])
+            try:
+                entry['memberPrincipal'].append(value)
+                api.Backend.ldap2.update_entry(entry)
+            except errors.EmptyModlist:
+                pass
+
+        __add_principal('ipa-http-delegation', 'HTTP', self)
+        __add_principal('ipa-ldap-delegation-targets', 'ldap', self)
 
     def __create_indices(self):
         self._ldap_mod("indices.ldif")
@@ -1032,22 +1073,59 @@ class DsInstance(service.Service):
                 logger.error(
                     'Unable to restart DS instance %s: %s', ds_instance, e)
 
+    def get_server_cert_nickname(self, serverid=None):
+        """
+        Retrieve the nickname of the server cert used by dirsrv.
+
+        The method directly reads the dse.ldif to find the attribute
+        nsSSLPersonalitySSL of cn=RSA,cn=encryption,cn=config because
+        LDAP is not always accessible when we need to get the nickname
+        (for instance during uninstall).
+        """
+        if serverid is None:
+            serverid = self.get_state("serverid")
+        if serverid is not None:
+            dirname = config_dirname(serverid)
+            config_file = os.path.join(dirname, "dse.ldif")
+            rsa_dn = "cn=RSA,cn=encryption,cn=config"
+            with open(config_file, "r") as in_file:
+                parser = upgradeinstance.GetEntryFromLDIF(
+                    in_file,
+                    entries_dn=[rsa_dn])
+                parser.parse()
+                try:
+                    config_entry = parser.get_results()[rsa_dn]
+                    nickname = config_entry["nsSSLPersonalitySSL"][0]
+                    return nickname.decode('utf-8')
+                except (KeyError, IndexError):
+                    logger.error("Unable to find server cert nickname in %s",
+                                 config_file)
+
+        logger.debug("Falling back to nickname Server-Cert")
+        return 'Server-Cert'
+
     def stop_tracking_certificates(self, serverid=None):
         if serverid is None:
             serverid = self.get_state("serverid")
         if not serverid is None:
+            nickname = self.get_server_cert_nickname(serverid)
             # drop the trailing / off the config_dirname so the directory
             # will match what is in certmonger
             dirname = config_dirname(serverid)[:-1]
             dsdb = certs.CertDB(self.realm, nssdir=dirname)
-            dsdb.untrack_server_cert(self.nickname)
+            dsdb.untrack_server_cert(nickname)
 
     def start_tracking_certificates(self, serverid):
+        nickname = self.get_server_cert_nickname(serverid)
         dirname = config_dirname(serverid)[:-1]
         dsdb = certs.CertDB(self.realm, nssdir=dirname)
-        dsdb.track_server_cert(self.nickname, self.principal,
-                               dsdb.passwd_fname,
-                               'restart_dirsrv %s' % serverid)
+        if dsdb.is_ipa_issued_cert(api, nickname):
+            dsdb.track_server_cert(nickname, self.principal,
+                                   dsdb.passwd_fname,
+                                   'restart_dirsrv %s' % serverid)
+        else:
+            logger.debug("Will not track DS server certificate %s as it is "
+                         "not issued by IPA", nickname)
 
     # we could probably move this function into the service.Service
     # class - it's very generic - all we need is a way to get an
@@ -1096,30 +1174,6 @@ class DsInstance(service.Service):
         self.start()
 
         return status
-
-    def tune_nofile(self, num=8192):
-        """
-        Increase the number of files descriptors available to directory server
-        from the default 1024 to 8192. This will allow to support a greater
-        number of clients out of the box.
-        """
-
-        # Do the platform-specific changes
-        proceed = services.knownservices.dirsrv.tune_nofile_platform(
-                    num=num, fstore=self.fstore)
-
-        if proceed:
-            # finally change also DS configuration
-            # NOTE: dirsrv will not allow you to set max file descriptors unless
-            # the user limits allow it, so we have to restart dirsrv before
-            # attempting to change them in cn=config
-            self.__restart_instance()
-
-            nf_sub_dict = dict(NOFILES=str(num))
-            self._ldap_mod("ds-nfiles.ldif", nf_sub_dict)
-
-    def __tuning(self):
-        self.tune_nofile(8192)
 
     def __root_autobind(self):
         self._ldap_mod("root-autobind.ldif",

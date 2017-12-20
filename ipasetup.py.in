@@ -25,22 +25,27 @@ class build_py(setuptools_build_py):
     """
     def initialize_options(self):
         setuptools_build_py.initialize_options(self)
-        self.skip_package = None
+        self.skip_modules = ()
 
     def finalize_options(self):
         setuptools_build_py.finalize_options(self)
         omit = os.environ.get('IPA_OMIT_INSTALL', '0')
         if omit == '1':
             distname = self.distribution.metadata.name
-            self.skip_package = '{}.install'.format(distname)
+            self.skip_modules = (
+                # *.install.* subpackages
+                '{}.install'.format(distname),
+                # platform override module
+                'ipaplatform.override',
+            )
             log.warn("bdist_wheel: Ignore package: %s",
-                     self.skip_package)
+                     ', '.join(self.skip_modules))
 
     def build_module(self, module, module_file, package):
         if isinstance(package, str):
             package = package.split('.')
         name = '.'.join(list(package) + [module])
-        if self.skip_package and name.startswith(self.skip_package):
+        if self.skip_modules and name.startswith(self.skip_modules):
             # remove file in case it has been copied to build/lib before
             outfile = self.get_module_outfile(self.build_lib, package, module)
             try:
@@ -76,7 +81,7 @@ PACKAGE_VERSION = {
     'jwcrypto': 'jwcrpyto >= 0.4.2',
     'kdcproxy': 'kdcproxy >= 0.3',
     'netifaces': 'netifaces >= 0.10.4',
-    'pyldap': 'pyldap >= 2.4.15',
+    'python-ldap': 'python-ldap >= 3.0.0b1',  # install --pre
     'python-yubico': 'python-yubico >= 1.2.3',
     'qrcode': 'qrcode >= 5.0',
 }
@@ -92,6 +97,7 @@ common_args = dict(
     url="http://www.freeipa.org/",
     download_url="http://www.freeipa.org/page/Downloads",
     platforms=["Linux", "Solaris", "Unix"],
+    python_requires=">=2.7.5,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Intended Audience :: System Administrators",

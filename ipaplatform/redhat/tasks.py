@@ -146,9 +146,22 @@ class RedHatTaskNamespace(BaseTaskNamespace):
         """
         if not os.path.exists(paths.IF_INET6):
             raise RuntimeError(
-                "IPv6 kernel module has to be enabled. If you do not wish to "
-                "use IPv6, please disable it on the interfaces in "
-                "sysctl.conf and enable the IPv6 kernel module.")
+                "IPv6 stack has to be enabled in the kernel and some "
+                "interface has to have ::1 address assigned. Typically "
+                "this is 'lo' interface. If you do not wish to use IPv6 "
+                "globally, disable it on the specific interfaces in "
+                "sysctl.conf except 'lo' interface.")
+
+        try:
+            localhost6 = ipautil.CheckedIPAddress('::1', allow_loopback=True)
+            if localhost6.get_matching_interface() is None:
+                raise ValueError("no interface for ::1 address found")
+        except ValueError:
+            raise RuntimeError(
+                 "IPv6 stack is enabled in the kernel but there is no "
+                 "interface that has ::1 address assigned. Add ::1 address "
+                 "resolution to 'lo' interface. You might need to enable IPv6 "
+                 "on the interface 'lo' in sysctl.conf.")
 
     def restore_pre_ipa_client_configuration(self, fstore, statestore,
                                              was_sssd_installed,
@@ -257,11 +270,11 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 "\n")
 
         has_eku = set()
-        for cert, nickname, trusted, ext_key_usage in ca_certs:
+        for cert, nickname, trusted, _ext_key_usage in ca_certs:
             try:
                 subject = cert.subject_bytes
                 issuer = cert.issuer_bytes
-                serial_number = cert.serial_number
+                serial_number = cert.serial_number_bytes
                 public_key_info = cert.public_key_info_bytes
             except (PyAsn1Error, ValueError, CertificateError) as e:
                 logger.warning(
@@ -271,7 +284,7 @@ class RedHatTaskNamespace(BaseTaskNamespace):
             label = urllib.parse.quote(nickname)
             subject = urllib.parse.quote(subject)
             issuer = urllib.parse.quote(issuer)
-            serial_number = urllib.parse.quote(str(serial_number))
+            serial_number = urllib.parse.quote(serial_number)
             public_key_info = urllib.parse.quote(public_key_info)
 
             obj = ("[p11-kit-object-v1]\n"
@@ -296,7 +309,8 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 pem=cert.public_bytes(x509.Encoding.PEM).decode('ascii'))
             f.write(obj)
 
-            if ext_key_usage is not None and public_key_info not in has_eku:
+            if (cert.extended_key_usage is not None and
+                    public_key_info not in has_eku):
                 try:
                     ext_key_usage = cert.extended_key_usage_bytes
                 except PyAsn1Error as e:

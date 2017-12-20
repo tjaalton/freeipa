@@ -523,7 +523,7 @@ def kadmin_modprinc(principal, options):
 
 def create_keytab(path, principal):
     try:
-        if ipautil.file_exists(path):
+        if os.path.isfile(path):
             os.remove(path)
     except os.error:
         logger.critical("Failed to remove %s.", path)
@@ -769,7 +769,7 @@ def read_replica_info(dir_path, rconfig):
 def read_replica_info_dogtag_port(config_dir):
     portfile = config_dir + "/dogtag_directory_port.txt"
     default_port = 7389
-    if not ipautil.file_exists(portfile):
+    if not os.path.isfile(portfile):
         dogtag_master_ds_port = default_port
     else:
         with open(portfile) as fd:
@@ -969,7 +969,7 @@ def handle_error(error, log_file_name=None):
         return error, 1
 
     if isinstance(error, errors.ACIError):
-        return error.message, 1
+        return str(error), 1
     if isinstance(error, ldap.INVALID_CREDENTIALS):
         return "Invalid password", 1
     if isinstance(error, ldap.INSUFFICIENT_ACCESS):
@@ -1434,6 +1434,7 @@ class ModifyLDIF(ldif.LDIFParser):
 
             if "replace" in entry:
                 for attr in entry["replace"]:
+                    attr = attr.decode('utf-8')
                     try:
                         self.replace_value(dn, attr, entry[attr])
                     except KeyError:
@@ -1441,9 +1442,11 @@ class ModifyLDIF(ldif.LDIFParser):
                                          "missing".format(dn=dn, attr=attr))
             elif "delete" in entry:
                 for attr in entry["delete"]:
+                    attr = attr.decode('utf-8')
                     self.remove_value(dn, attr, entry.get(attr, None))
             elif "add" in entry:
                 for attr in entry["add"]:
+                    attr = attr.decode('utf-8')
                     try:
                         self.replace_value(dn, attr, entry[attr])
                     except KeyError:
