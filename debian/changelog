@@ -26,6 +26,7 @@ freeipa (4.6.2-1) UNRELEASED; urgency=medium
   * rules, autoreconf: Refactor the build to match current upstream,
     drop d/autoreconf.
   * local-options: Ignore some files not on tarballs.
+  * rules: Migrate to dh_missing.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
 
