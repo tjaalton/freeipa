@@ -35,6 +35,8 @@ freeipa (4.6.2-1) UNRELEASED; urgency=medium
   * control: Drop libcurl4-nss-dev from build-depends, bump libkrb5-dev
     build-dependency.
   * control: Bump dependency on bind9 and bind9-dyndb-ldap.
+  * control: add libapache2-mod-lookup-identity to server dependencies,
+    enable/disable it in postinst/postrm.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
 

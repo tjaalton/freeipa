@@ -37,6 +37,9 @@ if [ "$1" = configure ]; then
 	if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then
             apache2_invoke enmod headers || exit $?
         fi
+	if [ ! -e /etc/apache2/mods-enabled/lookup_identity.load ]; then
+            apache2_invoke enmod lookup_identity || exit $?
+        fi
 	if [ ! -e /etc/apache2/mods-enabled/proxy.load ]; then
             apache2_invoke enmod proxy || exit $?
         fi
