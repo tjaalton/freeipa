@@ -74,5 +74,5 @@ override_dh_fixperms:
 	fi
 
 %:
-	dh $@ --with autoreconf,python2,systemd \
-		--builddirectory=build
+	dh $@ --with autoreconf,python2,systemd
+#		--builddirectory=build
