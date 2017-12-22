@@ -34,6 +34,7 @@ usr/lib/ipa/ipa-ods-exporter
 usr/lib/ipa/ipa-otpd
 usr/lib/ipa/ipa-pki-retrieve-key
 usr/lib/ipa/oddjob/org.freeipa.server.conncheck
+usr/lib/tmpfiles.d/ipa.conf
 usr/sbin/ipa-advise
 usr/sbin/ipa-backup
 usr/sbin/ipa-ca-install
