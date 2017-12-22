@@ -2,6 +2,24 @@
 set -e
 
 if [ "$1" = configure ]; then
+    if ! getent passwd kdcproxy  > $OUT; then
+        adduser --quiet --system --home / \
+            --shell /usr/sbin/nologin --group \
+            --no-create-home --gecos "IPA KDC Proxy User" \
+            kdcproxy > $OUT
+    fi
+    if ! getent passwd ipaapi  > $OUT; then
+        adduser --quiet --system --home / \
+            --shell /usr/sbin/nologin --group \
+            --no-create-home --gecos "IPA Framework User" \
+            ipaapi > $OUT
+    fi
+
+    # add www-data to ipaapi group
+    if ! id -Gn www-data | grep '\bipaapi\b' >/dev/null; then
+        usermod www-data -a -G ipaapi
+    fi
+
     if [ -e /usr/share/apache2/apache2-maintscript-helper ]; then
         . /usr/share/apache2/apache2-maintscript-helper
 	if [ ! -e /etc/apache2/mods-enabled/auth_gssapi.load ]; then
