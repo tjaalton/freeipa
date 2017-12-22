@@ -32,6 +32,8 @@ freeipa (4.6.2-1) UNRELEASED; urgency=medium
   * control: Add python-sss to python-ipaserver depends.
   * rules: Disable building on a builddirectory, it's broken upstream
     for now.
+  * control: Drop libcurl4-nss-dev from build-depends, bump libkrb5-dev
+    build-dependency.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
 
