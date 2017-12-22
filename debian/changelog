@@ -29,6 +29,7 @@ freeipa (4.6.2-1) UNRELEASED; urgency=medium
   * rules: Migrate to dh_missing.
   * Drop server tmpfile, ship upstream one, and create ipaapi/kdcproxy
     users/groups on install and add www-data to ipaapi group.
+  * control: Add python-sss to python-ipaserver depends.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
 

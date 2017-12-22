@@ -329,6 +329,7 @@ Depends:
  python-ldap (>= 2.4.22),
  python-libsss-nss-idmap,
  python-pyasn1,
+ python-sss,
  samba-common,
  zip,
  ${misc:Depends},
