@@ -39,6 +39,7 @@ freeipa (4.6.2-1) UNRELEASED; urgency=medium
     enable/disable it in postinst/postrm.
   * control: Depend on newer custodia, move dep on python-custodia to
     python-ipaserver.
+  * control: Add python-sss to client depends.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
 

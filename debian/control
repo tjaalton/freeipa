@@ -198,6 +198,7 @@ Depends:
  python-ipaclient (= ${source:Version}),
  python-gssapi,
  python-ldap,
+ python-sss,
  sssd (>= 1.14.0),
  ${misc:Depends},
  ${python:Depends},
