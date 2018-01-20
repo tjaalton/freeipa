@@ -1,4 +1,4 @@
-freeipa (4.6.2-1) UNRELEASED; urgency=medium
+freeipa (4.6.2-1) unstable; urgency=medium
 
   * New upstream release.
     - Remove upstreamed patches:
@@ -42,7 +42,7 @@ freeipa (4.6.2-1) UNRELEASED; urgency=medium
   * control: Add python-sss to client depends.
   * Add support for krb 1.16. (Closes: #887814)
 
- -- Timo Aaltonen <tjaalton@debian.org>  Tue, 14 Mar 2017 16:55:45 +0200
+ -- Timo Aaltonen <tjaalton@debian.org>  Sat, 20 Jan 2018 12:41:28 +0200
 
 freeipa (4.4.4-4) unstable; urgency=medium
 
