@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+OUT=/dev/null
+
 if [ "$1" = configure ]; then
     if ! getent passwd kdcproxy  > $OUT; then
         adduser --quiet --system --home / \
