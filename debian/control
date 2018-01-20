@@ -15,7 +15,7 @@ Build-Depends:
  libcmocka-dev,
  libini-config-dev,
  libkrad-dev,
- libkrb5-dev (>= 1.15),
+ libkrb5-dev (>= 1.16),
  libldap2-dev,
  libnspr4-dev,
  libnss3-dev,

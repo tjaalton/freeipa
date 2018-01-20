@@ -1,0 +1,90 @@
+commit 9f8700fceead6e7b4947dc86f161e78dabb5d186
+Author: Robbie Harwood <rharwood@redhat.com>
+Date:   Mon Oct 9 11:39:09 2017 -0400
+
+    ipa-kdb: support KDB DAL version 7.0
+    
+    krb5-1.16 includes DAL version 7, which changes the signature of
+    audit_as_req to include local and remote address parameters.
+    
+    This patch just enables building against the new DAL version and bumps
+    the minimum in freeipa.spec.in, but doesn't use the new information
+    for anything.
+    
+    Reviewed-By: Tomas Krizek <tkrizek@redhat.com>
+    Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+
+diff --git a/daemons/ipa-kdb/ipa_kdb.c b/daemons/ipa-kdb/ipa_kdb.c
+index c0f1e276c..b11153ecc 100644
+--- a/daemons/ipa-kdb/ipa_kdb.c
++++ b/daemons/ipa-kdb/ipa_kdb.c
+@@ -709,7 +709,9 @@ kdb_vftabl kdb_function_table = {
+ };
+ #endif
+ 
+-#if (KRB5_KDB_DAL_MAJOR_VERSION == 6) && defined(HAVE_KDB_FREEPRINCIPAL_EDATA)
++#if ((KRB5_KDB_DAL_MAJOR_VERSION == 6) || \
++     (KRB5_KDB_DAL_MAJOR_VERSION == 7)) && \
++    defined(HAVE_KDB_FREEPRINCIPAL_EDATA)
+ kdb_vftabl kdb_function_table = {
+     .maj_ver = KRB5_KDB_DAL_MAJOR_VERSION,
+     .min_ver = 1,
+@@ -742,7 +744,8 @@ kdb_vftabl kdb_function_table = {
+ };
+ #endif
+ 
+-#if (KRB5_KDB_DAL_MAJOR_VERSION != 5) && (KRB5_KDB_DAL_MAJOR_VERSION != 6)
++#if (KRB5_KDB_DAL_MAJOR_VERSION != 5) && \
++    (KRB5_KDB_DAL_MAJOR_VERSION != 6) && \
++    (KRB5_KDB_DAL_MAJOR_VERSION != 7)
+ #error unsupported DAL major version
+ #endif
+-
+diff --git a/daemons/ipa-kdb/ipa_kdb.h b/daemons/ipa-kdb/ipa_kdb.h
+index 72573a61a..be2f45752 100644
+--- a/daemons/ipa-kdb/ipa_kdb.h
++++ b/daemons/ipa-kdb/ipa_kdb.h
+@@ -326,6 +326,10 @@ krb5_error_code ipadb_check_allowed_to_delegate(krb5_context kcontext,
+ 
+ void ipadb_audit_as_req(krb5_context kcontext,
+                         krb5_kdc_req *request,
++#if (KRB5_KDB_DAL_MAJOR_VERSION == 7)
++                        const krb5_address *local_addr,
++                        const krb5_address *remote_addr,
++#endif
+                         krb5_db_entry *client,
+                         krb5_db_entry *server,
+                         krb5_timestamp authtime,
+diff --git a/daemons/ipa-kdb/ipa_kdb_audit_as.c b/daemons/ipa-kdb/ipa_kdb_audit_as.c
+index 5f59bf33a..c68a67aa2 100644
+--- a/daemons/ipa-kdb/ipa_kdb_audit_as.c
++++ b/daemons/ipa-kdb/ipa_kdb_audit_as.c
+@@ -26,6 +26,10 @@
+ 
+ void ipadb_audit_as_req(krb5_context kcontext,
+                         krb5_kdc_req *request,
++#if (KRB5_KDB_DAL_MAJOR_VERSION == 7)
++                        const krb5_address *local_addr,
++                        const krb5_address *remote_addr,
++#endif
+                         krb5_db_entry *client,
+                         krb5_db_entry *server,
+                         krb5_timestamp authtime,
+diff --git a/freeipa.spec.in b/freeipa.spec.in
+index 4eac379ff..cb71fd7ae 100644
+--- a/freeipa.spec.in
++++ b/freeipa.spec.in
+@@ -86,9 +86,13 @@ BuildRequires:  openldap-devel
+ # For KDB DAL version, make explicit dependency so that increase of version
+ # will cause the build to fail due to unsatisfied dependencies.
+ # DAL version change may cause code crash or memory leaks, it is better to fail early.
++%if 0%{?fedora} > 27
++BuildRequires: krb5-kdb-version = 7.0
++%else
+ %if 0%{?fedora} > 25
+ BuildRequires: krb5-kdb-version = 6.1
+ %endif
++%endif
+ BuildRequires:  krb5-devel >= %{krb5_version}
+ # 1.27.4: xmlrpc_curl_xportparms.gssapi_delegation
+ BuildRequires:  xmlrpc-c-devel >= 1.27.4

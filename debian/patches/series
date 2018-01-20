@@ -10,3 +10,4 @@ fix-replicainstall.diff
 create-sysconfig-ods.diff
 fix-named-conf-template.diff
 fix-opendnssec-setup.diff
+support-kdb-dal-7.0.diff
