@@ -1,8 +1,8 @@
-freeipa (4.6.2-3) UNRELEASED; urgency=medium
+freeipa (4.6.2-3) unstable; urgency=medium
 
   * tests: Add some debug info, and fail properly.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Mon, 29 Jan 2018 13:17:17 +0200
+ -- Timo Aaltonen <tjaalton@debian.org>  Mon, 29 Jan 2018 13:17:25 +0200
 
 freeipa (4.6.2-2) unstable; urgency=medium
 
