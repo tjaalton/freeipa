@@ -5,6 +5,13 @@ IP=`ip route get 1.1.1.1 | sed -n -e's/.*src //; s/ .*//; p; q'`
 HOSTNAME=`cat /etc/hosts| grep '127.0.1.1' | awk '{print $NF; exit}'`
 echo "$IP $HOSTNAME.debci $HOSTNAME" >> /etc/hosts
 
+echo "IP address is $IP"
+echo "Hostname is: $HOSTNAME"
+echo "/etc/hostname has:"
+cat /etc/hostname
+echo "/etc/hosts has:"
+cat /etc/hosts
+
 if [ ! -d /etc/systemd/system/pki-tomcatd.target.wants ]; then
     echo "WHOOPS: Creating /etc/systemd/system/pki-tomcatd.target.wants"
     mkdir /etc/systemd/system/pki-tomcatd.target.wants
@@ -25,8 +32,8 @@ ipa-server-install \
 	--no-forwarders \
 	--hostname=$HOSTNAME.debci
 
-
 if [ $? != 0 ]; then
     echo ">>>>> IPASERVER log >>>>>>>"
     cat /var/log/ipaserver-install.log
+    exit 1
 fi
