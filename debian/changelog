@@ -1,3 +1,9 @@
+freeipa (4.6.2-4) UNRELEASED; urgency=medium
+
+  * client.postinst: Migrate from old nssdb only if it exists.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Tue, 30 Jan 2018 17:42:00 +0200
+
 freeipa (4.6.2-3) unstable; urgency=medium
 
   * tests: Add some debug info, and fail properly.
