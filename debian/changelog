@@ -1,3 +1,9 @@
+freeipa (4.6.3-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Feb 2018 14:14:10 +0200
+
 freeipa (4.6.2-4) unstable; urgency=medium
 
   * client.postinst: Migrate from old nssdb only if it exists.
