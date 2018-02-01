@@ -1,6 +1,7 @@
 freeipa (4.6.3-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * support-kdb-dal-7.0.diff: Dropped, upstream.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Feb 2018 14:14:10 +0200
 
