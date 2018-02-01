@@ -65,6 +65,15 @@ def check_admin_in_ldap(host):
 def check_admin_in_cli(host):
     result = host.run_command(['ipa', 'user-show', 'admin'])
     assert 'User login: admin' in result.stdout_text, result.stdout_text
+
+    # LDAP do not guarantee any order, so the test cannot assume it. Based on
+    # that, the code bellow order the 'Member of groups' field to able to
+    # assert it latter.
+    data = dict(re.findall("\W*(.+):\W*(.+)\W*", result.stdout_text))
+    data["Member of groups"] = ', '.join(sorted(data["Member of groups"]
+                                                .split(", ")))
+    result.stdout_text = ''.join([' {}: {}\n'.format(k, v)
+                                  for k, v in data.items()])
     return result
 
 
@@ -126,15 +135,13 @@ def backup(host):
 
     # Get the backup location from the command's output
     for line in result.stderr_text.splitlines():
-        prefix = ('ipa.ipaserver.install.ipa_backup.Backup: '
-                  'INFO: Backed up to ')
+        prefix = 'ipaserver.install.ipa_backup: INFO: Backed up to '
         if line.startswith(prefix):
             backup_path = line[len(prefix):].strip()
             logger.info('Backup path for %s is %s', host, backup_path)
             return backup_path
     else:
         raise AssertionError('Backup directory not found in output')
-
 
 
 class TestBackupAndRestore(IntegrationTest):
@@ -408,6 +415,7 @@ class TestBackupAndRestoreWithKRA(BaseBackupAndRestoreWithKRA):
     def test_full_backup_restore_with_vault(self):
         """backup, uninstall, restore"""
         self._full_backup_restore_with_vault(reinstall=False)
+
 
 class TestBackupReinstallRestoreWithKRA(BaseBackupAndRestoreWithKRA):
     def test_full_backup_reinstall_restore_with_vault(self):

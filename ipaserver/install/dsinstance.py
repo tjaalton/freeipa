@@ -185,7 +185,7 @@ def get_all_external_schema_files(root):
         for name in files:
             if fnmatch.fnmatch(name, "*.ldif"):
                 f.append(os.path.join(path, name))
-    return f
+    return sorted(f)
 
 
 INF_TEMPLATE = """
@@ -1303,4 +1303,8 @@ def write_certmap_conf(realm, ca_subject):
     shutil.copyfile(
         os.path.join(paths.USR_SHARE_IPA_DIR, "certmap.conf.template"),
         certmap_filename)
-    installutils.update_file(certmap_filename, '$ISSUER_DN', str(ca_subject))
+    installutils.update_file(
+        certmap_filename,
+        '$ISSUER_DN',  # lgtm [py/regex/unmatchable-dollar]
+        str(ca_subject)
+    )

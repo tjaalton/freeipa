@@ -49,7 +49,7 @@
 %global samba_version 4.7.0
 %global selinux_policy_version 3.12.1-153
 %global slapi_nis_version 0.56.0-4
-%global python_ldap_version 2.4.15
+%global python2_ldap_version 2.4.15
 %else
 # 1.15.1-7: certauth (http://krbdev.mit.edu/rt/Ticket/Display.html?id=8561)
 %global krb5_version 1.15.1-7
@@ -59,7 +59,18 @@
 %global samba_version 2:4.7.0
 %global selinux_policy_version 3.13.1-158.4
 %global slapi_nis_version 0.56.1
-%global python_ldap_version 3.0.0
+
+# Use python3-pyldap to be compatible with old python3-pyldap 2.x and new
+# python3-ldap 3.0. The python3-ldap package also provides python3-pyldap.
+%if 0%{?fedora} >= 28
+# https://pagure.io/freeipa/issue/7257 DNSSEC daemons on Python 3
+%global python2_ldap_version 3.0.0-0.4.b4
+%global python3_ldap_version 3.0.0-0.4.b4
+%else
+%global python2_ldap_version 2.4.15
+%global python3_ldap_version 2.4.35.1-2
+%endif
+
 %endif
 
 
@@ -95,8 +106,12 @@ BuildRequires:  openldap-devel
 # For KDB DAL version, make explicit dependency so that increase of version
 # will cause the build to fail due to unsatisfied dependencies.
 # DAL version change may cause code crash or memory leaks, it is better to fail early.
+%if 0%{?fedora} > 27
+BuildRequires: krb5-kdb-version = 7.0
+%else
 %if 0%{?fedora} > 25
 BuildRequires: krb5-kdb-version = 6.1
+%endif
 %endif
 BuildRequires:  krb5-devel >= %{krb5_version}
 # 1.27.4: xmlrpc_curl_xportparms.gssapi_delegation
@@ -148,7 +163,7 @@ BuildRequires:  python-lesscpy
 # Build dependencies for makeapi/makeaci
 # makeapi/makeaci is using Python 2 only for now
 #
-BuildRequires:  python2-ldap >= %{python_ldap_version}
+BuildRequires:  python2-ldap >= %{python2_ldap_version}
 BuildRequires:  python2-netaddr
 BuildRequires:  python2-pyasn1
 BuildRequires:  python2-pyasn1-modules
@@ -206,7 +221,11 @@ BuildRequires:  python2-pytest-sourceorder
 BuildRequires:  python2-jwcrypto >= 0.4.2
 # 0.3: sd_notify (https://pagure.io/freeipa/issue/5825)
 BuildRequires:  python2-custodia >= 0.3.1
+%if 0%{?fedora} >= 28
 BuildRequires:  python2-dbus
+%else
+BuildRequires:  dbus-python
+%endif
 BuildRequires:  python2-dateutil
 BuildRequires:  python2-enum34
 BuildRequires:  python2-netifaces
@@ -260,7 +279,7 @@ BuildRequires:  python3-augeas
 BuildRequires:  python3-netaddr
 BuildRequires:  python3-pyasn1
 BuildRequires:  python3-pyasn1-modules
-BuildRequires:  python3-ldap >= %{python_ldap_version}
+BuildRequires:  python3-pyldap >= %{python3_ldap_version}
 %endif # with_python3
 %endif # with_lint
 
@@ -291,10 +310,10 @@ Requires: %{name}-client = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 %if 0%{?with_python3}
 Requires: python3-ipaserver = %{version}-%{release}
-Requires: python3-ldap >= %{python_ldap_version}
+Requires: python3-pyldap >= %{python3_ldap_version}
 %else
 Requires: python2-ipaserver = %{version}-%{release}
-Requires: python2-ldap >= %{python_ldap_version}
+Requires: python2-ldap >= %{python2_ldap_version}
 %endif
 # 1.3.7.6-1: https://bugzilla.redhat.com/show_bug.cgi?id=1488295
 Requires: 389-ds-base >= 1.3.7.6-1
@@ -393,12 +412,16 @@ Requires: %{name}-server-common = %{version}-%{release}
 Requires: %{name}-common = %{version}-%{release}
 Requires: python2-ipaclient = %{version}-%{release}
 Requires: python2-custodia >= 0.3.1
-Requires: python2-ldap >= %{python_ldap_version}
+Requires: python2-ldap >= %{python2_ldap_version}
 Requires: python2-lxml
 Requires: python2-gssapi >= 1.2.0-5
 Requires: python2-sssdconfig
 Requires: python2-pyasn1 >= 0.3.2-2
-Requires: python2-dbus
+%if 0%{?fedora} >= 28
+BuildRequires:  python2-dbus
+%else
+BuildRequires:  dbus-python
+%endif
 Requires: python2-dns >= 1.15
 Requires: python2-kdcproxy >= 0.3
 Requires: rpm-libs
@@ -426,7 +449,7 @@ Requires: %{name}-common = %{version}-%{release}
 Requires: python3-ipaclient = %{version}-%{release}
 Requires: python3-custodia >= 0.3.1
 # we need pre-requires since earlier versions may break upgrade
-Requires(pre): python3-ldap >= %{python_ldap_version}
+Requires(pre): python3-pyldap >= %{python3_ldap_version}
 Requires: python3-lxml
 Requires: python3-gssapi >= 1.2.0
 Requires: python3-sssdconfig
@@ -549,11 +572,11 @@ Requires: %{name}-common = %{version}-%{release}
 %if 0%{?with_python3}
 Requires: python3-gssapi >= 1.2.0-5
 Requires: python3-ipaclient = %{version}-%{release}
-Requires: python3-ldap >= %{python_ldap_version}
+Requires: python3-pyldap >= %{python3_ldap_version}
 %else
 Requires: python2-gssapi >= 1.2.0-5
 Requires: python2-ipaclient = %{version}-%{release}
-Requires: python2-ldap >= %{python_ldap_version}
+Requires: python2-ldap >= %{python2_ldap_version}
 %endif
 Requires: cyrus-sasl-gssapi%{?_isa}
 Requires: ntp
@@ -713,7 +736,6 @@ Requires: %{name}-common = %{version}-%{release}
 Requires: python2-gssapi >= 1.2.0-5
 Requires: gnupg
 Requires: keyutils
-Requires: pyOpenSSL
 Requires: python2 >= 2.7.9
 Requires: python2-cryptography >= 1.6
 Requires: python2-netaddr >= %{python_netaddr_version}
@@ -724,13 +746,17 @@ Requires: python2-pyasn1-modules >= 0.3.2-2
 Requires: python2-dateutil
 Requires: python2-yubico >= 1.2.3
 Requires: python2-sss-murmur
-Requires: python2-dbus
+%if 0%{?fedora} >= 28
+BuildRequires:  python2-dbus
+%else
+BuildRequires:  dbus-python
+%endif
 Requires: python2-setuptools
 Requires: python2-six
 # 0.4.2: Py3 fix https://bugzilla.redhat.com/show_bug.cgi?id=1476150
 Requires: python2-jwcrypto >= 0.4.2
 Requires: python2-cffi
-Requires: python2-ldap >= %{python_ldap_version}
+Requires: python2-ldap >= %{python2_ldap_version}
 Requires: python2-requests
 Requires: python2-dns >= 1.15
 Requires: python2-enum34
@@ -763,7 +789,6 @@ Requires: %{name}-common = %{version}-%{release}
 Requires: python3-gssapi >= 1.2.0
 Requires: gnupg
 Requires: keyutils
-Requires: python3-pyOpenSSL
 Requires: python3-cryptography >= 1.6
 Requires: python3-netaddr >= %{python_netaddr_version}
 Requires: python3-libipa_hbac
@@ -781,7 +806,7 @@ Requires: python3-six
 Requires: python3-jwcrypto >= 0.4.2
 Requires: python3-cffi
 # we need pre-requires since earlier versions may break upgrade
-Requires(pre): python3-ldap >= %{python_ldap_version}
+Requires(pre): python3-pyldap >= %{python3_ldap_version}
 Requires: python3-requests
 Requires: python3-dns >= 1.15
 Requires: python3-netifaces >= 0.10.4
@@ -1612,9 +1637,14 @@ fi
 %ghost %attr(0644,root,apache) %config(noreplace) %{_sysconfdir}/ipa/default.conf
 %ghost %attr(0644,root,apache) %config(noreplace) %{_sysconfdir}/ipa/ca.crt
 %dir %attr(0755,root,root) %{_sysconfdir}/ipa/nssdb
+# old dbm format
 %ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/cert8.db
 %ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/key3.db
 %ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/secmod.db
+# new sql format
+%ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/cert9.db
+%ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/key4.db
+%ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/pkcs11.txt
 %ghost %config(noreplace) %{_sysconfdir}/ipa/nssdb/pwdfile.txt
 %ghost %config(noreplace) %{_sysconfdir}/pki/ca-trust/source/ipa.p11-kit
 %dir %{_localstatedir}/lib/ipa-client

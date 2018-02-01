@@ -251,8 +251,8 @@ def env_normalize(env):
                     pass
                 else:
                     return
-            else:
-                env[name] = ''
+            env[name] = ''
+
     coalesce('MASTER_env1', 'MASTER')
     coalesce('REPLICA_env1', 'REPLICA', 'SLAVE')
     coalesce('CLIENT_env1', 'CLIENT')
@@ -334,7 +334,8 @@ def host_from_env(env, domain, hostname, role, index, domain_index):
 
     cls = domain.get_host_class({})
 
-    return cls(domain, hostname, role, ip, external_hostname)
+    return cls(domain, hostname, role, ip=ip,
+               external_hostname=external_hostname)
 
 
 def host_to_env(host, **kwargs):

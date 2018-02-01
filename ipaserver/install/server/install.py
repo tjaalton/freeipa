@@ -305,6 +305,8 @@ def install_check(installer):
     external_cert_file = installer._external_cert_file
     external_ca_file = installer._external_ca_file
     http_ca_cert = installer._ca_cert
+    dirsrv_ca_cert = None
+    pkinit_ca_cert = None
 
     tasks.check_ipv6_stack_enabled()
     tasks.check_selinux_status()
@@ -617,6 +619,14 @@ def install_check(installer):
 
         # check addresses here, dns module is doing own check
         no_matching_interface_for_ip_address_warning(ip_addresses)
+
+    instance_name = "-".join(realm_name.split("."))
+    dirsrv = services.knownservices.dirsrv
+    if (options.external_cert_files
+            and dirsrv.is_installed(instance_name)
+            and not dirsrv.is_running(instance_name)):
+        logger.debug('Starting Directory Server')
+        services.knownservices.dirsrv.start(instance_name)
 
     if options.setup_adtrust:
         adtrust.install_check(False, options, api)

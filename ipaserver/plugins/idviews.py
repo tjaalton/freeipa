@@ -22,10 +22,11 @@ import re
 import six
 
 from .baseldap import (LDAPQuery, LDAPObject, LDAPCreate,
-                                     LDAPDelete, LDAPUpdate, LDAPSearch,
-                                     LDAPAddAttributeViaOption,
-                                     LDAPRemoveAttributeViaOption,
-                                     LDAPRetrieve, global_output_params)
+                       LDAPDelete, LDAPUpdate, LDAPSearch,
+                       LDAPAddAttributeViaOption,
+                       LDAPRemoveAttributeViaOption,
+                       LDAPRetrieve, global_output_params,
+                       add_missing_object_class)
 from .hostgroup import get_complete_hostgroup_member_list
 from ipalib import (
     api, Str, Int, Flag, _, ngettext, errors, output
@@ -153,7 +154,7 @@ class idview(LDAPObject):
         try:
             orig_entry_attrs = ldap.get_entry(dn, ['objectclass'])
         except errors.NotFound:
-            self.handle_not_found(*keys)
+            raise self.handle_not_found(*keys)
 
         orig_objectclasses = {
             o.lower() for o in orig_entry_attrs.get('objectclass', [])}
@@ -173,6 +174,12 @@ class idview_add(LDAPCreate):
     def pre_callback(self, ldap, dn, entry_attrs, attrs_list, *keys, **options):
         self.api.Object.config.validate_domain_resolution_order(entry_attrs)
 
+        # The objectclass ipaNameResolutionData may not be present on
+        # the id view. We need to add it if we define a new
+        # value for ipaDomainResolutionOrder
+        if 'ipadomainresolutionorder' in entry_attrs:
+            add_missing_object_class(ldap, u'ipanameresolutiondata', dn,
+                                     entry_attrs, update=False)
         return dn
 
 
@@ -587,7 +594,7 @@ def resolve_object_to_anchor(ldap, obj_type, obj, fallback_to_ldap):
         pass
 
     # No acceptable object was found
-    api.Object[obj_type].handle_not_found(obj)
+    raise api.Object[obj_type].handle_not_found(obj)
 
 
 def resolve_anchor_to_object_name(ldap, obj_type, anchor):
@@ -789,12 +796,12 @@ class baseidoverride_del(LDAPDelete):
         try:
             entry = ldap.get_entry(dn, ['objectclass'])
         except errors.NotFound:
-            self.obj.handle_not_found(*keys)
+            raise self.obj.handle_not_found(*keys)
 
         # If not, treat it as a failed search
         for required_oc in self.obj.object_class:
             if not self.obj.has_objectclass(entry['objectclass'], required_oc):
-                self.obj.handle_not_found(*keys)
+                raise self.obj.handle_not_found(*keys)
 
         return dn
 

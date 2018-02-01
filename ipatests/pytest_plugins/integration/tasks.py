@@ -35,6 +35,7 @@ from six import StringIO
 
 from ipapython import ipautil
 from ipaplatform.paths import paths
+from ipaplatform.constants import constants
 from ipapython.dn import DN
 from ipalib import errors
 from ipalib.util import get_reverse_zone_default, verify_host_resolvable
@@ -599,8 +600,9 @@ def modify_sssd_conf(host, domain, mod_dict, provider='ipa',
     :param provider_subtype: backend subtype (e.g. id or sudo), will be added
         to the domain config if not present
     """
+    fd, temp_config_file = tempfile.mkstemp()
+    os.close(fd)
     try:
-        temp_config_file = tempfile.mkstemp()[1]
         current_config = host.transport.get_file_contents(paths.SSSD_CONF)
 
         with open(temp_config_file, 'wb') as f:
@@ -1262,9 +1264,12 @@ def run_server_del(host, server_to_delete, force=False,
     return host.run_command(args, raiseonerr=False)
 
 
-def run_certutil(host, args, reqdir, stdin=None, raiseonerr=True):
-    new_args = [paths.CERTUTIL, "-d", reqdir]
-    new_args = " ".join(new_args + args)
+def run_certutil(host, args, reqdir, dbtype=None,
+                 stdin=None, raiseonerr=True):
+    if dbtype is None:
+        dbtype = constants.NSS_DEFAULT_DBTYPE
+    new_args = [paths.CERTUTIL, '-d', '{}:{}'.format(dbtype, reqdir)]
+    new_args.extend(args)
     return host.run_command(new_args, raiseonerr=raiseonerr,
                             stdin_text=stdin)
 

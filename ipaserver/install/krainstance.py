@@ -71,6 +71,7 @@ class KRAInstance(DogtagInstance):
             realm=realm,
             subsystem="KRA",
             service_desc="KRA server",
+            config=paths.KRA_CS_CFG_PATH,
         )
 
         self.basedn = DN(('o', 'kra'), ('o', 'ipaca'))
@@ -120,6 +121,7 @@ class KRAInstance(DogtagInstance):
         if promote:
             self.step("destroying installation admin user",
                       self.teardown_admin)
+        self.step("enabling ephemeral requests", self.enable_ephemeral)
         self.step("restarting KRA", self.restart_instance)
         self.step("configure certmonger for renewals",
                   self.configure_certmonger_renewal)
@@ -152,6 +154,10 @@ class KRAInstance(DogtagInstance):
         self.tmp_agent_db = tempfile.mkdtemp(
                 prefix="tmp-", dir=paths.VAR_LIB_IPA)
         tmp_agent_pwd = ipautil.ipa_generate_password()
+
+        # Create a temporary file for the admin PKCS #12 file
+        (admin_p12_fd, admin_p12_file) = tempfile.mkstemp()
+        os.close(admin_p12_fd)
 
         # Create KRA configuration
         config = RawConfigParser()
@@ -187,9 +193,8 @@ class KRAInstance(DogtagInstance):
         config.set("KRA", "pki_admin_nickname", "ipa-ca-agent")
         config.set("KRA", "pki_admin_subject_dn",
                    str(DN(('cn', 'ipa-ca-agent'), self.subject_base)))
-        config.set("KRA", "pki_import_admin_cert", "True")
-        config.set("KRA", "pki_admin_cert_file", paths.ADMIN_CERT_PATH)
-        config.set("KRA", "pki_client_admin_cert_p12", paths.DOGTAG_ADMIN_P12)
+        config.set("KRA", "pki_import_admin_cert", "False")
+        config.set("KRA", "pki_client_admin_cert_p12", admin_p12_file)
 
         # Directory server
         config.set("KRA", "pki_ds_ldap_port", "389")
@@ -294,6 +299,7 @@ class KRAInstance(DogtagInstance):
         finally:
             os.remove(p12_tmpfile_name)
             os.remove(cfg_file)
+            os.remove(admin_p12_file)
 
         shutil.move(paths.KRA_BACKUP_KEYS_P12, paths.KRACERT_P12)
         logger.debug("completed creating KRA instance")
@@ -348,8 +354,20 @@ class KRAInstance(DogtagInstance):
                                    sub_dict=sub_dict)
         ld.update([os.path.join(paths.UPDATES_DIR, '40-vault.update')])
 
-    @staticmethod
-    def update_cert_config(nickname, cert):
+    def enable_ephemeral(self):
+        """
+        Enable ephemeral KRA requests to reduce the number of LDAP
+        write operations.
+        """
+        with installutils.stopped_service('pki-tomcatd', 'pki-tomcat'):
+            installutils.set_directive(
+                self.config,
+                'kra.ephemeralRequests',
+                'true', quotes=False, separator='=')
+
+        # A restart is required
+
+    def update_cert_config(self, nickname, cert):
         """
         When renewing a KRA subsystem certificate the configuration file
         needs to get the new certificate as well.
@@ -367,8 +385,8 @@ class KRAInstance(DogtagInstance):
             'Server-Cert cert-pki-ca': 'kra.sslserver.cert'}
 
         if nickname in directives:
-            DogtagInstance.update_cert_cs_cfg(
-                directives[nickname], cert, paths.KRA_CS_CFG_PATH)
+            super(KRAInstance, self).update_cert_cs_cfg(
+                directives[nickname], cert)
 
     def __enable_instance(self):
         self.ldap_enable('KRA', self.fqdn, None, self.suffix)
