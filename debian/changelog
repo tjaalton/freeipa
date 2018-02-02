@@ -1,11 +1,11 @@
-freeipa (4.6.3-1) UNRELEASED; urgency=medium
+freeipa (4.6.3-1) unstable; urgency=medium
 
   * New upstream release.
   * support-kdb-dal-7.0.diff: Dropped, upstream.
   * tests: Force hostname as 'autopkgtest' if the system didn't have
     one.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Thu, 01 Feb 2018 14:14:10 +0200
+ -- Timo Aaltonen <tjaalton@debian.org>  Fri, 02 Feb 2018 17:27:41 +0200
 
 freeipa (4.6.2-4) unstable; urgency=medium
 
