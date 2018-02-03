@@ -7,7 +7,7 @@ echo "IP address is $IP"
 HOSTNAME=`cat /etc/hosts| grep '127.0.1.1' | awk '{print $NF; exit}' | sed 's/\..*//'`
 echo "Hostname was: $HOSTNAME"
 
-if [ -z $HOSTNAME ]; then
+if [ -z $HOSTNAME ]; then
     HOSTNAME=autopkgtest
     hostname $HOSTNAME
     echo $HOSTNAME > /etc/hostname
