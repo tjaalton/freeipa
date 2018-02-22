@@ -54,6 +54,12 @@ if [ "$1" = configure ]; then
 	if [ ! -e /etc/apache2/mods-enabled/rewrite.load ]; then
             apache2_invoke enmod rewrite || exit $?
         fi
+	if [ ! -e /etc/apache2/mods-enabled/session.load ]; then
+            apache2_invoke enmod session || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/session_cookie.load ]; then
+            apache2_invoke enmod session_cookie || exit $?
+        fi
     fi
 
     # check if IPA is set up

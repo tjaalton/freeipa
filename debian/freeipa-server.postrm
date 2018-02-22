@@ -39,6 +39,12 @@ case "$1" in
             if [ -e /etc/apache2/mods-enabled/rewrite.load ]; then
                 apache2_invoke dismod rewrite || exit $?
             fi
+            if [ -e /etc/apache2/mods-enabled/session.load ]; then
+                apache2_invoke dismod session || exit $?
+            fi
+            if [ -e /etc/apache2/mods-enabled/session_cookie.load ]; then
+                apache2_invoke dismod session_cookie || exit $?
+            fi
         fi
     ;;
 esac
