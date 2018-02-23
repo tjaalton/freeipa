@@ -11,3 +11,4 @@ create-sysconfig-ods.diff
 fix-named-conf-template.diff
 fix-opendnssec-setup.diff
 fix-httpd-group.diff
+support-pam-mkhomedir.diff
