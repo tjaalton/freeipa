@@ -188,7 +188,6 @@ Depends:
  dnsutils,
  freeipa-common (= ${source:Version}),
  krb5-user,
- libcurl3 (>= 7.22.0),
  libnss3-tools,
  libnss-sss,
  libpam-sss,
