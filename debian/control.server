@@ -10,7 +10,6 @@ Depends:
  custodia (>= 0.5.0),
  fonts-font-awesome,
  fonts-open-sans,
- freeipa-admintools (= ${source:Version}),
  freeipa-client (= ${binary:Version}),
  freeipa-common (= ${source:Version}),
  gssproxy (>= 0.7.0),
@@ -96,23 +95,6 @@ Description: FreeIPA centralized identity framework -- AD trust installer
  Cross-realm trusts with Active Directory in IPA require working Samba 4
  installation. This package is provided for convenience to install all required
  dependencies at once.
-
-Package: freeipa-admintools
-Architecture: all
-Depends:
- freeipa-client (>= ${source:Version}),
- python-ipalib (>= ${source:Version}),
- python-gssapi,
- python-ldap,
- ${misc:Depends},
- ${python:Depends},
-Description: FreeIPA centralized identity framework -- admintools
- FreeIPA is an integrated solution to provide centrally managed Identity
- (machine, user, virtual machines, groups, authentication credentials), Policy
- (configuration settings, access control information) and Audit (events,
- logs, analysis thereof).
- .
- This package contains some tools for administrators.
 
 Package: freeipa-tests
 Architecture: all
