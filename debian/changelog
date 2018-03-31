@@ -9,6 +9,7 @@ freeipa (4.6.3-2) UNRELEASED; urgency=medium
   * support-pam-mkhomedir.diff: Add support for enabling pam_mkhomedir.
   * control: Add libsss-certmap-dev to build-depends.
   * control: Drop hardcoded libcurl3 dependency from client.
+  * control*, rules: Add support for client-only build.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Sun, 04 Feb 2018 00:25:41 +0200
 
