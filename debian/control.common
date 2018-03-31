@@ -47,8 +47,8 @@ Recommends:
  ntp,
 Suggests:
  libpam-krb5,
-Breaks: freeipa-admintools (<< 4.6.3-2)
-Replaces: freeipa-admintools (<< 4.6.3-2)
+Breaks: freeipa-admintools (<< 4.6.3-2~)
+Replaces: freeipa-admintools (<< 4.6.3-2~)
 Provides: freeipa-admintools
 Description: FreeIPA centralized identity framework -- client
  FreeIPA is an integrated solution to provide centrally managed Identity
