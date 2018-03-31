@@ -46,6 +46,9 @@ else
 	> debian/control
 endif
 
+override_dh_clean: gencontrol
+	dh_clean
+
 override_dh_auto_configure: gencontrol
 	dh_auto_configure -- $(confflags)
 
@@ -64,12 +67,12 @@ ifneq ($(ONLY_CLIENT), 1)
 	touch $(DESTDIR)/usr/share/ipa/html/krb.js
 	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
 	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
+endif
 
 	mkdir -p $(DESTDIR)/usr/share/bash-completion/completions \
 	install -m 0644 contrib/completion/ipa.bash_completion \
 		$(DESTDIR)/usr/share/bash-completion/completions/ipa
 	rm -rf $(DESTDIR)/etc/bash_completion.d
-endif
 
 	# purge .la files
 	find $(CURDIR)/debian/tmp -name "*.la" -type f -exec rm -f "{}" \;
