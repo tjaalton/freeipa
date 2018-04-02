@@ -1,6 +1,6 @@
 --- a/ipaplatform/debian/tasks.py
 +++ b/ipaplatform/debian/tasks.py
-@@ -9,14 +9,15 @@ This module contains default Debian-spec
+@@ -9,14 +9,20 @@ This module contains default Debian-spec
  from ipaplatform.base.tasks import BaseTaskNamespace
  from ipaplatform.redhat.tasks import RedHatTaskNamespace
  
@@ -13,12 +13,17 @@
                                               was_sssd_configured):
 -        # Debian doesn't use authconfig, nothing to restore
 -        return True
++        ret = True
 +        try:
-+            ipautil.run(["pam-auth-update", "--package", "--remove", "mkhomedir"])
++            ipautil.run(["pam-auth-update",
++                         "--package", "--remove", "mkhomedir"])
++        except ipautil.CalledProcessError:
++            ret = False
++        return ret
  
      @staticmethod
      def set_nisdomain(nisdomain):
-@@ -25,8 +26,11 @@ class DebianTaskNamespace(RedHatTaskName
+@@ -25,8 +31,13 @@ class DebianTaskNamespace(RedHatTaskName
  
      @staticmethod
      def modify_nsswitch_pam_stack(sssd, mkhomedir, statestore):
@@ -27,6 +32,8 @@
 +        if mkhomedir:
 +            try:
 +                ipautil.run(["pam-auth-update", "--package", "--enable", "mkhomedir"])
++            except ipautil.CalledProcessError:
++                return False
 +        else:
 +            return True
  
