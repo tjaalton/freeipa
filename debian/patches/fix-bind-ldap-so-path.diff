@@ -1,0 +1,10 @@
+--- a/ipaplatform/debian/paths.py
++++ b/ipaplatform/debian/paths.py
+@@ -60,6 +60,7 @@ class DebianPathNamespace(BasePathNamesp
+     SBIN_SERVICE = "/usr/sbin/service"
+     CERTMONGER_COMMAND_TEMPLATE = "/usr/lib/ipa/certmonger/%s"
+     UPDATE_CA_TRUST = "/usr/sbin/update-ca-certificates"
++    BIND_LDAP_SO = "/usr/lib/{0}/bind/ldap.so".format(MULTIARCH)
+     BIND_LDAP_DNS_IPA_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/"
+     BIND_LDAP_DNS_ZONE_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/master/"
+     LIBSOFTHSM2_SO = "/usr/lib/softhsm/libsofthsm2.so"
