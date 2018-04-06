@@ -2,7 +2,6 @@
 
 # not upstreamable
 hack-libarch.diff
-enable-mod-nss-during-setup.diff
 
 # send upstream
 fix-replicainstall.diff
