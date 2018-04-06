@@ -49,6 +49,9 @@ endif
 
 override_dh_clean: gencontrol
 	dh_clean
+	if [ -f /usr/bin/git ]; then \
+	    git checkout -- po; \
+	fi
 
 override_dh_auto_configure: gencontrol
 	dh_auto_configure -- $(confflags)
