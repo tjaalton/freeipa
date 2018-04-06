@@ -30,6 +30,7 @@ usr/lib/ipa/ipa-custodia-check
 usr/lib/ipa/ipa-dnskeysync-replica
 usr/lib/ipa/ipa-dnskeysyncd
 usr/lib/ipa/ipa-httpd-kdcproxy
+usr/lib/ipa/ipa-httpd-pwdreader
 usr/lib/ipa/ipa-ods-exporter
 usr/lib/ipa/ipa-otpd
 usr/lib/ipa/ipa-pki-retrieve-key
@@ -63,9 +64,6 @@ usr/share/ipa/*.uldif
 usr/share/ipa/advise/legacy/*.template
 usr/share/ipa/gssapi.login
 usr/share/ipa/html/*
-usr/share/ipa/ipa-pki-proxy.conf
-usr/share/ipa/ipa-rewrite.conf
-usr/share/ipa/ipa.conf
 usr/share/ipa/ipakrb5.aug
 usr/share/ipa/kdcproxy.wsgi
 usr/share/ipa/migration/*
