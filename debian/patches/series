@@ -11,3 +11,4 @@ fix-opendnssec-setup.diff
 fix-httpd-group.diff
 support-pam-mkhomedir.diff
 fix-bind-ldap-so-path.diff
+fix-paths.diff
