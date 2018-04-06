@@ -4,6 +4,7 @@ freeipa (4.7.0~pre1+git20180404-1) UNRELEASED; urgency=medium
   * fix-ipa-conf.diff: Dropped, upstream.
   * rules: Force building with python2.
   * server.install: Updated.
+  * debian/.gitignore: Ignore d/control.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
 
