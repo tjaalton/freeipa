@@ -5,7 +5,6 @@ hack-libarch.diff
 enable-mod-nss-during-setup.diff
 
 # send upstream
-fix-ipa-conf.diff
 fix-replicainstall.diff
 create-sysconfig-ods.diff
 fix-named-conf-template.diff

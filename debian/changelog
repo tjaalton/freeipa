@@ -1,6 +1,7 @@
 freeipa (4.7.0~pre1+git20180404-1) UNRELEASED; urgency=medium
 
   * New upstream prerelease.
+  * fix-ipa-conf.diff: Dropped, upstream.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
 
