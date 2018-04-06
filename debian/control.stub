@@ -32,7 +32,7 @@ Build-Depends:
  libunistring-dev,
  libverto-dev,
  libxmlrpc-core-c3-dev (>= 1.33.06),
- pki-base (>= 10.3.5-6),
+ pki-base (>= 10.6.0~),
  python-all-dev,
  python-cryptography,
  python-dbus,
