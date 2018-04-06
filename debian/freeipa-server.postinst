@@ -17,6 +17,10 @@ if [ "$1" = configure ]; then
             ipaapi > $OUT
     fi
 
+    chmod 711 /var/lib/ipa/sysrestore > $OUT || true
+    chmod 700 /var/lib/ipa/passwds > $OUT || true
+    chmod 700 /var/lib/ipa/private > $OUT || true
+
     # add www-data to ipaapi group
     if ! id -Gn www-data | grep '\bipaapi\b' >/dev/null; then
         usermod www-data -a -G ipaapi
