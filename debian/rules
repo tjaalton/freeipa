@@ -1,0 +1,108 @@
+#!/usr/bin/make -f 
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+ONLY_CLIENT=0
+DESTDIR=$(CURDIR)/debian/tmp
+
+JAVA_STACK_SIZE ?= 8m
+export JAVA_STACK_SIZE
+
+confflags = \
+	--libexecdir=/usr/lib/ \
+	--with-ipaplatform=debian \
+	--with-sysconfenvdir=/etc/default \
+	--disable-pylint \
+	--without-jslint
+
+ifeq ($(ONLY_CLIENT), 1)
+confflags += --disable-server \
+	--without-ipatests
+else
+confflags += --enable-server \
+	--with-ipatests
+endif
+
+# For maintainer use only, generate a tarball:
+SOURCE = freeipa
+gentarball: UV=$(shell dpkg-parsechangelog|awk '/^Version:/ {print $$2}'|sed 's/-.*$$//')
+gentarball:
+	git archive --format=tar experimental --prefix=$(SOURCE)-$(UV)/ | \
+		xz --best \
+		> ../$(SOURCE)_$(UV).orig.tar.xz
+
+gencontrol:
+ifeq ($(ONLY_CLIENT), 1)
+	cat debian/control.stub \
+	debian/control.common \
+	> debian/control
+else
+	cat debian/control.stub \
+	debian/control.common \
+	debian/control.server \
+	> debian/control
+endif
+
+override_dh_clean: gencontrol
+	dh_clean
+
+override_dh_auto_configure: gencontrol
+	dh_auto_configure -- $(confflags)
+
+# tests would just fail, they need a proper environment with 389 running et al
+override_dh_auto_test:
+
+override_dh_auto_install:
+	dh_auto_install --max-parallel=1
+
+ifneq ($(ONLY_CLIENT), 1)
+	chmod 755 $(DESTDIR)/usr/lib/ipa/certmonger/*
+
+	touch $(DESTDIR)/usr/share/ipa/html/ca.crt
+	touch $(DESTDIR)/usr/share/ipa/html/kerberosauth.xpi
+	touch $(DESTDIR)/usr/share/ipa/html/krb.con
+	touch $(DESTDIR)/usr/share/ipa/html/krb.js
+	touch $(DESTDIR)/usr/share/ipa/html/krb5.ini
+	touch $(DESTDIR)/usr/share/ipa/html/krbrealm.con
+endif
+
+	mkdir -p $(DESTDIR)/usr/share/bash-completion/completions \
+	install -m 0644 contrib/completion/ipa.bash_completion \
+		$(DESTDIR)/usr/share/bash-completion/completions/ipa
+	rm -rf $(DESTDIR)/etc/bash_completion.d
+
+	# purge .la files
+	find $(CURDIR)/debian/tmp -name "*.la" -type f -exec rm -f "{}" \;
+	# purge precompiled .pyc/.pyo files
+	find $(CURDIR)/debian/tmp -name '*.py[c,o]' -exec rm '{}' ';'
+	# fix permissions
+	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
+	# remove files which are useful only for make uninstall
+	find $(CURDIR)/debian/tmp -wholename '*/dist-packages/*/install_files.txt' -exec rm '{}' \;
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+ifneq ($(ONLY_CLIENT), 1)
+override_dh_systemd_enable:
+	dh_systemd_enable -pfreeipa-server --no-enable ipa.service
+	dh_systemd_enable -pfreeipa-server --no-enable ipa-dnskeysyncd.service
+	dh_systemd_enable -pfreeipa-server --no-enable ipa-custodia.service
+	dh_systemd_enable -pfreeipa-server --no-enable ipa-ods-exporter.service
+endif
+
+override_dh_fixperms:
+	dh_fixperms
+
+	# check needed to not fail arch-indep build which doesn't run dh_installdirs
+	if [ -d $(CURDIR)/debian/freeipa-server/etc/ipa/custodia ]; then \
+	    chmod 0700 $(CURDIR)/debian/freeipa-server/etc/ipa/custodia; \
+	    chmod 0700 $(CURDIR)/debian/freeipa-server/var/lib/ipa/backup; \
+	fi
+
+%:
+	dh $@ --with autoreconf,python2,systemd
+#		--builddirectory=build

@@ -1,0 +1,15 @@
+# upstreamed
+
+# not upstreamable
+hack-libarch.diff
+enable-mod-nss-during-setup.diff
+
+# send upstream
+fix-ipa-conf.diff
+fix-replicainstall.diff
+create-sysconfig-ods.diff
+fix-named-conf-template.diff
+fix-opendnssec-setup.diff
+fix-httpd-group.diff
+support-pam-mkhomedir.diff
+fix-bind-ldap-so-path.diff

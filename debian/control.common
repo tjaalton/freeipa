@@ -1,0 +1,120 @@
+Package: freeipa-admintools
+Architecture: any
+Depends: ${misc:Depends},
+Description: transitional dummy package
+ This is a transitional dummy package, it can be safely removed.
+
+Package: freeipa-common
+Architecture: all
+Breaks: python-freeipa
+Replaces: python-freeipa
+Depends:
+ ${misc:Depends},
+Description: FreeIPA centralized identity framework -- common files
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package includes common files.
+
+Package: freeipa-client
+Architecture: any
+Depends:
+ bind9utils,
+ certmonger (>= 0.79.5-2),
+ curl,
+ dnsutils,
+ freeipa-common (= ${source:Version}),
+ krb5-user,
+ libnss3-tools,
+ libnss-sss,
+ libpam-sss,
+ libsasl2-modules-gssapi-mit,
+ libsss-sudo,
+ libxmlrpc-core-c3 (>= 1.16.33-3.1ubuntu5),
+ oddjob-mkhomedir,
+ python-dnspython,
+ python-ipaclient (= ${source:Version}),
+ python-gssapi,
+ python-ldap,
+ python-sss,
+ sssd (>= 1.14.0),
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends}
+Recommends:
+ ntp,
+Suggests:
+ libpam-krb5,
+Breaks: freeipa-admintools (<< 4.6.3-2~)
+Replaces: freeipa-admintools (<< 4.6.3-2~)
+Provides: freeipa-admintools
+Description: FreeIPA centralized identity framework -- client
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This is the client package.
+
+Package: python-ipaclient
+Architecture: all
+Section: python
+Breaks: freeipa-client (<< 4.3.0-1)
+Replaces: freeipa-client (<< 4.3.0-1)
+Depends:
+ freeipa-common (= ${binary:Version}),
+ python-dnspython,
+ python-ipalib (>= ${source:Version}),
+ python-jinja2,
+ ${misc:Depends},
+ ${python:Depends},
+Description: FreeIPA centralized identity framework -- Python modules for ipaclient
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This Python module is used by FreeIPA client.
+
+Package: python-ipalib
+Architecture: all
+Section: python
+Breaks: python-freeipa
+Replaces: python-freeipa
+Depends:
+ freeipa-common (= ${source:Version}),
+ gnupg2,
+ gnupg-agent,
+ keyutils,
+ python-cffi,
+ python-cryptography,
+ python-dbus,
+ python-dnspython,
+ python-gssapi,
+ python-jwcrypto,
+ python-ldap,
+ python-libipa-hbac,
+ python-lxml,
+ python-netaddr,
+ python-netifaces (>= 0.10.4),
+ python-nss (>= 0.16.0),
+ python-pyasn1,
+ python-qrcode (>= 5.0.0),
+ python-requests,
+ python-setuptools,
+ python-six,
+ python-usb (>= 1.0.0~b2),
+ python-yubico,
+ ${misc:Depends},
+ ${python:Depends},
+ ${shlibs:Depends},
+Description: FreeIPA centralized identity framework -- shared Python modules
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This Python module is used by other FreeIPA packages.
+
