@@ -10,6 +10,7 @@ DESTDIR=$(CURDIR)/debian/tmp
 
 JAVA_STACK_SIZE ?= 8m
 export JAVA_STACK_SIZE
+export PYTHON=python
 
 confflags = \
 	--libexecdir=/usr/lib/ \
