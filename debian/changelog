@@ -13,6 +13,7 @@ freeipa (4.7.0~pre1+git20180404-1) UNRELEASED; urgency=medium
   * enable-mod-nss-during-setup.diff: Dropped, not needed anymore.
   * server.postinst/postrm: Enable/disable mod_ssl.
   * control: Bump 389-ds-base dependency.
+  * rules: Modify python scripts to use python2.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
 

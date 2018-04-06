@@ -87,6 +87,11 @@ endif
 	# remove files which are useful only for make uninstall
 	find $(CURDIR)/debian/tmp -wholename '*/dist-packages/*/install_files.txt' -exec rm '{}' \;
 
+	# we still need to use python2
+	find debian/tmp ! -name '*.pyc' -a ! -name '*.pyo' -a \
+	    -type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
+	    -exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!/usr/bin/python|' {} \;
+
 override_dh_missing:
 	dh_missing --fail-missing
 
