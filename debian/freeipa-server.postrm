@@ -45,6 +45,9 @@ case "$1" in
             if [ -e /etc/apache2/mods-enabled/session_cookie.load ]; then
                 apache2_invoke dismod session_cookie || exit $?
             fi
+            if [ -e /etc/apache2/mods-enabled/ssl.load ]; then
+                apache2_invoke dismod ssl || exit $?
+            fi
         fi
     ;;
 esac

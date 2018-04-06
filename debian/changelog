@@ -11,6 +11,7 @@ freeipa (4.7.0~pre1+git20180404-1) UNRELEASED; urgency=medium
   * control.server: Bump dogtag dependencies to 10.6.0~.
   * control.server: Drop mod-nss from Depends, mod_ssl is used instead.
   * enable-mod-nss-during-setup.diff: Dropped, not needed anymore.
+  * server.postinst/postrm: Enable/disable mod_ssl.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
 

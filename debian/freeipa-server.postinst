@@ -64,6 +64,9 @@ if [ "$1" = configure ]; then
 	if [ ! -e /etc/apache2/mods-enabled/session_cookie.load ]; then
             apache2_invoke enmod session_cookie || exit $?
         fi
+	if [ ! -e /etc/apache2/mods-enabled/ssl.load ]; then
+            apache2_invoke enmod ssl || exit $?
+        fi
     fi
 
     # check if IPA is set up
