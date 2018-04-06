@@ -15,6 +15,8 @@ freeipa (4.7.0~pre1+git20180404-1) UNRELEASED; urgency=medium
   * control: Bump 389-ds-base dependency.
   * rules: Modify python scripts to use python2.
   * fix-paths.diff: Add some paths to platform data.
+  * dont-setup-apache-logging.diff: Don't specify apache logging
+    directories.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
 
