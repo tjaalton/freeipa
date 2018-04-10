@@ -13,3 +13,4 @@ support-pam-mkhomedir.diff
 fix-bind-ldap-so-path.diff
 fix-paths.diff
 dont-setup-apache-logging.diff
+hack-tomcat-race.diff
