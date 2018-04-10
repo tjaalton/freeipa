@@ -1,4 +1,5 @@
 # upstreamed
+fix-apache-ssl-setup.diff
 
 # not upstreamable
 hack-libarch.diff
@@ -12,5 +13,4 @@ fix-httpd-group.diff
 support-pam-mkhomedir.diff
 fix-bind-ldap-so-path.diff
 fix-paths.diff
-dont-setup-apache-logging.diff
 hack-tomcat-race.diff
