@@ -4,7 +4,7 @@
      match = re.search(r'^profile\.list=(\S*)', cs_cfg, re.MULTILINE)
      profile_ids = match.group(1).split(',')
  
-+    time.sleep(60)
++    time.sleep(80)
 +
      for profile_id in profile_ids:
          match = re.search(

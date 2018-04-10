@@ -16,8 +16,8 @@ freeipa (4.7.0~pre1+git20180404-1) UNRELEASED; urgency=medium
   * rules: Modify python scripts to use python2.
   * fix-paths.diff: Add some paths to platform data.
   * hack-tomcat-race.diff: Restarting pki-tomcatd takes time, and renew_ca_cert
-    does that several times in a row, so wait for a minute before starting to
-    migrating profiles to ldap to make sure the instance is up.
+    does that several times in a row, so wait for 80s before starting migrating
+    profiles to ldap to make sure the instance is up.
   * fix-apache-ssl-setup.diff: Fix mod_ssl setup.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
