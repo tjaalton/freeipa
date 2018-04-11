@@ -1,0 +1,12 @@
+Needed until https://pagure.io/freeipa/issue/7490 is fixed
+
+--- a/ipaserver/install/httpinstance.py
++++ b/ipaserver/install/httpinstance.py
+@@ -414,6 +414,7 @@ class HTTPInstance(service.Service):
+         installutils.set_directive(paths.HTTPD_SSL_SITE_CONF,
+                                    'SSLCACertificateFile',
+                                    paths.IPA_CA_CRT, False)
++        os.system('sed -i "/snakeoil.pem/d" /etc/apache2/sites-available/default-ssl.conf')
+ 
+     def __publish_ca_cert(self):
+         ca_subject = self.cert.issuer

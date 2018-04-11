@@ -14,3 +14,4 @@ support-pam-mkhomedir.diff
 fix-bind-ldap-so-path.diff
 fix-paths.diff
 hack-tomcat-race.diff
+hack-duplicate-cert-directive.diff
