@@ -23,6 +23,7 @@ Architecture: any
 Depends:
  bind9utils,
  certmonger (>= 0.79.5-2),
+ chrony,
  curl,
  dnsutils,
  freeipa-common (= ${source:Version}),
@@ -43,8 +44,6 @@ Depends:
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
-Recommends:
- ntp,
 Suggests:
  libpam-krb5,
 Breaks: freeipa-admintools (<< 4.6.3-2~)
