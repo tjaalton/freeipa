@@ -67,6 +67,11 @@ if [ "$1" = configure ]; then
 	if [ ! -e /etc/apache2/mods-enabled/ssl.load ]; then
             apache2_invoke enmod ssl || exit $?
         fi
+
+	# Enable default SSL site
+	if [ ! -e /etc/apache2/sites-enabled/default-ssl.conf ]; then
+            apache2_invoke ensite default-ssl || exit $?
+        fi
     fi
 
     # check if IPA is set up
