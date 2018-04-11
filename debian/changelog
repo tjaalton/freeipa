@@ -36,6 +36,7 @@ freeipa (4.7.0~pre1+git20180411-1) UNRELEASED; urgency=medium
   * server.postinst: Enable default-ssl site.
   * control: Depend on chrony instead of ntp.
   * fix-paths.diff: Add CHRONY_CONF.
+  * python-ipaserver.install: Updated after dropping NTP.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
 
