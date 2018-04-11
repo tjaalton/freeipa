@@ -658,11 +658,12 @@ def clear_sssd_cache(host):
 def sync_time(host, server):
     """
     Syncs the time with the remote server. Please note that this function
-    leaves ntpd stopped.
+    leaves chronyd stopped.
     """
 
-    host.run_command(['systemctl', 'stop', 'ntpd'])
-    host.run_command(['ntpdate', server.hostname])
+    host.run_command(['systemctl', 'stop', 'chronyd'])
+    host.run_command(['chronyd', '-q',
+                      '"server {srv} iburst"'.format(srv=server.hostname)])
 
 
 def connect_replica(master, replica, domain_level=None):
@@ -1353,7 +1354,7 @@ def ldappasswd_user_change(user, oldpw, newpw, master):
     master_ldap_uri = "ldap://{}".format(master.external_hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
-            '-s', newpw, '-x', '-H', master_ldap_uri]
+            '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
     master.run_command(args)
 
 

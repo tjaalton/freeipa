@@ -20,6 +20,7 @@ from ipalib.install import certmonger, sysrestore
 import SSSDConfig
 import ipalib.util
 import ipalib.errors
+from ipaclient.install import timeconf
 from ipaclient.install.client import sssd_enable_service
 from ipaplatform import services
 from ipaplatform.tasks import tasks
@@ -28,10 +29,10 @@ from ipapython import dnsutil
 from ipapython.dn import DN
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
+from ipaserver import servroles
 from ipaserver.install import installutils
 from ipaserver.install import dsinstance
 from ipaserver.install import httpinstance
-from ipaserver.install import ntpinstance
 from ipaserver.install import bindinstance
 from ipaserver.install import service
 from ipaserver.install import cainstance
@@ -1594,6 +1595,48 @@ def enable_certauth(krb):
         aug.close()
 
 
+def ntpd_cleanup(fqdn, fstore):
+    sstore = sysrestore.StateFile(paths.SYSRESTORE)
+    timeconf.restore_forced_timeservices(sstore, 'ntpd')
+    if sstore.has_state('ntp'):
+        instance = services.service('ntpd', api)
+        sstore.restore_state(instance.service_name, 'enabled')
+        sstore.restore_state(instance.service_name, 'running')
+        sstore.restore_state(instance.service_name, 'step-tickers')
+        try:
+            instance.disable()
+            instance.stop()
+        except Exception as e:
+            logger.info("Service ntpd was not disabled or stopped")
+
+    for ntpd_file in [paths.NTP_CONF, paths.NTP_STEP_TICKERS,
+                      paths.SYSCONFIG_NTPD]:
+        try:
+            fstore.restore_file(ntpd_file)
+        except ValueError as e:
+            logger.warning(e)
+
+    try:
+        api.Backend.ldap2.delete_entry(DN(('cn', 'NTP'), ('cn', fqdn),
+                                       api.env.container_masters))
+    except ipalib.errors.NotFound:
+        logger.warning("Warning: NTP service entry was not found in LDAP.")
+
+    ntp_role_instance = servroles.ServiceBasedRole(
+         u"ntp_server_server",
+         u"NTP server",
+         component_services=['NTP']
+    )
+
+    updated_role_instances = tuple()
+    for role_instance in servroles.role_instances:
+        if role_instance is not ntp_role_instance:
+            updated_role_instances += tuple([role_instance])
+
+    servroles.role_instances = updated_role_instances
+    sysupgrade.set_upgrade_state('ntpd', 'ntpd_cleaned', True)
+
+
 def upgrade_configuration():
     """
     Execute configuration upgrade of the IPA services
@@ -1613,6 +1656,9 @@ def upgrade_configuration():
     ds_running = ds.is_running()
     if not ds_running:
         ds.start(ds_serverid)
+
+    if not sysupgrade.get_upgrade_state('ntpd', 'ntpd_cleaned'):
+        ntpd_cleanup(fqdn, fstore)
 
     check_certs()
 
@@ -1734,8 +1780,6 @@ def upgrade_configuration():
     http.enable_and_start_oddjobd()
 
     ds.configure_dirsrv_ccache()
-
-    ntpinstance.ntp_ldap_enable(api.env.host, api.env.basedn, api.env.realm)
 
     ds.stop(ds_serverid)
     fix_schema_file_syntax()

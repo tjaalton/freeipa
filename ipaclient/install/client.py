@@ -60,7 +60,7 @@ from ipapython.ipautil import (
 )
 from ipapython.ssh import SSHPublicKey
 
-from . import automount, ipadiscovery, ntpconf, sssd
+from . import automount, ipadiscovery, timeconf, sssd
 from .ipachangeconf import IPAChangeConf
 
 NoneType = type(None)
@@ -1987,21 +1987,15 @@ def install_check(options):
             "using 'ipa-client-install --uninstall'.")
         raise ScriptError(rval=CLIENT_ALREADY_CONFIGURED)
 
-    if options.conf_ntp and not options.on_master and not options.force_ntpd:
+    if options.conf_ntp:
         try:
-            ntpconf.check_timedate_services()
-        except ntpconf.NTPConflictingService as e:
-            print("WARNING: ntpd time&date synchronization service will not"
-                  " be configured as")
-            print("conflicting service ({}) is enabled".format(
-                e.conflicting_service))
-            print("Use --force-ntpd option to disable it and force "
-                  "configuration of ntpd")
+            timeconf.check_timedate_services()
+        except timeconf.NTPConflictingService as e:
+            print("WARNING: conflicting time&date synchronization service '{}'"
+                  " will be disabled".format(e.conflicting_service))
+            print("in favor of chronyd")
             print("")
-
-            # configuration of ntpd is disabled in this case
-            options.conf_ntp = False
-        except ntpconf.NTPConfigurationError:
+        except timeconf.NTPConfigurationError:
             pass
 
     if options.unattended and (
@@ -2345,6 +2339,67 @@ def update_ipa_nssdb():
                                    (nickname, sys_db.secdir, e))
 
 
+def sync_time(options, fstore, statestore):
+    """
+    Will disable any other time synchronization service and configure chrony
+    with given ntp(chrony) server and/or pool using Augeas.
+    If there is no option --ntp-server set IPADiscovery will try to find ntp
+    server in DNS records.
+    """
+    # We assume that NTP servers are discoverable through SRV records in DNS.
+
+    # disable other time&date services first
+    timeconf.force_chrony(statestore)
+
+    logger.info('Synchronizing time')
+
+    if not options.ntp_servers:
+        ds = ipadiscovery.IPADiscovery()
+        ntp_servers = ds.ipadns_search_srv(cli_domain, '_ntp._udp',
+                                           None, break_on_first=False)
+    else:
+        ntp_servers = options.ntp_servers
+
+    configured = False
+    if ntp_servers or options.ntp_pool:
+        configured = timeconf.configure_chrony(ntp_servers, options.ntp_pool,
+                                               fstore, statestore)
+    else:
+        logger.warning("No SRV records of NTP servers found and no NTP server "
+                       "or pool address was provided.")
+
+    if not configured:
+        print("Using default chrony configuration.")
+
+    return timeconf.sync_chrony()
+
+
+def restore_time_sync(statestore, fstore):
+    if statestore.has_state('chrony'):
+        chrony_enabled = statestore.restore_state('chrony', 'enabled')
+        restored = False
+
+        try:
+            # Restore might fail due to missing file(s) in backup.
+            # One example is if the client was updated from a previous version
+            # not configured with chrony. In such a cast it is OK to fail.
+            restored = fstore.restore_file(paths.CHRONY_CONF)
+        except ValueError:  # this will not handle possivble IOError
+            logger.debug("Configuration file %s was not restored.",
+                         paths.CHRONY_CONF)
+
+        if not chrony_enabled:
+            services.knownservices.chronyd.stop()
+            services.knownservices.chronyd.disable()
+        elif restored:
+            services.knownservices.chronyd.restart()
+
+    try:
+        timeconf.restore_forced_timeservices(statestore)
+    except CalledProcessError as e:
+        logger.error('Failed to restore time synchronization service: %s', e)
+
+
 def install(options):
     try:
         _install(options)
@@ -2390,39 +2445,16 @@ def _install(options):
         tasks.backup_hostname(fstore, statestore)
         tasks.set_hostname(options.hostname)
 
-    ntp_srv_servers = []
-    if not options.on_master and options.conf_ntp:
-        # Attempt to sync time with IPA server.
-        # If we're skipping NTP configuration, we also skip the time sync here.
-        # We assume that NTP servers are discoverable through SRV records
-        # in the DNS.
-        # If that fails, we try to sync directly with IPA server,
-        # assuming it runs NTP
-        logger.info('Synchronizing time with KDC...')
-        ds = ipadiscovery.IPADiscovery()
-        ntp_srv_servers = ds.ipadns_search_srv(cli_domain, '_ntp._udp',
-                                               None, break_on_first=False)
-        synced_ntp = False
-        ntp_servers = ntp_srv_servers
-
-        # use user specified NTP servers if there are any
-        if options.ntp_servers:
-            ntp_servers = options.ntp_servers
-
-        for s in ntp_servers:
-            synced_ntp = ntpconf.synconce_ntp(s, options.debug)
-            if synced_ntp:
-                break
-
-        if not synced_ntp and not options.ntp_servers:
-            synced_ntp = ntpconf.synconce_ntp(cli_server[0], options.debug)
-        if not synced_ntp:
-            logger.warning(
-                "Unable to sync time with NTP "
-                "server, assuming the time is in sync. Please check "
-                "that 123 UDP port is opened.")
+    if options.conf_ntp:
+        # Attempt to configure and sync time with NTP server (chrony).
+        sync_time(options, fstore, statestore)
+    elif options.on_master:
+        # If we're on master skipping the time sync here because it was done
+        # in ipa-server-install
+        logger.info("Skipping attempt to configure and synchronize time with"
+                    " chrony server as it has been already done on master.")
     else:
-        logger.info('Skipping synchronizing time with NTP server.')
+        logger.info("Skipping chrony configuration")
 
     if not options.unattended:
         if (options.principal is None and options.password is None and
@@ -2942,23 +2974,6 @@ def _install(options):
                         "Adding hardcoded server name to "
                         "/etc/ldap.conf failed: %s", str(e))
 
-    if options.conf_ntp and not options.on_master:
-        # disable other time&date services first
-        if options.force_ntpd:
-            ntpconf.force_ntpd(statestore)
-
-        if options.ntp_servers:
-            ntp_servers = options.ntp_servers
-        elif ntp_srv_servers:
-            ntp_servers = ntp_srv_servers
-        else:
-            logger.warning("No SRV records of NTP servers found. IPA "
-                           "server address will be used")
-            ntp_servers = cli_server
-
-        ntpconf.config_ntp(ntp_servers, fstore, statestore)
-        logger.info("NTP enabled")
-
     if options.conf_ssh:
         configure_ssh_config(fstore, options)
 
@@ -3255,35 +3270,7 @@ def uninstall(options):
                 service.service_name
             )
 
-    ntp_configured = statestore.has_state('ntp')
-    if ntp_configured:
-        ntp_enabled = statestore.restore_state('ntp', 'enabled')
-        ntp_step_tickers = statestore.restore_state('ntp', 'step-tickers')
-        restored = False
-
-        try:
-            # Restore might fail due to file missing in backup
-            # the reason for it might be that freeipa-client was updated
-            # to this version but not unenrolled/enrolled again
-            # In such case it is OK to fail
-            restored = fstore.restore_file(paths.NTP_CONF)
-            restored |= fstore.restore_file(paths.SYSCONFIG_NTPD)
-            if ntp_step_tickers:
-                restored |= fstore.restore_file(paths.NTP_STEP_TICKERS)
-        except Exception:
-            pass
-
-        if not ntp_enabled:
-            services.knownservices.ntpd.stop()
-            services.knownservices.ntpd.disable()
-        else:
-            if restored:
-                services.knownservices.ntpd.restart()
-
-    try:
-        ntpconf.restore_forced_ntpd(statestore)
-    except CalledProcessError as e:
-        logger.error('Failed to start chronyd: %s', e)
+    restore_time_sync(statestore, fstore)
 
     if was_sshd_configured and services.knownservices.sshd.is_running():
         services.knownservices.sshd.restart()
@@ -3461,6 +3448,12 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
     )
     ntp_servers = enroll_only(ntp_servers)
 
+    ntp_pool = knob(
+        str, None,
+        description="ntp server pool to use",
+    )
+    ntp_pool = enroll_only(ntp_pool)
+
     no_ntp = knob(
         None,
         description="do not configure ntp",
@@ -3469,9 +3462,10 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
     no_ntp = enroll_only(no_ntp)
 
     force_ntpd = knob(
-        None,
+        None, False,
+        deprecated=True,
         description="Stop and disable any time&date synchronization services "
-                    "besides ntpd",
+                    "besides ntpd. This option has been deprecated",
     )
     force_ntpd = enroll_only(force_ntpd)
 
@@ -3541,9 +3535,16 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
             raise RuntimeError(
                 "--server cannot be used without providing --domain")
 
-        if self.force_ntpd and self.no_ntp:
+        if self.force_ntpd:
+            logger.warning("Option --force-ntpd has been deprecated")
+
+        if self.ntp_servers and self.no_ntp:
             raise RuntimeError(
-                "--force-ntpd cannot be used together with --no-ntp")
+                "--ntp-server cannot be used together with --no-ntp")
+
+        if self.ntp_pool and self.no_ntp:
+            raise RuntimeError(
+                "--ntp-pool cannot be used together with --no-ntp")
 
         if self.no_nisdomain and self.nisdomain:
             raise RuntimeError(
