@@ -37,6 +37,7 @@ freeipa (4.7.0~pre1+git20180411-1) UNRELEASED; urgency=medium
   * control: Depend on chrony instead of ntp.
   * fix-paths.diff: Add CHRONY_CONF.
   * python-ipaserver.install: Updated after dropping NTP.
+  * fix-version.diff: Append +git to prerelease tag, don't require git.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
 
