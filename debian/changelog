@@ -1,4 +1,4 @@
-freeipa (4.7.0~pre1+git20180411-1) UNRELEASED; urgency=medium
+freeipa (4.7.0~pre1+git20180411-1) experimental; urgency=medium
 
   * New upstream prerelease + git snapshot.
   * tests: Fix whitespace.
@@ -8,6 +8,7 @@ freeipa (4.7.0~pre1+git20180411-1) UNRELEASED; urgency=medium
   * fix-httpd-group.diff: Fix apache group for Debian.
   * control: Bump dependency on certmonger.
   * support-pam-mkhomedir.diff: Add support for enabling pam_mkhomedir.
+    (LP: #1336869)
   * control: Add libsss-certmap-dev to build-depends.
   * control: Drop hardcoded libcurl3 dependency from client.
   * control*, rules: Add support for client-only build.
@@ -42,7 +43,7 @@ freeipa (4.7.0~pre1+git20180411-1) UNRELEASED; urgency=medium
   * rules: Update clean target.
   * control: Bump depends on bind9.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Fri, 06 Apr 2018 16:18:42 +0300
+ -- Timo Aaltonen <tjaalton@debian.org>  Thu, 12 Apr 2018 14:01:56 +0300
 
 freeipa (4.6.3-1) unstable; urgency=medium
 
