@@ -59,7 +59,7 @@ Breaks: freeipa-server (<< 4.3.0-1)
 Replaces: freeipa-server (<< 4.3.0-1)
 Depends:
  freeipa-server (>= ${source:Version}),
- bind9 (>= 1:9.11),
+ bind9 (>= 1:9.11.3),
  bind9-dyndb-ldap (>= 11),
  opendnssec (>= 1:1.4.9-2),
  ${misc:Depends},
