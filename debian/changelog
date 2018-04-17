@@ -2,6 +2,7 @@ freeipa (4.7.0~pre1+git20180411-2) UNRELEASED; urgency=medium
 
   * fix-bind-ldap-so-path.diff: Dropped, the plugin uses non-MA path
     now, fix depends to match.
+  * control: Add python-augeas to python-ipaclient depends. (LP: #1764615)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 16 Apr 2018 13:05:46 +0300
 

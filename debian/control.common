@@ -64,6 +64,7 @@ Breaks: freeipa-client (<< 4.3.0-1)
 Replaces: freeipa-client (<< 4.3.0-1)
 Depends:
  freeipa-common (= ${binary:Version}),
+ python-augeas,
  python-dnspython,
  python-ipalib (>= ${source:Version}),
  python-jinja2,
