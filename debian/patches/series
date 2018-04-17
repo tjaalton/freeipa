@@ -2,9 +2,9 @@
 fix-apache-ssl-setup.diff
 
 # not upstreamable
-hack-libarch.diff
 
 # send upstream
+ldap-multiarch.diff
 fix-replicainstall.diff
 create-sysconfig-ods.diff
 fix-named-conf-template.diff
