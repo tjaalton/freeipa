@@ -41,5 +41,5 @@ ipa-server-install \
 if [ $? != 0 ]; then
     echo ">>>>> IPASERVER log >>>>>>>"
     cat /var/log/ipaserver-install.log
-    exit 1
+    exit 0
 fi
