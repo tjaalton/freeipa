@@ -1,3 +1,10 @@
+freeipa (4.7.0~pre1+git20180411-3) UNRELEASED; urgency=medium
+
+  * tests/server-install: Fix the fake domain, single label domains are not
+    supported anymore.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
+
 freeipa (4.7.0~pre1+git20180411-2) experimental; urgency=medium
 
   * fix-bind-ldap-so-path.diff: Dropped, the plugin uses non-MA path

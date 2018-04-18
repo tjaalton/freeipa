@@ -13,7 +13,7 @@ if [ -z $HOSTNAME ]; then
     echo $HOSTNAME > /etc/hostname
 fi
 
-echo "$IP $HOSTNAME.debci $HOSTNAME" >> /etc/hosts
+echo "$IP $HOSTNAME.debci.ipatest $HOSTNAME" >> /etc/hosts
 
 echo "/etc/hosts now has:"
 cat /etc/hosts
@@ -29,14 +29,14 @@ fi
 
 ipa-server-install \
 	-U \
-	-r DEBCI \
-	-n debci \
+	-r DEBCI.IPATEST \
+	-n debci.ipatest \
 	-p Secret123 \
 	-a Secret123 \
 	--ip-address=$IP \
 	--setup-dns \
 	--no-forwarders \
-	--hostname=$HOSTNAME.debci
+	--hostname=$HOSTNAME.debci.ipatest
 
 if [ $? != 0 ]; then
     echo ">>>>> IPASERVER log >>>>>>>"
