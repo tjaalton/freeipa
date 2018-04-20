@@ -4,6 +4,7 @@ freeipa (4.7.0~pre1+git20180411-3) UNRELEASED; urgency=medium
     supported anymore.
   * tests: If the server install fails, just dump the log and exit
     successfully.
+  * server.postinst: Fix upgrade from earlier version.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 

@@ -17,6 +17,25 @@ if [ "$1" = configure ]; then
             ipaapi > $OUT
     fi
 
+    # fix upgrade
+    if dpkg --compare-versions "$2" lt "4.7.0~pre1+git20180411-3"; then
+        # mod_nss needs to be disabled before mod_ssl is enabled
+        if [ -e /etc/apache2/mods-enabled/nss.load ]; then
+            . /usr/share/apache2/apache2-maintscript-helper
+            apache2_invoke dismod nss || exit $?
+            # and if that's not enough, just remove the links to be sure
+            rm /etc/apache2/mods-enabled/nss.load rm /etc/apache2/mods-enabled/nss.conf
+        fi
+
+        # this is new in tmpfiles.d/ipa.conf, need to create it here
+        # for the upgrader
+        if [ ! -e /var/run/ipa/ccaches ]; then
+            mkdir /var/run/ipa/ccaches
+            chown ipaapi:ipaapi /var/run/ipa/ccaches
+            chmod 770 /var/run/ipa/ccaches
+        fi
+    fi
+
     chmod 711 /var/lib/ipa/sysrestore > $OUT || true
     chmod 700 /var/lib/ipa/passwds > $OUT || true
     chmod 700 /var/lib/ipa/private > $OUT || true
