@@ -1,5 +1,6 @@
-freeipa (4.7.0~pre1+git20180411-3) UNRELEASED; urgency=medium
+freeipa (4.7.0~pre2-1) UNRELEASED; urgency=medium
 
+  * New upstream prerelease.
   * tests/server-install: Fix the fake domain, single label domains are not
     supported anymore.
   * tests: If the server install fails, just dump the log and exit
