@@ -2,6 +2,8 @@
 # Copyright (C) 2017 FreeIPA Contributors see COPYING for license
 #
 
+from __future__ import absolute_import
+
 from ipalib.plugable import Registry
 from ipaplatform import services
 from ipaplatform.paths import paths
@@ -90,8 +92,8 @@ class config_server_for_smart_card_auth(common_smart_card_auth_config):
                    "Smart Card auth requests. To enable the feature in the "
                    "whole topology you have to run the script on each master")
 
-    nss_conf = paths.HTTPD_NSS_CONF
-    nss_ocsp_directive = OCSP_DIRECTIVE
+    ssl_conf = paths.HTTPD_SSL_CONF
+    ssl_ocsp_directive = OCSP_DIRECTIVE
     kdc_service_name = services.knownservices.krb5kdc.systemd_name
 
     def get_info(self):
@@ -100,7 +102,7 @@ class config_server_for_smart_card_auth(common_smart_card_auth_config):
         self.check_ccache_not_empty()
         self.check_hostname_is_in_masters()
         self.resolve_ipaca_records()
-        self.enable_nss_ocsp()
+        self.enable_ssl_ocsp()
         self.restart_httpd()
         self.record_httpd_ocsp_status()
         self.check_and_enable_pkinit()
@@ -139,8 +141,8 @@ class config_server_for_smart_card_auth(common_smart_card_auth_config):
                 'ipa-ca record pointing to IP addresses of IPA CA masters'
             ])
 
-    def enable_nss_ocsp(self):
-        self.log.comment('look for the OCSP directive in nss.conf')
+    def enable_ssl_ocsp(self):
+        self.log.comment('look for the OCSP directive in ssl.conf')
         self.log.comment(' if it is present, switch it on')
         self.log.comment(
             'if it is absent, append it to the end of VirtualHost section')
@@ -164,7 +166,7 @@ class config_server_for_smart_card_auth(common_smart_card_auth_config):
 
     def _interpolate_ocsp_directive_file_into_command(self, fmt_line):
         return self._format_command(
-            fmt_line, self.nss_ocsp_directive, self.nss_conf)
+            fmt_line, self.ssl_ocsp_directive, self.ssl_conf)
 
     def _format_command(self, fmt_line, directive, filename):
         return fmt_line.format(directive=directive, filename=filename)
@@ -236,7 +238,7 @@ class config_client_for_smart_card_auth(common_smart_card_auth_config):
         self.add_pkcs11_module_to_systemwide_db()
         self.upload_smartcard_ca_certificates_to_systemwide_db()
         self.update_ipa_ca_certificate_store()
-        self.run_authconfig_to_configure_smart_card_auth()
+        self.run_authselect_to_configure_smart_card_auth()
         self.restart_sssd()
 
     def check_and_remove_pam_pkcs11(self):
@@ -288,10 +290,9 @@ class config_client_for_smart_card_auth(common_smart_card_auth_config):
             ]
         )
 
-    def run_authconfig_to_configure_smart_card_auth(self):
+    def run_authselect_to_configure_smart_card_auth(self):
         self.log.exit_on_failed_command(
-             'authconfig --enablesssd --enablesssdauth --enablesmartcard '
-             '--smartcardmodule=sssd --smartcardaction=1 --updateall',
+            'authselect enable-feature with-smartcard',
             [
                 'Failed to configure Smart Card authentication in SSSD'
             ]

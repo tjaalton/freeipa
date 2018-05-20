@@ -19,6 +19,8 @@
 
 """Common tasks for FreeIPA integration tests"""
 
+from __future__ import absolute_import
+
 import logging
 import os
 import textwrap
@@ -41,7 +43,7 @@ from ipalib.util import get_reverse_zone_default, verify_host_resolvable
 from ipalib.constants import (
     DEFAULT_CONFIG, DOMAIN_SUFFIX_NAME, DOMAIN_LEVEL_0)
 
-from .create_external_ca import ExternalCA
+from ipatests.create_external_ca import ExternalCA
 from .env_config import env_to_script
 from .host import Host
 
@@ -338,10 +340,25 @@ def master_authoritative_for_client_domain(master, client):
                                 raiseonerr=False)
     return result.returncode == 0
 
+
+def _config_replica_resolvconf_with_master_data(master, replica):
+    """
+    Configure replica /etc/resolv.conf to use master as DNS server
+    """
+    content = ('search {domain}\nnameserver {master_ip}'
+               .format(domain=master.domain.name, master_ip=master.ip))
+    replica.put_file_contents(paths.RESOLV_CONF, content)
+
+
 def replica_prepare(master, replica, extra_args=(),
                     raiseonerr=True, stdin_text=None):
     fix_apache_semaphores(replica)
     prepare_reverse_zone(master, replica.ip)
+
+    # in domain level 0 there is no autodiscovery, so it's necessary to
+    # change /etc/resolv.conf to find master DNS server
+    _config_replica_resolvconf_with_master_data(master, replica)
+
     args = ['ipa-replica-prepare',
             '-p', replica.config.dirman_password,
             replica.hostname]
@@ -663,7 +680,8 @@ def sync_time(host, server):
 
     host.run_command(['systemctl', 'stop', 'chronyd'])
     host.run_command(['chronyd', '-q',
-                      '"server {srv} iburst"'.format(srv=server.hostname)])
+                      "server {srv} iburst".format(srv=server.hostname),
+                      'pidfile /tmp/chronyd.pid', 'bindcmdaddress /'])
 
 
 def connect_replica(master, replica, domain_level=None):

@@ -15,6 +15,11 @@ EXAMPLE_CONFIG = [
     'foobar=2\n',
 ]
 
+WHITESPACE_CONFIG = [
+    'foo 1\n',
+    'foobar\t2\n',
+]
+
 
 @pytest.fixture
 def tempdir(request):
@@ -44,6 +49,28 @@ class test_set_directive_lines(object):
         assert list(lines) == ['foo=3\n', 'foobar=2\n']
 
 
+class test_set_directive_lines_whitespace(object):
+    def test_remove_directive(self):
+        lines = installutils.set_directive_lines(
+            False, ' ', 'foo', None, WHITESPACE_CONFIG, comment="#")
+        assert list(lines) == ['foobar\t2\n']
+
+    def test_add_directive(self):
+        lines = installutils.set_directive_lines(
+            False, ' ', 'baz', '4', WHITESPACE_CONFIG, comment="#")
+        assert list(lines) == ['foo 1\n', 'foobar\t2\n', 'baz 4\n']
+
+    def test_set_directive_does_not_clobber_suffix_key(self):
+        lines = installutils.set_directive_lines(
+            False, ' ', 'foo', '3', WHITESPACE_CONFIG, comment="#")
+        assert list(lines) == ['foo 3\n', 'foobar\t2\n']
+
+    def test_set_directive_with_tab(self):
+        lines = installutils.set_directive_lines(
+            False, ' ', 'foobar', '6', WHITESPACE_CONFIG, comment="#")
+        assert list(lines) == ['foo 1\n', 'foobar 6\n']
+
+
 class test_set_directive(object):
     def test_set_directive(self):
         """Check that set_directive writes the new data and preserves mode."""
@@ -69,6 +96,30 @@ class test_set_directive(object):
 
         finally:
             os.remove(filename)
+
+
+class test_get_directive(object):
+    def test_get_directive(self, tmpdir):
+        configfile = tmpdir.join('config')
+        configfile.write(''.join(EXAMPLE_CONFIG))
+
+        assert '1' == installutils.get_directive(str(configfile),
+                                                 'foo',
+                                                 separator='=')
+        assert '2' == installutils.get_directive(str(configfile),
+                                                 'foobar',
+                                                 separator='=')
+
+
+class test_get_directive_whitespace(object):
+    def test_get_directive(self, tmpdir):
+        configfile = tmpdir.join('config')
+        configfile.write(''.join(WHITESPACE_CONFIG))
+
+        assert '1' == installutils.get_directive(str(configfile),
+                                                 'foo')
+        assert '2' == installutils.get_directive(str(configfile),
+                                                 'foobar')
 
 
 def test_directivesetter(tempdir):

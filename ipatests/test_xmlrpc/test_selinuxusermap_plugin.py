@@ -240,6 +240,7 @@ class test_selinuxusermap(Declarative):
                     member=dict(
                         group=tuple(),
                         user=tuple(),
+                        service=tuple(),
                     ),
                 ),
                 result={
@@ -620,9 +621,11 @@ class test_selinuxusermap(Declarative):
             command=(
                 'selinuxusermap_add', [rule1], dict(ipaselinuxuser=u'bad+user')
             ),
-            expected=errors.ValidationError(name='selinuxuser',
-                error=u'Invalid SELinux user name, only a-Z and _ are allowed'
-                ),
+            expected=errors.ValidationError(
+                name='selinuxuser',
+                error=u'Invalid SELinux user name, only a-Z, _ '
+                      'and . are allowed'
+            ),
         ),
 
 

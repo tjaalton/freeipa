@@ -27,7 +27,7 @@ from ipaclient.frontend import MethodOverride
 from ipalib import errors
 from ipalib import x509
 from ipalib import util
-from ipalib.parameters import File, Flag, Str
+from ipalib.parameters import BinaryFile, File, Flag, Str
 from ipalib.plugable import Registry
 from ipalib.text import _
 
@@ -117,7 +117,8 @@ class cert_request(CertRetrieveOverride):
             if database:
                 adaptor = csrgen.NSSAdaptor(database, password_file)
             elif private_key:
-                adaptor = csrgen.OpenSSLAdaptor(private_key, password_file)
+                adaptor = csrgen.OpenSSLAdaptor(
+                    key_filename=private_key, password_filename=password_file)
             else:
                 raise errors.InvocationError(
                     message=u"One of 'database' or 'private_key' is required")
@@ -195,7 +196,7 @@ class cert_remove_hold(MethodOverride):
 @register(override=True, no_fail=True)
 class cert_find(MethodOverride):
     takes_options = (
-        File(
+        BinaryFile(
             'file?',
             label=_("Input filename"),
             doc=_('File to load the certificate from.'),

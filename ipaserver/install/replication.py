@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import logging
 
@@ -474,20 +474,30 @@ class ReplicationManager(object):
 
         try:
             entry = conn.get_entry(dn)
+        except errors.NotFound:
+            pass
+        else:
             managers = {DN(m) for m in entry.get('nsDS5ReplicaBindDN', [])}
 
+            mods = []
             if replica_binddn not in managers:
                 # Add the new replication manager
-                mod = [(ldap.MOD_ADD, 'nsDS5ReplicaBindDN',
-                        replica_binddn)]
-                conn.modify_s(dn, mod)
+                mods.append(
+                    (ldap.MOD_ADD, 'nsDS5ReplicaBindDN', replica_binddn)
+                )
+            if 'nsds5replicareleasetimeout' not in entry:
+                # See https://pagure.io/freeipa/issue/7488
+                mods.append(
+                    (ldap.MOD_ADD, 'nsds5replicareleasetimeout', ['60'])
+                )
+
+            if mods:
+                conn.modify_s(dn, mods)
 
             self.set_replica_binddngroup(conn, entry)
 
             # replication is already configured
             return
-        except errors.NotFound:
-            pass
 
         replica_type = self.get_replica_type()
 
@@ -502,6 +512,7 @@ class ReplicationManager(object):
             nsds5replicabinddn=[replica_binddn],
             nsds5replicabinddngroup=[self.repl_man_group_dn],
             nsds5replicabinddngroupcheckinterval=["60"],
+            nsds5replicareleasetimeout=["60"],
             nsds5replicalegacyconsumer=["off"],
         )
         conn.add_entry(entry)
@@ -970,7 +981,13 @@ class ReplicationManager(object):
             if status: # always check for errors
                 # status will usually be a number followed by a string
                 # number != 0 means error
-                rc, msg = status.split(' ', 1)
+                # Since 389-ds-base 1.3.5 it is 'Error (%d) %s'
+                # so we need to remove a prefix string and parentheses
+                if status.startswith('Error '):
+                    rc, msg = status[6:].split(' ', 1)
+                    rc = rc.strip('()')
+                else:
+                    rc, msg = status.split(' ', 1)
                 if rc != '0':
                     hasError = 1
                     error_message = msg

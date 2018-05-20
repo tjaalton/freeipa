@@ -22,6 +22,8 @@ This Red Hat OS family base platform module exports default filesystem paths as
 common in Red Hat OS family-based systems.
 '''
 
+from __future__ import absolute_import
+
 import sys
 
 # Fallback to default path definitions
@@ -35,6 +37,8 @@ class RedHatPathNamespace(BasePathNamespace):
         PAM_KRB5_SO = BasePathNamespace.PAM_KRB5_SO_64
         BIND_LDAP_SO = BasePathNamespace.BIND_LDAP_SO_64
     AUTHCONFIG = '/usr/sbin/authconfig'
+    AUTHSELECT = '/usr/bin/authselect'
+    SYSCONF_NETWORK = '/etc/sysconfig/network'
 
 
 paths = RedHatPathNamespace()

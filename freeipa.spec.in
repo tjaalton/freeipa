@@ -58,6 +58,7 @@
 %global selinux_policy_version 3.12.1-153
 %global slapi_nis_version 0.56.0-4
 %global python2_ldap_version 2.4.15
+%global ds_version 1.3.7.9-1
 %else
 # 1.15.1-7: certauth (http://krbdev.mit.edu/rt/Ticket/Display.html?id=8561)
 %global krb5_version 1.15.1-7
@@ -81,10 +82,26 @@
 %global python3_ldap_version 2.4.35.1-2
 %endif
 
+%if 0%{?fedora} >= 28
+# Fix for "Crash when failing to read from SASL connection"
+# https://pagure.io/389-ds-base/issue/49639
+%global ds_version 1.4.0.8-1
+%else
+# 1.3.7.9-1: https://bugzilla.redhat.com/show_bug.cgi?id=1459946
+#            https://bugzilla.redhat.com/show_bug.cgi?id=1511462
+#            https://bugzilla.redhat.com/show_bug.cgi?id=1514033
+%global ds_version 1.3.7.9-1
 %endif
 
-# Require Dogtag PKI 10.6.0 with Python 3 and SQL NSSDB fixes
-%global pki_version 10.6.0-0.2
+%endif
+
+# Require Dogtag PKI 10.6.1 with Python 3 and SQL NSSDB fixes for external
+# CA support, https://bugzilla.redhat.com/show_bug.cgi?id=1573094
+%global pki_version 10.6.1
+
+# NSS release with fix for CKA_LABEL import bug in shared SQL database.
+# https://bugzilla.redhat.com/show_bug.cgi?id=1568271
+%global nss_version 3.36.1-1.1
 
 %define krb5_base_version %(LC_ALL=C rpm -q --qf '%%{VERSION}' krb5-devel | grep -Eo '^[^.]+\.[^.]+')
 
@@ -145,14 +162,12 @@ BuildRequires:  systemd
 # systemd-tmpfiles which is executed from make install requires apache user
 BuildRequires:  httpd
 BuildRequires:  nspr-devel
-BuildRequires:  nss-devel
+BuildRequires:  nss-devel >= %{nss_version}
 BuildRequires:  openssl-devel
 BuildRequires:  libini_config-devel
 BuildRequires:  cyrus-sasl-devel
-BuildRequires:  sssd-tools
 %if ! %{ONLY_CLIENT}
-# 1.3.3.9: DS_Sleep (https://fedorahosted.org/389/ticket/48005)
-BuildRequires:  389-ds-base-devel >= 1.3.3.9
+BuildRequires:  389-ds-base-devel >= %{ds_version}
 BuildRequires:  svrcore-devel
 %if 0%{?rhel}
 BuildRequires:  samba-devel >= 4.0.0
@@ -326,13 +341,10 @@ Requires: python3-pyldap >= %{python3_ldap_version}
 Requires: python2-ipaserver = %{version}-%{release}
 Requires: python2-ldap >= %{python2_ldap_version}
 %endif
-# 1.3.7.9-1: https://bugzilla.redhat.com/show_bug.cgi?id=1459946
-#            https://bugzilla.redhat.com/show_bug.cgi?id=1511462
-#            https://bugzilla.redhat.com/show_bug.cgi?id=1514033
-Requires: 389-ds-base >= 1.3.7.9-1
+Requires: 389-ds-base >= %{ds_version}
 Requires: openldap-clients > 2.4.35-4
-Requires: nss >= 3.14.3-12.0
-Requires: nss-tools >= 3.14.3-12.0
+Requires: nss >= %{nss_version}
+Requires: nss-tools >= %{nss_version}
 Requires(post): krb5-server >= %{krb5_version}
 Requires(post): krb5-server >= %{krb5_base_version}, krb5-server < %{krb5_base_version}.100
 Requires: krb5-pkinit-openssl >= %{krb5_version}
@@ -373,10 +385,7 @@ Requires(postun): systemd-units
 Requires: policycoreutils >= 2.1.12-5
 Requires: tar
 Requires(pre): certmonger >= 0.79.5-1
-# 1.3.7.9-1: https://bugzilla.redhat.com/show_bug.cgi?id=1459946
-#            https://bugzilla.redhat.com/show_bug.cgi?id=1511462
-#            https://bugzilla.redhat.com/show_bug.cgi?id=1514033
-Requires(pre): 389-ds-base >= 1.3.7.9-1
+Requires(pre): 389-ds-base >= %{ds_version}
 Requires: fontawesome-fonts
 Requires: open-sans-fonts
 Requires: openssl
@@ -592,7 +601,7 @@ Requires: python2-sssdconfig
 Requires: cyrus-sasl-gssapi%{?_isa}
 Requires: chrony
 Requires: krb5-workstation >= %{krb5_version}
-Requires: authconfig
+Requires: authselect >= 0.4-2
 Requires: curl
 # NIS domain name config: /usr/lib/systemd/system/*-domainname.service
 Requires: initscripts
@@ -600,13 +609,14 @@ Requires: libcurl >= 7.21.7-2
 Requires: xmlrpc-c >= 1.27.4
 Requires: sssd >= 1.14.0
 Requires: certmonger >= 0.79.5-1
-Requires: nss-tools
+Requires: nss-tools >= %{nss_version}
 Requires: bind-utils
 Requires: oddjob-mkhomedir
 Requires: libsss_autofs
 Requires: autofs
 Requires: libnfsidmap
 Requires: nfs-utils
+Requires: sssd-tools
 Requires(post): policycoreutils
 
 Provides: %{alt_name}-client = %{version}
@@ -642,6 +652,7 @@ Requires: %{name}-common = %{version}-%{release}
 Requires: python2-ipalib = %{version}-%{release}
 Requires: python2-dns >= 1.15
 Requires: python2-jinja2
+Requires: python2-augeas
 
 %description -n python2-ipaclient
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -665,6 +676,7 @@ Requires: %{name}-common = %{version}-%{release}
 Requires: python3-ipalib = %{version}-%{release}
 Requires: python3-dns >= 1.15
 Requires: python3-jinja2
+Requires: python3-augeas
 
 %description -n python3-ipaclient
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -1155,6 +1167,8 @@ if [ -e /usr/sbin/ipa_kpasswd ]; then
 # END
 fi
 
+
+%pre server-common
 # create users and groups
 # create kdcproxy group and user
 getent group kdcproxy >/dev/null || groupadd -f -r kdcproxy
@@ -1396,7 +1410,6 @@ fi
 %attr(644,root,root) %{_unitdir}/ipa-custodia.service
 %ghost %attr(644,root,root) %{etc_systemd_dir}/httpd.d/ipa.conf
 # END
-%dir %{_usr}/share/ipa
 %{_usr}/share/ipa/wsgi.py*
 %{_usr}/share/ipa/kdcproxy.wsgi
 %{_usr}/share/ipa/*.ldif
@@ -1603,6 +1616,7 @@ fi
 %dir %{_localstatedir}/lib/ipa-client/pki
 %dir %{_localstatedir}/lib/ipa-client/sysrestore
 %{_mandir}/man5/default.conf.5*
+%{_usr}/share/ipa/freeipa.template
 
 
 %files python-compat
@@ -1635,6 +1649,7 @@ fi
 %defattr(-,root,root,-)
 %doc README.md Contributors.txt
 %license COPYING
+%dir %{_usr}/share/ipa
 
 
 %if 0%{?with_python3}

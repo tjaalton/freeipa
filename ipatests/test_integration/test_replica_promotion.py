@@ -2,6 +2,8 @@
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
 
+from __future__ import absolute_import
+
 import time
 import re
 from tempfile import NamedTemporaryFile
@@ -481,6 +483,19 @@ class TestRenewalMaster(IntegrationTest):
         assert("IPA CA renewal master: %s" % replica.hostname not in result), (
             "Replica hostname found among CA renewal masters"
         )
+
+    def test_renewal_replica_with_ipa_ca_cert_manage(self):
+        """Make replica as IPA CA renewal master using
+        ipa-cacert-manage --renew"""
+        master = self.master
+        replica = self.replicas[0]
+        self.assertCARenewalMaster(master, master.hostname)
+        replica.run_command([paths.IPA_CACERT_MANAGE, 'renew'])
+        self.assertCARenewalMaster(replica, replica.hostname)
+        # set master back to ca-renewal-master
+        master.run_command([paths.IPA_CACERT_MANAGE, 'renew'])
+        self.assertCARenewalMaster(master, master.hostname)
+        self.assertCARenewalMaster(replica, master.hostname)
 
     def test_manual_renewal_master_transfer(self):
         replica = self.replicas[0]

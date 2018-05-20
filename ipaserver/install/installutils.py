@@ -56,7 +56,7 @@ from ipalib.install import sysrestore
 from ipalib.install.kinit import kinit_password
 import ipaplatform
 from ipapython import ipautil, admintool, version
-from ipapython.admintool import ScriptError
+from ipapython.admintool import ScriptError, SERVER_NOT_CONFIGURED  # noqa: E402
 from ipapython.certdb import EXTERNAL_CA_TRUST_FLAGS
 from ipapython.ipaldap import DIRMAN_DN, LDAPClient
 from ipalib.util import validate_hostname
@@ -565,11 +565,15 @@ def set_directive_lines(quotes, separator, k, v, lines, comment):
         v_quoted = quote_directive_value(v, '"') if quotes else v
         new_line = ''.join([k, separator, v_quoted, '\n'])
 
+    # Special case: consider space as "white space" so tabs are allowed
+    if separator == ' ':
+        separator = '[ \t]+'
+
     found = False
     addnext = False  # add on next line, found a comment
-    matcher = re.compile(r'\s*{}'.format(re.escape(k + separator)))
-    cmatcher = re.compile(r'\s*{}\s*{}'.format(comment,
-                                               re.escape(k + separator)))
+    matcher = re.compile(r'\s*{}\s*{}'.format(re.escape(k), separator))
+    cmatcher = re.compile(r'\s*{}\s*{}\s*{}'.format(comment,
+                                                    re.escape(k), separator))
     for line in lines:
         if matcher.match(line):
             found = True
@@ -601,13 +605,20 @@ def get_directive(filename, directive, separator=' '):
 
     :returns: The (unquoted) value if the directive was found, None otherwise
     """
+    # Special case: consider space as "white space" so tabs are allowed
+    if separator == ' ':
+        separator = '[ \t]+'
+
     fd = open(filename, "r")
     for line in fd:
         if line.lstrip().startswith(directive):
             line = line.strip()
 
-            (directive, sep, value) = line.partition(separator)
-            if not sep or not value:
+            match = re.match(r'{}\s*{}\s*(.*)'.format(directive, separator),
+                             line)
+            if match:
+                value = match.group(1)
+            else:
                 raise ValueError("Malformed directive: {}".format(line))
 
             result = unquote_directive_value(value.strip(), '"')
@@ -959,7 +970,8 @@ def check_server_configuration():
     """
     server_fstore = sysrestore.FileStore(paths.SYSRESTORE)
     if not server_fstore.has_files():
-        raise RuntimeError("IPA is not configured on this system.")
+        raise ScriptError("IPA is not configured on this system.",
+                          rval=SERVER_NOT_CONFIGURED)
 
 
 def remove_file(filename):

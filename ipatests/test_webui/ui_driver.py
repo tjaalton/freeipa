@@ -22,7 +22,7 @@ Base class for UI integration tests.
 
 Contains browser driver and common tasks.
 """
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 from datetime import datetime
 import time
@@ -42,6 +42,7 @@ try:
     from selenium.common.exceptions import InvalidElementStateException
     from selenium.common.exceptions import StaleElementReferenceException
     from selenium.common.exceptions import WebDriverException
+    from selenium.common.exceptions import ElementClickInterceptedException
     from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
     from selenium.webdriver.common.keys import Keys
     from selenium.webdriver.common.by import By
@@ -57,7 +58,6 @@ try:
 except ImportError:
     NO_YAML = True
 from ipaplatform.paths import paths
-
 
 ENV_MAP = {
     'MASTER': 'ipa_server',
@@ -384,9 +384,9 @@ class UI_driver(object):
         if self.logged_in():
             return
 
-        if not login:
+        if login is None:
             login = self.config['ipa_admin']
-        if not password:
+        if password is None:
             password = self.config['ipa_password']
         if not new_password:
             new_password = password
@@ -423,7 +423,14 @@ class UI_driver(object):
         return logged_in
 
     def logout(self):
+
+        runner = self
+
         self.profile_menu_action('logout')
+        # it may take some time to get login screen visible
+        WebDriverWait(self.driver, self.request_timeout).until(
+            lambda d: runner.login_screen_visible())
+
         assert self.login_screen_visible()
 
     def get_login_screen(self):
@@ -815,6 +822,50 @@ class UI_driver(object):
         last = inputs[-1]
         last.send_keys(value)
 
+    def edit_multivalued(self, name, value, new_value, parent=None):
+        """
+        Edit multivalued textbox
+        """
+        if not parent:
+            parent = self.get_form()
+        s = "div[name='%s'].multivalued-widget" % name
+        w = self.find(s, By.CSS_SELECTOR, parent, strict=True)
+        s = "div[name=value] input"
+        inputs = self.find(s, By.CSS_SELECTOR, w, many=True)
+
+        for i in inputs:
+            val = i.get_attribute('value')
+            if val == value:
+                i.clear()
+                i.send_keys(new_value)
+
+    def undo_multivalued(self, name, value, parent=None):
+        """
+        Undo multivalued change
+        """
+        if not parent:
+            parent = self.get_form()
+        s = "div[name='%s'].multivalued-widget" % name
+        w = self.find(s, By.CSS_SELECTOR, parent, strict=True)
+        s = "div[name=value] input"
+        inputs = self.find(s, By.CSS_SELECTOR, w, many=True)
+        clicked = False
+        for i in inputs:
+            val = i.get_attribute('value')
+            n = i.get_attribute('name')
+            if val == value:
+                s = "input[name='%s'] ~ .input-group-btn button[name=undo]" % n
+                link = self.find(s, By.CSS_SELECTOR, w, strict=True)
+                link.click()
+                self.wait()
+                clicked = True
+                # lets try to find the undo button element again to check if
+                # it is not present or displayed
+                link = self.find(s, By.CSS_SELECTOR, w)
+                assert not link or not link.is_displayed(), 'Undo btn present'
+
+        assert clicked, 'Value was not undone: %s' % value
+
     def del_multivalued(self, name, value, parent=None):
         """
         Mark value in multivalued textbox as deleted.
@@ -862,15 +913,21 @@ class UI_driver(object):
             s += "[@value='%s']" % value
         opts = self.find(s, "xpath", parent, many=True)
         label = None
+        checkbox = None
         # Select only the one which matches exactly the name
         for o in opts:
             n = o.get_attribute("name")
             if n == name or re.match("^%s\d+$" % name, n):
                 s = "label[for='%s']" % o.get_attribute("id")
                 label = self.find(s, By.CSS_SELECTOR, parent, strict=True)
+                checkbox = o
                 break
         assert label is not None, "Option not found: %s" % name
-        label.click()
+
+        try:
+            label.click()
+        except ElementClickInterceptedException:
+            checkbox.click()
 
     def select_combobox(self, name, value, parent=None, combobox_input=None):
         """
@@ -1268,9 +1325,9 @@ class UI_driver(object):
         self.wait_for_request(n=2)
 
     def add_record(self, entity, data, facet='search', facet_btn='add',
-                   dialog_btn='add', delete=False, pre_delete=True,
-                   dialog_name='add', navigate=True, combobox_input=None,
-                   negative=False):
+                   dialog_btn='add', add_another_btn='add_and_add_another',
+                   delete=False, pre_delete=True, dialog_name='add',
+                   navigate=True, combobox_input=None, negative=False):
         """
         Add records.
 
@@ -1285,8 +1342,15 @@ class UI_driver(object):
             ],
         }
         """
-        pkey = data['pkey']
+        if type(data) is not list:
+            data = [data]
 
+        last_element = data[len(data) - 1]
+
+        pkeys = []
+
+        for record in data:
+            pkeys.append(record['pkey'])
         if navigate:
             self.navigate_to_entity(entity, facet)
 
@@ -1294,8 +1358,9 @@ class UI_driver(object):
         self.assert_facet(entity, facet)
 
         # delete if exists, ie. from previous test fail
+
         if pre_delete:
-            self.delete_record(pkey, data.get('del'))
+            self.delete(entity, data, navigate=False)
 
         # current row count
         self.wait_for_request(0.5)
@@ -1306,44 +1371,63 @@ class UI_driver(object):
         self.facet_button_click(facet_btn)
         self.assert_dialog(dialog_name)
 
-        # fill dialog
-        self.fill_fields(data['add'], combobox_input=combobox_input)
+        for record in data:
 
-        # confirm dialog
-        self.dialog_button_click(dialog_btn)
-        self.wait_for_request()
-        self.wait_for_request()
+            # fill dialog
+            self.fill_fields(record['add'], combobox_input=combobox_input)
 
-        # check expected error/warning/info
-        expected = ['error_4304_info']
-        dialog_info = self.get_dialog_info()
-        if dialog_info and dialog_info['name'] in expected:
-            self.dialog_button_click('ok')
+            btn = dialog_btn
+
+            if record != last_element:
+                btn = add_another_btn
+
+            self.dialog_button_click(btn)
+            self.wait_for_request()
             self.wait_for_request()
 
-        if negative:
+            # check expected error/warning/info
+            expected = ['error_4304_info']
+            dialog_info = self.get_dialog_info()
+            if dialog_info and dialog_info['name'] in expected:
+                self.dialog_button_click('ok')
+                self.wait_for_request()
+
+            if negative:
+                return
+
+            # check for error
+            self.assert_no_error_dialog()
+            self.wait_for_request()
+            self.wait_for_request(0.4)
+
+        if dialog_btn == 'add_and_edit':
+            page_pkey = self.get_text('.facet-pkey')
+            assert record['pkey'] in page_pkey
+            # we cannot delete because we are on different page
             return
-
-        # check for error
-        self.assert_no_error_dialog()
-        self.wait_for_request()
-        self.wait_for_request(0.4)
-
-        # check if table has more rows
+        elif dialog_btn == add_another_btn:
+            # dialog is still open, we cannot check for records on search page
+            # or delete the records
+            return
+        elif dialog_btn == 'cancel':
+            return
+        # when standard 'add' was used then it will land on search page
+        # and we can check if new item was added - table has more rows
         new_count = len(self.get_rows())
         # adjust because of paging
-        expected = count + 1
+        expected = count + len(data)
         if count == 20:
             expected = 20
         self.assert_row_count(expected, new_count)
 
         # delete record
         if delete:
-            self.delete_record(pkey)
+            self.delete(entity, data, navigate=False)
             new_count = len(self.get_rows())
             self.assert_row_count(count, new_count)
 
-    def mod_record(self, entity, data, facet='details', facet_btn='save'):
+    def mod_record(self, entity, data, facet='details', facet_btn='save',
+                   negative=False):
         """
         Mod record
 
@@ -1358,6 +1442,9 @@ class UI_driver(object):
         self.facet_button_click(facet_btn)
         self.wait_for_request()
         self.wait_for_request()
+
+        if negative:
+            return
         self.assert_facet_button_enabled(facet_btn, enabled=False)
 
     def basic_crud(self, entity, data,
@@ -1403,10 +1490,9 @@ class UI_driver(object):
         self.wait_for_request()
 
         # 2. Add record
-        self.add_record(parent_entity, data, facet=search_facet, navigate=False,
-                        facet_btn=add_facet_btn, dialog_name=add_dialog_name,
-                        dialog_btn=add_dialog_btn
-                        )
+        self.add_record(parent_entity, data, facet=search_facet,
+                        navigate=False, facet_btn=add_facet_btn,
+                        dialog_name=add_dialog_name, dialog_btn=add_dialog_btn)
 
         self.close_notifications()
 
@@ -1458,7 +1544,7 @@ class UI_driver(object):
 
     def prepare_associations(
             self, pkeys, facet=None, facet_btn='add', member_pkeys=None,
-            confirm_btn='add'):
+            confirm_btn='add', search=False):
         """
         Helper function for add_associations and delete_associations
         """
@@ -1469,8 +1555,18 @@ class UI_driver(object):
         self.wait()
         self.wait_for_request()
 
-        for key in pkeys:
-            self.select_record(key, table_name='available')
+        if search is True:
+            for key in pkeys:
+                search_field_s = '.adder-dialog-top input[name="filter"]'
+                self.fill_text(search_field_s, key)
+                self._button_click(selector="button[name='find'].btn-default",
+                                   parent=None)
+                self.wait_for_request()
+                self.select_record(key, table_name='available')
+                self.button_click('add')
+        else:
+            for key in pkeys:
+                self.select_record(key, table_name='available')
             self.button_click('add')
 
         self.dialog_button_click(confirm_btn)
@@ -1485,18 +1581,19 @@ class UI_driver(object):
 
     def add_associations(
             self, pkeys, facet=None, delete=False, facet_btn='add',
-            member_pkeys=None, confirm_btn='add'):
+            member_pkeys=None, confirm_btn='add', search=False):
         """
         Add associations
         """
         check_pkeys = self.prepare_associations(
-            pkeys, facet, facet_btn, member_pkeys, confirm_btn=confirm_btn)
+            pkeys, facet, facet_btn, member_pkeys, confirm_btn, search)
 
         # we need to return if we want to "cancel" to avoid assert record fail
         if confirm_btn == 'cancel':
             return
 
         for key in check_pkeys:
+
             self.assert_record(key)
             if delete:
                 self.delete_record(key)
@@ -1513,7 +1610,8 @@ class UI_driver(object):
         for key in check_pkeys:
             self.assert_record(key, negative=True)
 
-    def add_table_associations(self, table_name, pkeys, parent=False, delete=False):
+    def add_table_associations(self, table_name, pkeys, parent=False,
+                               delete=False, negative=False):
         """
         Add value to table (association|rule|...)
         """
@@ -1533,7 +1631,12 @@ class UI_driver(object):
             self.button_click('add')
             self.wait()
 
-        self.dialog_button_click('add')
+        if negative:
+            self.dialog_button_click('cancel')
+            self.assert_record(key, parent, table_name, negative=True)
+            return
+        else:
+            self.dialog_button_click('add')
         self.wait_for_request(n=2)
 
         for key in pkeys:
@@ -1663,33 +1766,89 @@ class UI_driver(object):
             # add multiple at once and test table delete button
             self.add_table_associations(table, keys, delete=True)
 
-    def add_sshkey_to_user(self, user, ssh_key):
+    def add_sshkey_to_record(self, ssh_keys, pkey, entity='user',
+                             navigate=False, save=True):
         """
-        Add ssh public key to particular user
+        Add ssh public key to particular record
 
-        user (str): user to add the key to
-        ssh_key (str): public ssh key
+        ssh_keys (list): public ssh key(s)
+        pkey (str): user/host/idview to add the key to
+        entity (str): name of entity where to navigate if navigate=True
+        navigate (bool): whether we should navigate to record
+        save (bool): whether we should click save after adding a key
         """
-        self.navigate_to_entity('user')
-        self.navigate_to_record(user)
 
-        ssh_pub = 'div[name="ipasshpubkey"] button[name="add"]'
-        self.find(ssh_pub, By.CSS_SELECTOR).click()
-        self.wait()
-        self.driver.switch_to.active_element.send_keys(ssh_key)
-        self.dialog_button_click('update')
-        self.facet_button_click('save')
+        if type(ssh_keys) is not list:
+            ssh_keys = [ssh_keys]
 
-    def delete_user_sshkey(self, user):
+        if navigate:
+            self.navigate_to_entity(entity)
+            self.navigate_to_record(pkey)
+
+        for key in ssh_keys:
+            s_add = 'div[name="ipasshpubkey"] button[name="add"]'
+            ssh_add_btn = self.find(s_add, By.CSS_SELECTOR, strict=True)
+            ssh_add_btn.click()
+            self.wait()
+            s_text_area = 'textarea.certificate'
+            text_area = self.find(s_text_area, By.CSS_SELECTOR, strict=True)
+            text_area.send_keys(key)
+            self.wait()
+            self.dialog_button_click('update')
+
+        # sometimes we do not want to save e.g. in order to test undo buttons
+        if save:
+            self.facet_button_click('save')
+
+    def delete_record_sshkeys(self, pkey, entity='user', navigate=False):
         """
-        Delete ssh public key of particular user
+        Delete all ssh public keys of particular record
+
+        pkey (str): user/host/idview to add the key to
+        entity (str): name of entity where to navigate if navigate=True
+        navigate (bool): whether we should navigate to record
         """
-        self.navigate_to_entity('user')
-        self.navigate_to_record(user)
+
+        if navigate:
+            self.navigate_to_entity(entity)
+            self.navigate_to_record(pkey)
 
         ssh_pub = 'div[name="ipasshpubkey"] button[name="remove"]'
-        self.find(ssh_pub, By.CSS_SELECTOR).click()
+        rm_btns = self.find(ssh_pub, By.CSS_SELECTOR, many=True)
+        assert rm_btns, 'No SSH keys to be deleted found on current page'
+
+        for btn in rm_btns:
+            btn.click()
+
         self.facet_button_click('save')
+
+    def assert_num_ssh_keys(self, num):
+        """
+        Assert number of SSH keys we have associated with the user
+        """
+
+        s_keys = 'div[name="ipasshpubkey"] .widget[name="value"]'
+        ssh_keys = self.find(s_keys, By.CSS_SELECTOR, many=True)
+
+        num_ssh_keys = len(ssh_keys) if not None else 0
+
+        assert num_ssh_keys == num, \
+            ('Number of SSH keys does not match. '
+             'Expected: {}, Got: {}'.format(num, num_ssh_keys))
+
+    def undo_ssh_keys(self, btn_name='undo'):
+        """
+        Undo either one SSH key or all of them
+
+        Possible options:
+        btn_name='undo'
+        btn_name='undo_all'
+        """
+
+        s_undo = 'div[name="ipasshpubkey"] button[name="{}"]'.format(btn_name)
+        undo = self.find(s_undo, By.CSS_SELECTOR, strict=True)
+        undo.click()
+        self.wait(0.6)
 
     def run_cmd_on_ui_host(self, cmd):
         """
@@ -1987,18 +2146,26 @@ class UI_driver(object):
             assert is_enabled == enabled, ('Invalid enabled state of action item %s. '
                                            'Expected: %s') % (action, str(visible))
 
-    def assert_field_validation_required(self, parent=None):
+    def assert_field_validation(self, expect_error, parent=None, field=None):
         """
-        Assert we got 'Required field' error message in field validation
+        Assert for error in field validation
         """
 
         if not parent:
             parent = self.get_form()
 
+        if field:
+            field_s = '.widget[name="{}"]'.format(field)
+            parent = self.find(field_s, By.CSS_SELECTOR, context=parent)
+
         req_field_css = '.help-block[name="error_link"]'
 
         res = self.find(req_field_css, By.CSS_SELECTOR, context=parent)
-        assert 'Required field' in res.text, 'No "Required field" error found'
+        assert expect_error in res.text, \
+            'Expected error: {} not found'.format(expect_error)
+
+    def assert_field_validation_required(self, parent=None, field=None):
+        self.assert_field_validation('Required field', parent, field)
 
     def assert_notification(self, type='success', assert_text=None):
         """
@@ -2039,3 +2206,22 @@ class UI_driver(object):
         else:
             s = '.modal-body div p'
             self.assert_text(s, expected_err, parent=err_dialog)
+
+    def assert_value_checked(self, values, name, negative=False):
+        """
+        Assert particular value is checked
+        """
+
+        if type(values) is not list:
+            values = [values]
+
+        checked_values = self.get_field_checked(name)
+
+        for value in values:
+            if negative:
+                assert value not in checked_values, (
+                    '{} checked while it should not be'.format(value)
+                )
+            else:
+                assert value in checked_values, ('{} NOT checked while it '
+                                                 'should be'.format(value))

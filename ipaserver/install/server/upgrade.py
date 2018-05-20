@@ -2,7 +2,7 @@
 # Copyright (C) 2015  FreeIPA Contributors see COPYING for license
 #
 
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 
 import logging
 import re
@@ -1563,6 +1563,37 @@ def setup_pkinit(krb):
         aug.close()
 
 
+def setup_spake(krb):
+    logger.info("[Setup SPAKE]")
+
+    aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD,
+                 loadpath=paths.USR_SHARE_IPA_DIR)
+    try:
+        aug.transform("IPAKrb5", paths.KRB5KDC_KDC_CONF)
+        aug.load()
+
+        path = "/files{}/libdefaults/spake_preauth_kdc_challenge"
+        path = path.format(paths.KRB5KDC_KDC_CONF)
+        value = "edwards25519"
+        if aug.match(path):
+            return
+
+        aug.remove(path)
+        aug.set(path, value)
+        try:
+            aug.save()
+        except IOError:
+            for error_path in aug.match('/augeas//error'):
+                logger.error('augeas: %s', aug.get(error_path))
+                raise
+
+        if krb.is_running():
+            krb.stop()
+            krb.start()
+    finally:
+        aug.close()
+
+
 def enable_certauth(krb):
     logger.info("[Enable certauth]")
 
@@ -1635,6 +1666,38 @@ def ntpd_cleanup(fqdn, fstore):
 
     servroles.role_instances = updated_role_instances
     sysupgrade.set_upgrade_state('ntpd', 'ntpd_cleaned', True)
+
+
+def update_replica_config(db_suffix):
+    dn = DN(
+        ('cn', 'replica'), ('cn', db_suffix), ('cn', 'mapping tree'),
+        ('cn', 'config')
+    )
+    try:
+        entry = api.Backend.ldap2.get_entry(dn)
+    except ipalib.errors.NotFound:
+        return  # entry does not exist until a replica is installed
+
+    if 'nsds5replicareleasetimeout' not in entry:
+        # See https://pagure.io/freeipa/issue/7488
+        logger.info("Adding nsds5replicaReleaseTimeout=60 to %s", dn)
+        entry['nsds5replicareleasetimeout'] = '60'
+        api.Backend.ldap2.update_entry(entry)
+
+
+def migrate_to_authselect():
+    logger.info('[Migrating to authselect profile]')
+    if sysupgrade.get_upgrade_state('authcfg', 'migrated_to_authselect'):
+        logger.info("Already migrated to authselect profile")
+        return
+
+    statestore = sysrestore.StateFile(paths.IPA_CLIENT_SYSRESTORE)
+    try:
+        tasks.migrate_auth_configuration(statestore)
+    except ipautil.CalledProcessError as e:
+        raise RuntimeError(
+            "Failed to migrate to authselect profile: %s" % e, 1)
+    sysupgrade.set_upgrade_state('authcfg', 'migrated_to_authselect', True)
 
 
 def upgrade_configuration():
@@ -1781,6 +1844,10 @@ def upgrade_configuration():
 
     ds.configure_dirsrv_ccache()
 
+    update_replica_config(ipautil.realm_to_suffix(api.env.realm))
+    if ca.is_configured():
+        update_replica_config(DN(('o', 'ipaca')))
+
     ds.stop(ds_serverid)
     fix_schema_file_syntax()
     remove_ds_ra_cert(subject_base)
@@ -1912,6 +1979,7 @@ def upgrade_configuration():
         ca.setup_lightweight_ca_key_retrieval()
         cainstance.ensure_ipa_authority_entry()
 
+    migrate_to_authselect()
     set_sssd_domain_option('ipa_server_mode', 'True')
     set_sssd_domain_option('ipa_server', api.env.host)
 
@@ -1942,6 +2010,7 @@ def upgrade_configuration():
                         KDC_CA_BUNDLE_PEM=paths.KDC_CA_BUNDLE_PEM,
                         CA_BUNDLE_PEM=paths.CA_BUNDLE_PEM)
     krb.add_anonymous_principal()
+    setup_spake(krb)
     setup_pkinit(krb)
     enable_certauth(krb)
 

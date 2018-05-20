@@ -23,26 +23,13 @@
 This module contains default Fedora-specific implementations of system tasks.
 '''
 
+from __future__ import absolute_import
+
 from ipaplatform.redhat.tasks import RedHatTaskNamespace
 
 
 class FedoraTaskNamespace(RedHatTaskNamespace):
-
-    def backup_auth_configuration(self, path):
-        """Dummy method
-
-        On Fedora 28, authconfig from authselect-compat does not implement
-        backup and restore.
-        """
-        pass
-
-    def restore_auth_configuration(self, path):
-        """Dummy method
-
-        On Fedora 28, authconfig from authselect-compat does not implement
-        backup and restore.
-        """
-        pass
+    pass
 
 
 tasks = FedoraTaskNamespace()

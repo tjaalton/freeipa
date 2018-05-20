@@ -21,6 +21,7 @@ import gssapi
 import netifaces
 import os
 import SSSDConfig
+import shutil
 import socket
 import sys
 import tempfile
@@ -522,8 +523,12 @@ def configure_openldap_conf(fstore, cli_basedn, cli_server):
         {
             'name': 'comment',
             'type': 'comment',
-            'value': '   URI, BASE and TLS_CACERT have been added if they '
-                     'were not set.'
+            'value': '   URI, BASE, TLS_CACERT and SASL_MECH'
+        },
+        {
+            'name': 'comment',
+            'type': 'comment',
+            'value': '   have been added if they were not set.'
         },
         {
             'name': 'comment',
@@ -572,6 +577,12 @@ def configure_openldap_conf(fstore, cli_basedn, cli_server):
             'name': 'TLS_CACERT',
             'type': 'option',
             'value': paths.IPA_CA_CRT
+        },
+        {
+            'action': 'addifnotset',
+            'name': 'SASL_MECH',
+            'type': 'option',
+            'value': 'GSSAPI'
         },
     ]
 
@@ -627,6 +638,16 @@ def configure_krb5_conf(
         filename, client_domain, client_hostname, force=False,
         configure_sssd=True):
 
+    # First, write a snippet to krb5.conf.d.  Currently this doesn't support
+    # templating, but that could be changed in the future.
+    template = os.path.join(
+        paths.USR_SHARE_IPA_DIR,
+        os.path.basename(paths.KRB5_FREEIPA) + ".template"
+    )
+    shutil.copy(template, paths.KRB5_FREEIPA)
+    os.chmod(paths.KRB5_FREEIPA, 0x644)
+
+    # Then, perform the rest of our configuration into krb5.conf itself.
     krbconf = IPAChangeConf("IPA Installer")
     krbconf.setOptionAssignment((" = ", " "))
     krbconf.setSectionNameDelimiters(("[", "]"))
@@ -2026,6 +2047,22 @@ def install_check(options):
             "Invalid hostname, '{}' must not be used.".format(hostname),
             rval=CLIENT_INSTALL_ERROR)
 
+    # --no-sssd is not supported any more for rhel-based distros
+    if not tasks.is_nosssd_supported() and not options.sssd:
+        raise ScriptError(
+            "Option '--no-sssd' is incompatible with the 'authselect' tool "
+            "provided by this distribution for configuring system "
+            "authentication resources",
+            rval=CLIENT_INSTALL_ERROR)
+
+    # --noac is not supported any more for rhel-based distros
+    if not tasks.is_nosssd_supported() and options.no_ac:
+        raise ScriptError(
+            "Option '--noac' is incompatible with the 'authselect' tool "
+            "provided by this distribution for configuring system "
+            "authentication resources",
+            rval=CLIENT_INSTALL_ERROR)
+
     # when installing with '--no-sssd' option, check whether nss-ldap is
     # installed
     if not options.sssd:
@@ -2889,9 +2926,11 @@ def _install(options):
 
     if not options.no_ac:
         # Modify nsswitch/pam stack
-        tasks.modify_nsswitch_pam_stack(sssd=options.sssd,
-                                        mkhomedir=options.mkhomedir,
-                                        statestore=statestore)
+        tasks.modify_nsswitch_pam_stack(
+            sssd=options.sssd,
+            mkhomedir=options.mkhomedir,
+            statestore=statestore
+        )
 
         logger.info("%s enabled", "SSSD" if options.sssd else "LDAP")
 
