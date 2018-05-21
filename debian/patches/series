@@ -13,5 +13,3 @@ fix-httpd-group.diff
 support-pam-mkhomedir.diff
 fix-paths.diff
 hack-tomcat-race.diff
-hack-duplicate-cert-directive.diff
-fix-version.diff

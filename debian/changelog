@@ -1,6 +1,8 @@
 freeipa (4.7.0~pre2-1) UNRELEASED; urgency=medium
 
   * New upstream prerelease.
+    - fix-version.diff: Dropped, not needed
+    - hack-duplicate-cert-directive.diff: Dropped, fixed upstream
   * tests/server-install: Fix the fake domain, single label domains are not
     supported anymore.
   * tests: If the server install fails, just dump the log and exit
