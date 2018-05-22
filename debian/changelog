@@ -8,6 +8,8 @@ freeipa (4.7.0~pre2-1) UNRELEASED; urgency=medium
   * tests: If the server install fails, just dump the log and exit
     successfully.
   * server.postinst: Fix upgrade from earlier version.
+  * Create-kadm5.acl-if-it-doesn-t-exist.diff: Fix kadmind startup issue
+    if kadm5.acl doesn't exist. (LP: #1772447)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 
