@@ -14,3 +14,4 @@ fix-httpd-group.diff
 support-pam-mkhomedir.diff
 fix-paths.diff
 hack-tomcat-race.diff
+fix-fontawesome-path.diff
