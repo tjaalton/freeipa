@@ -29,3 +29,13 @@
      VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
      VAR_KRB5KDC_K5_REALM = "/var/lib/krb5kdc/.k5."
      CACERT_PEM = "/var/lib/krb5kdc/cacert.pem"
+--- a/ipaserver/install/httpinstance.py
++++ b/ipaserver/install/httpinstance.py
+@@ -103,6 +103,7 @@ class HTTPInstance(service.Service):
+             AUTOREDIR='' if auto_redirect else '#',
+             CRL_PUBLISH_PATH=paths.PKI_CA_PUBLISH_DIR,
+             FONTS_DIR=paths.FONTS_DIR,
++            FONT_AWESOME_DIR=paths.FONT_AWESOME_DIR,
+             GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
+             IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
+             IPA_CCACHES=paths.IPA_CCACHES,
