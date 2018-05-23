@@ -12,6 +12,8 @@ freeipa (4.7.0~pre2-1) UNRELEASED; urgency=medium
     if kadm5.acl doesn't exist. (LP: #1772447)
   * fix-fontawesome-path.diff: Fix the path to font-awesome. (LP:
     #1772921)
+  * fix-krb5kdc-cert-path.diff: Apache can't access KDC certs, move them
+    to /var/lib/ipa/certs. (LP: #1772447)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 
