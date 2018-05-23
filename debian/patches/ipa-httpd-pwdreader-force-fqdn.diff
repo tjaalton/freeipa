@@ -1,0 +1,10 @@
+--- a/install/tools/ipa-httpd-pwdreader
++++ b/install/tools/ipa-httpd-pwdreader
+@@ -4,6 +4,7 @@
+ # If you'd like to write your custom binary providing passwords to mod_ssl,
+ # see the documentation of the aforementioned directive of the mod_ssl module.
+ 
++HOSTNAME=`hostname -f`
+ USAGE="./ipa-pwdreader host:port RSA|DSA|ECC|number"
+ ERR_UNKNOWN_KEY="\
+ ERROR: You seem to be running a non-standard IPA installation.
