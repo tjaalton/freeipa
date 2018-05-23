@@ -1,6 +1,6 @@
 --- a/ipaserver/install/cainstance.py
 +++ b/ipaserver/install/cainstance.py
-@@ -1755,6 +1755,8 @@ def migrate_profiles_to_ldap():
+@@ -1754,6 +1754,8 @@ def migrate_profiles_to_ldap():
      match = re.search(r'^profile\.list=(\S*)', cs_cfg, re.MULTILINE)
      profile_ids = match.group(1).split(',')
  

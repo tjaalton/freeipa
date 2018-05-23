@@ -1,6 +1,6 @@
 --- a/ipaplatform/debian/tasks.py
 +++ b/ipaplatform/debian/tasks.py
-@@ -9,14 +9,20 @@ This module contains default Debian-spec
+@@ -11,14 +11,20 @@ from __future__ import absolute_import
  from ipaplatform.base.tasks import BaseTaskNamespace
  from ipaplatform.redhat.tasks import RedHatTaskNamespace
  
@@ -23,7 +23,7 @@
  
      @staticmethod
      def set_nisdomain(nisdomain):
-@@ -25,8 +31,13 @@ class DebianTaskNamespace(RedHatTaskName
+@@ -27,8 +33,13 @@ class DebianTaskNamespace(RedHatTaskName
  
      @staticmethod
      def modify_nsswitch_pam_stack(sssd, mkhomedir, statestore):

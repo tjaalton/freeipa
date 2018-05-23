@@ -1,6 +1,6 @@
 --- a/ipaplatform/debian/paths.py
 +++ b/ipaplatform/debian/paths.py
-@@ -65,6 +65,7 @@ class DebianPathNamespace(BasePathNamesp
+@@ -67,6 +67,7 @@ class DebianPathNamespace(BasePathNamesp
      UPDATE_CA_TRUST = "/usr/sbin/update-ca-certificates"
      BIND_LDAP_DNS_IPA_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/"
      BIND_LDAP_DNS_ZONE_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/master/"
@@ -10,7 +10,7 @@
      LIB_SYSTEMD_SYSTEMD_DIR = "/lib/systemd/system/"
 --- a/ipaserver/install/ldapupdate.py
 +++ b/ipaserver/install/ldapupdate.py
-@@ -42,6 +42,7 @@ from ipalib import api, create_api
+@@ -43,6 +43,7 @@ from ipalib import api, create_api
  from ipalib import constants
  from ipaplatform.paths import paths
  from ipapython.dn import DN
@@ -18,7 +18,7 @@
  
  if six.PY3:
      unicode = str
-@@ -327,12 +328,15 @@ class LDAPUpdate(object):
+@@ -328,12 +329,15 @@ class LDAPUpdate(object):
             etc.  Determine if a suffix is needed based on the current
             architecture.
          """

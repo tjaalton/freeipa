@@ -1,6 +1,6 @@
 --- a/ipaserver/install/server/replicainstall.py
 +++ b/ipaserver/install/server/replicainstall.py
-@@ -758,7 +758,7 @@ def install_check(installer):
+@@ -765,7 +765,7 @@ def install_check(installer):
          finally:
              shutil.rmtree(tmp_db_dir)
  

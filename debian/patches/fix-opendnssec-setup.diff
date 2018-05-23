@@ -12,7 +12,7 @@ Description: Fix ODS setup with 2.0.x
  	</RepositoryList>
 --- a/ipaserver/install/opendnssecinstance.py
 +++ b/ipaserver/install/opendnssecinstance.py
-@@ -282,20 +282,15 @@ class OpenDNSSECInstance(service.Service
+@@ -284,20 +284,15 @@ class OpenDNSSECInstance(service.Service
              os.chmod(paths.OPENDNSSEC_KASP_DB, 0o660)
  
              # regenerate zonelist.xml
@@ -37,7 +37,7 @@ Description: Fix ODS setup with 2.0.x
  
 --- a/ipaplatform/base/paths.py
 +++ b/ipaplatform/base/paths.py
-@@ -167,7 +167,8 @@ class BasePathNamespace(object):
+@@ -182,7 +182,8 @@ class BasePathNamespace(object):
      NET = "/usr/bin/net"
      BIN_NISDOMAINNAME = "/usr/bin/nisdomainname"
      NSUPDATE = "/usr/bin/nsupdate"

@@ -18,7 +18,7 @@ Description: fix named.conf template
  
  	// Any host is permitted to issue recursive queries
  	allow-recursion { any; };
-@@ -27,18 +27,14 @@ options {
+@@ -30,18 +30,14 @@ options {
   * By default, SELinux policy does not allow named to modify the /var/named directory,
   * so put the default debug log file in data/ :
   */
