@@ -1,0 +1,12 @@
+--- a/ipaserver/plugins/dogtag.py
++++ b/ipaserver/plugins/dogtag.py
+@@ -1918,8 +1918,7 @@ class ra(rabase.rabase, RestClient):
+             client_keyfile=None,
+             cafile=self.ca_cert,
+             method='POST',
+-            headers={'Accept-Encoding': 'gzip, deflate',
+-                     'User-Agent': 'IPA',
++            headers={'User-Agent': 'IPA',
+                      'Content-Type': 'application/xml'},
+             body=payload
+         )

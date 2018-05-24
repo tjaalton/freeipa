@@ -17,3 +17,4 @@ hack-tomcat-race.diff
 fix-fontawesome-path.diff
 fix-krb5kdc-cert-path.diff
 ipa-httpd-pwdreader-force-fqdn.diff
+dont-allow-compressed-certs.diff
