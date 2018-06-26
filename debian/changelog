@@ -20,6 +20,7 @@ freeipa (4.7.0~pre2-1) UNRELEASED; urgency=medium
   * dont-allow-compressed-certs.diff: mod_deflate is enabled by default on
     Debian, but the current apache config doesn't know how to uncompress the
     received cert data so disallow gzip content for now. (LP: #1772450)
+  * control: Add libjs-scriptaculous to server depends.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 

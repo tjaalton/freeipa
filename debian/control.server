@@ -25,6 +25,7 @@ Depends:
  libapache2-mod-wsgi,
  libjs-dojo-core,
  libjs-jquery,
+ libjs-scriptaculous,
  libnss3-tools,
  libsasl2-modules-gssapi-mit,
  oddjob (>= 0.34.3-2),
