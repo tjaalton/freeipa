@@ -8,8 +8,6 @@ DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 ONLY_CLIENT=0
 DESTDIR=$(CURDIR)/debian/tmp
 
-JAVA_STACK_SIZE ?= 8m
-export JAVA_STACK_SIZE
 export PYTHON=python
 
 confflags = \

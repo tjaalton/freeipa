@@ -32,6 +32,7 @@ Build-Depends:
  libunistring-dev,
  libverto-dev,
  libxmlrpc-core-c3-dev (>= 1.33.06),
+ nodejs,
  pki-base (>= 10.6.0~),
  python-all-dev,
  python-cryptography,
@@ -57,7 +58,6 @@ Build-Depends:
  python-sss (>= 1.14.0),
  python-usb (>= 1.0.0~b2),
  python-yubico,
- rhino,
  samba-dev,
  systemd,
  uuid-dev
