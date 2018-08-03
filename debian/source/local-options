@@ -3,10 +3,12 @@ extend-diff-ignore = po/*|zanata.xml
 # development files
 extend-diff-ignore = .git-commit-template|autogen.sh|client/version.m4.in|makerpms.sh
 # javascript cruft
-extend-diff-ignore = install/html/jsl.conf|install/ui/js
+extend-diff-ignore = install/html/jsl.conf|install/ui/js|install/ui/package.json|install/ui/Gruntfile.js
 # some cruft
 extend-diff-ignore = install/share/memcache-remove.uldif
 # files for CI
 extend-diff-ignore = .freeipa-pr-ci.yaml|.test_runner_config*|.travis*
 # files for tox
 extend-diff-ignore = .tox-install.sh|pypi/test_placeholder.py|tox.ini
+# docs
+extend-diff-ignore = CODE_OF_CONDUCT.md|freeipa.doap.rdf
