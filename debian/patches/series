@@ -1,21 +1,13 @@
 # upstreamed
-fix-apache-ssl-setup.diff
-Create-kadm5.acl-if-it-doesn-t-exist.diff
 
 # not upstreamable
 
 # send upstream
-ldap-multiarch.diff
 fix-replicainstall.diff
 create-sysconfig-ods.diff
-fix-named-conf-template.diff
 fix-opendnssec-setup.diff
-fix-httpd-group.diff
-support-pam-mkhomedir.diff
-fix-paths.diff
 hack-tomcat-race.diff
 fix-fontawesome-path.diff
 fix-krb5kdc-cert-path.diff
 ipa-httpd-pwdreader-force-fqdn.diff
-dont-allow-compressed-certs.diff
 fix-gzip-path.diff

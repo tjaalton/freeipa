@@ -7,6 +7,6 @@
 +        # create the configfile, opendnssec-enforcer doesn't ship it
 +        open(paths.SYSCONFIG_ODS, 'a').close()
 +
-         installutils.set_directive(paths.SYSCONFIG_ODS,
-                                    'SOFTHSM2_CONF',
-                                     paths.DNSSEC_SOFTHSM2_CONF,
+         directivesetter.set_directive(paths.SYSCONFIG_ODS,
+                                       'SOFTHSM2_CONF',
+                                       paths.DNSSEC_SOFTHSM2_CONF,

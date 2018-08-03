@@ -1,25 +1,26 @@
 freeipa (4.7.0-1) UNRELEASED; urgency=medium
 
-  * New upstream release.
+  * New upstream release. (LP: #1772447, #1772450)
     - fix-version.diff: Dropped, not needed
     - hack-duplicate-cert-directive.diff: Dropped, fixed upstream
+    - ldap-multiarch.diff: Dropped, fixed upstream
+    - support-pam-mkhomedir.diff: Dropped, fixed upstream
+    - fix-apache-ssl-setup.diff: Dropped, fixed upstream
+    - fix-httpd-group.diff: Dropped, fixed upstream
+    - fix-named-conf-template.diff: Dropped, fixed upstream
+    - fix-paths.diff: Dropped, fixed upstream
     - refresh patches
   * tests/server-install: Fix the fake domain, single label domains are not
     supported anymore.
   * tests: If the server install fails, just dump the log and exit
     successfully.
   * server.postinst: Fix upgrade from earlier version.
-  * Create-kadm5.acl-if-it-doesn-t-exist.diff: Fix kadmind startup issue
-    if kadm5.acl doesn't exist. (LP: #1772447)
   * fix-fontawesome-path.diff: Fix the path to font-awesome. (LP:
     #1772921)
   * fix-krb5kdc-cert-path.diff: Apache can't access KDC certs, move them
     to /var/lib/ipa/certs. (LP: #1772447)
   * ipa-httpd-pwdreader-force-fqdn.diff: Make sure HOSTNAME is a FQDN. (LP:
     #1769485)
-  * dont-allow-compressed-certs.diff: mod_deflate is enabled by default on
-    Debian, but the current apache config doesn't know how to uncompress the
-    received cert data so disallow gzip content for now. (LP: #1772450)
   * control: Add libjs-scriptaculous to server depends.
   * fix-gzip-path.diff: Fix path to gzip. (LP: #1778236)
 

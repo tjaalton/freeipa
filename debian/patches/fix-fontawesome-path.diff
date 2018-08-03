@@ -1,6 +1,6 @@
 --- a/install/share/ipa.conf.template
 +++ b/install/share/ipa.conf.template
-@@ -181,7 +181,7 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+@@ -186,7 +186,7 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  #  List explicitly only the fonts we want to serve
  Alias /ipa/ui/fonts/open-sans "${FONTS_DIR}/open-sans"
@@ -11,14 +11,14 @@
    AllowOverride None
 --- a/ipaplatform/base/paths.py
 +++ b/ipaplatform/base/paths.py
-@@ -244,6 +244,7 @@ class BasePathNamespace(object):
+@@ -245,6 +245,7 @@ class BasePathNamespace(object):
      SMBD = "/usr/sbin/smbd"
      USERADD = "/usr/sbin/useradd"
      FONTS_DIR = "/usr/share/fonts"
 +    FONT_AWESOME_DIR = "fontawesome"
      USR_SHARE_IPA_DIR = "/usr/share/ipa/"
+     USR_SHARE_IPA_CLIENT_DIR = "/usr/share/ipa/client"
      CA_TOPOLOGY_ULDIF = "/usr/share/ipa/ca-topology.uldif"
-     IPA_HTML_DIR = "/usr/share/ipa/html"
 --- a/ipaplatform/debian/paths.py
 +++ b/ipaplatform/debian/paths.py
 @@ -87,6 +87,7 @@ class DebianPathNamespace(BasePathNamesp
@@ -31,7 +31,7 @@
      CACERT_PEM = "/var/lib/krb5kdc/cacert.pem"
 --- a/ipaserver/install/httpinstance.py
 +++ b/ipaserver/install/httpinstance.py
-@@ -103,6 +103,7 @@ class HTTPInstance(service.Service):
+@@ -104,6 +104,7 @@ class HTTPInstance(service.Service):
              AUTOREDIR='' if auto_redirect else '#',
              CRL_PUBLISH_PATH=paths.PKI_CA_PUBLISH_DIR,
              FONTS_DIR=paths.FONTS_DIR,
