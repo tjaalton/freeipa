@@ -59,6 +59,7 @@ Build-Depends:
  python-usb (>= 1.0.0~b2),
  python-yubico,
  python3-lesscpy,
+ python3-pkg-resources,
  samba-dev,
  systemd,
  uuid-dev
