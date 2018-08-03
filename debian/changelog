@@ -25,6 +25,8 @@ freeipa (4.7.0-1) UNRELEASED; urgency=medium
   * fix-gzip-path.diff: Fix path to gzip. (LP: #1778236)
   * control, rules: Switch rhino to nodejs for ui build.
   * d/s/local-options: Add some files to ignore.
+  * control, copyright: Add libjs-uglify to build-depends, the embedded
+    copy was removed.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 

@@ -14,6 +14,7 @@ Build-Depends:
  krb5-user,
  libcmocka-dev,
  libini-config-dev,
+ libjs-uglify,
  libkrad-dev,
  libkrb5-dev (>= 1.16),
  libldap2-dev,

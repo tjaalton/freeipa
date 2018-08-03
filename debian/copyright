@@ -80,16 +80,6 @@ Files: install/ui/less/font-awesome/*
 Copyright: 2012-2013, Dave Gandy <drgandy@alum.mit.edu>
 License: MIT
 
-Files: install/ui/util/uglifyjs/lib/consolidator.js
-Copyright: 2012, Robert Gust-Bardon
-License: BSD-2-clause
-
-Files: install/ui/util/uglifyjs/lib/parse-js.js
-       install/ui/util/uglifyjs/lib/process.js
-       install/ui/util/uglifyjs/lib/squeeze-more.js
-Copyright: 2010, Mihai Bazon <mihai.bazon@gmail.com>
-License: BSD-2-clause
-
 Files: install/ui/util/build/build.js
        install/ui/util/build/_base/configRhino.js
        install/ui/build/dojo/dojo.js
