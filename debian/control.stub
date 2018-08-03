@@ -58,6 +58,7 @@ Build-Depends:
  python-sss (>= 1.14.0),
  python-usb (>= 1.0.0~b2),
  python-yubico,
+ python3-lesscpy,
  samba-dev,
  systemd,
  uuid-dev
