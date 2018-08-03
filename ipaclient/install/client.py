@@ -20,6 +20,7 @@ import getpass
 import gssapi
 import netifaces
 import os
+import re
 import SSSDConfig
 import shutil
 import socket
@@ -60,6 +61,7 @@ from ipapython.ipautil import (
     user_input,
 )
 from ipapython.ssh import SSHPublicKey
+from ipapython import version
 
 from . import automount, ipadiscovery, timeconf, sssd
 from .ipachangeconf import IPAChangeConf
@@ -199,6 +201,31 @@ def nssldap_exists():
                 pass
 
     return (retval, files_found)
+
+
+def check_ldap_conf(conf=paths.OPENLDAP_LDAP_CONF,
+                    error_rval=CLIENT_INSTALL_ERROR):
+    if not os.path.isfile(conf):
+        return False
+
+    pat = re.compile(r"^\s*(PORT|HOST).*")
+    unsupported = set()
+
+    with open(conf) as f:
+        for line in f:
+            mo = pat.match(line)
+            if mo is not None:
+                unsupported.add(mo.group(1))
+
+    if unsupported:
+        raise ScriptError(
+            "'{}' contains deprecated and unsupported entries: {}".format(
+                conf, ", ".join(sorted(unsupported))
+            ),
+            rval=error_rval
+        )
+    else:
+        return True
 
 
 def delete_ipa_domain():
@@ -533,13 +560,14 @@ def configure_openldap_conf(fstore, cli_basedn, cli_server):
         {
             'name': 'comment',
             'type': 'comment',
-            'value': '   In case any of them were set, a comment with '
-                     'trailing note'
+            'value': '   In case any of them were set, a comment has been '
+                     'inserted and'
         },
         {
             'name': 'comment',
             'type': 'comment',
-            'value': '   "# modified by IPA" note has been inserted.'
+            'value': '   "# CONF_NAME modified by IPA" added to the line '
+                     'above.'
         },
         {
             'name': 'comment',
@@ -641,7 +669,7 @@ def configure_krb5_conf(
     # First, write a snippet to krb5.conf.d.  Currently this doesn't support
     # templating, but that could be changed in the future.
     template = os.path.join(
-        paths.USR_SHARE_IPA_DIR,
+        paths.USR_SHARE_IPA_CLIENT_DIR,
         os.path.basename(paths.KRB5_FREEIPA) + ".template"
     )
     shutil.copy(template, paths.KRB5_FREEIPA)
@@ -796,6 +824,7 @@ def configure_certmonger(
     cmonger = services.knownservices.certmonger
     try:
         cmonger.enable()
+        cmonger.start()
     except Exception as e:
         logger.error(
             "Failed to configure automatic startup of the %s daemon: %s",
@@ -807,19 +836,24 @@ def configure_certmonger(
     subject = str(DN(('CN', hostname), subject_base))
     passwd_fname = os.path.join(paths.IPA_NSSDB_DIR, 'pwdfile.txt')
     try:
-        certmonger.request_cert(
+        certmonger.request_and_wait_for_cert(
             certpath=paths.IPA_NSSDB_DIR,
             storage='NSSDB',
             nickname='Local IPA host',
             subject=subject,
             dns=[hostname],
             principal=principal,
-            passwd_fname=passwd_fname
+            passwd_fname=passwd_fname,
+            resubmit_timeout=120,
         )
-    except Exception as ex:
-        logger.error(
-            "%s request for host certificate failed: %s",
-            cmonger.service_name, ex)
+    except Exception as e:
+        logger.exception("certmonger request failed")
+        raise ScriptError(
+            "{} request for host certificate failed: {}".format(
+                cmonger.service_name, e
+            ),
+            rval=CLIENT_INSTALL_ERROR
+        )
 
 
 def configure_sssd_conf(
@@ -861,7 +895,7 @@ def configure_sssd_conf(
             logger.info(
                 "The old /etc/sssd/sssd.conf is backed up and "
                 "will be restored during uninstall.")
-        logger.info("New SSSD config will be created")
+        logger.debug("New SSSD config will be created")
         sssdconfig = SSSDConfig.SSSDConfig()
         sssdconfig.new_config()
 
@@ -1246,10 +1280,9 @@ def do_nsupdate(update_txt):
     logger.debug("Writing nsupdate commands to %s:", UPDATE_FILE)
     logger.debug("%s", update_txt)
 
-    update_fd = open(UPDATE_FILE, "w")
-    update_fd.write(update_txt)
-    update_fd.flush()
-    update_fd.close()
+    with open(UPDATE_FILE, "w") as f:
+        f.write(update_txt)
+        ipautil.flush_sync(f)
 
     result = False
     try:
@@ -1572,7 +1605,7 @@ def cert_summary(msg, certs, indent='    '):
 
 def get_certs_from_ldap(server, base_dn, realm, ca_enabled):
     ldap_uri = ipaldap.get_ldap_uri(server)
-    conn = ipaldap.LDAPClient(ldap_uri, sasl_nocanon=True)
+    conn = ipaldap.LDAPClient(ldap_uri)
     try:
         conn.gssapi_bind()
         certs = certstore.get_ca_certs(conn, base_dn, realm, ca_enabled)
@@ -1852,7 +1885,7 @@ def get_ca_certs(fstore, options, server, basedn, realm):
 
     if ca_certs is not None:
         try:
-            x509.write_certificate_list(ca_certs, ca_file)
+            x509.write_certificate_list(ca_certs, ca_file, mode=0o644)
         except Exception as e:
             if os.path.exists(ca_file):
                 try:
@@ -1989,6 +2022,10 @@ def install_check(options):
     global client_domain
     global cli_basedn
 
+    print("This program will set up FreeIPA client.")
+    print("Version {}".format(version.VERSION))
+    print("")
+
     cli_domain_source = 'Unknown source'
     cli_server_source = 'Unknown source'
 
@@ -2007,6 +2044,8 @@ def install_check(options):
             "If you want to reinstall the IPA client, uninstall it first "
             "using 'ipa-client-install --uninstall'.")
         raise ScriptError(rval=CLIENT_ALREADY_CONFIGURED)
+
+    check_ldap_conf()
 
     if options.conf_ntp:
         try:
@@ -2042,7 +2081,7 @@ def install_check(options):
             rval=CLIENT_INSTALL_ERROR
         )
 
-    if (hostname == 'localhost') or (hostname == 'localhost.localdomain'):
+    if hostname in ('localhost', 'localhost.localdomain'):
         raise ScriptError(
             "Invalid hostname, '{}' must not be used.".format(hostname),
             rval=CLIENT_INSTALL_ERROR)
@@ -2488,8 +2527,8 @@ def _install(options):
     elif options.on_master:
         # If we're on master skipping the time sync here because it was done
         # in ipa-server-install
-        logger.info("Skipping attempt to configure and synchronize time with"
-                    " chrony server as it has been already done on master.")
+        logger.debug("Skipping attempt to configure and synchronize time with"
+                     " chrony server as it has been already done on master.")
     else:
         logger.info("Skipping chrony configuration")
 
@@ -2841,10 +2880,14 @@ def _install(options):
 
     x509.write_certificate_list(
         [c for c, n, t, u in ca_certs if t is not False],
-        paths.KDC_CA_BUNDLE_PEM)
+        paths.KDC_CA_BUNDLE_PEM,
+        mode=0o644
+    )
     x509.write_certificate_list(
         [c for c, n, t, u in ca_certs if t is not False],
-        paths.CA_BUNDLE_PEM)
+        paths.CA_BUNDLE_PEM,
+        mode=0o644
+    )
 
     # Add the CA certificates to the IPA NSS database
     logger.debug("Adding CA certificates to the IPA NSS database.")
@@ -2929,8 +2972,23 @@ def _install(options):
         tasks.modify_nsswitch_pam_stack(
             sssd=options.sssd,
             mkhomedir=options.mkhomedir,
-            statestore=statestore
+            statestore=statestore,
+            sudo=options.conf_sudo
         )
+        # if mkhomedir, make sure oddjobd is enabled and started
+        if options.mkhomedir:
+            oddjobd = services.service('oddjobd', api)
+            running = oddjobd.is_running()
+            enabled = oddjobd.is_enabled()
+            statestore.backup_state('oddjobd', 'running', running)
+            statestore.backup_state('oddjobd', 'enabled', enabled)
+            try:
+                if not enabled:
+                    oddjobd.enable()
+                if not running:
+                    oddjobd.start()
+            except Exception as e:
+                logger.critical("Unable to start oddjobd: %s", str(e))
 
         logger.info("%s enabled", "SSSD" if options.sssd else "LDAP")
 
@@ -3056,9 +3114,10 @@ def uninstall(options):
 
     try:
         run([paths.IPA_CLIENT_AUTOMOUNT, "--uninstall", "--debug"])
-    except Exception as e:
-        logger.error(
-            "Unconfigured automount client failed: %s", str(e))
+    except CalledProcessError as e:
+        if e.returncode != CLIENT_NOT_CONFIGURED:
+            logger.error(
+                "Unconfigured automount client failed: %s", str(e))
 
     # Reload the state as automount unconfigure may have modified it
     fstore._load()
@@ -3173,6 +3232,20 @@ def uninstall(options):
         except Exception as e:
             logger.error(
                 "Failed to remove Kerberos service principals: %s", str(e))
+
+    # Restore oddjobd to its original state
+    oddjobd = services.service('oddjobd', api)
+    if not statestore.restore_state('oddjobd', 'running'):
+        try:
+            oddjobd.stop()
+        except Exception:
+            pass
+
+    if not statestore.restore_state('oddjobd', 'enabled'):
+        try:
+            oddjobd.disable()
+        except Exception:
+            pass
 
     logger.info("Disabling client Kerberos and LDAP configurations")
     was_sssd_installed = False

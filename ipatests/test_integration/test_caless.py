@@ -173,7 +173,7 @@ class CALessBase(IntegrationTest):
                        http_pin=_DEFAULT, dirsrv_pin=_DEFAULT, pkinit_pin=None,
                        root_ca_file='root.pem', pkinit_pkcs12_exists=False,
                        pkinit_pkcs12='server-kdc.p12', unattended=True,
-                       stdin_text=None):
+                       stdin_text=None, extra_args=None):
         """Install a CA-less server
 
         Return value is the remote ipa-server-install command
@@ -183,12 +183,16 @@ class CALessBase(IntegrationTest):
 
         destname = functools.partial(os.path.join, host.config.test_dir)
 
-        extra_args = [
+        std_args = [
             '--http-cert-file', destname(http_pkcs12),
             '--dirsrv-cert-file', destname(dirsrv_pkcs12),
             '--ca-cert-file', destname(root_ca_file),
             '--ip-address', host.ip
         ]
+        if extra_args:
+            extra_args.extend(std_args)
+        else:
+            extra_args = std_args
 
         if http_pin is _DEFAULT:
             http_pin = cls.cert_password
@@ -451,7 +455,7 @@ class TestServerInstall(CALessBase):
                      'The full certificate chain is not present in '
                      '%s/server.p12' % self.master.config.test_dir)
 
-    @pytest.mark.xfail(reason='Ticket N 6289')
+    @pytest.mark.xfail(reason='Ticket N 6289', strict=True)
     @server_install_teardown
     def test_ca_2_certs(self):
         "IPA server install with CA PEM file with 2 certificates"
@@ -514,7 +518,7 @@ class TestServerInstall(CALessBase):
                      'ipa-server-install: error: You must specify '
                      '--dirsrv-pin with --dirsrv-cert-file')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378')
+    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @server_install_teardown
     def test_incorect_http_pin(self):
         "IPA server install with incorrect HTTP PKCS#12 password"
@@ -525,7 +529,7 @@ class TestServerInstall(CALessBase):
         result = self.install_server(http_pin='bad<pin>')
         assert_error(result, 'incorrect password for pkcs#12 file server.p12')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378')
+    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @server_install_teardown
     def test_incorect_ds_pin(self):
         "IPA server install with incorrect DS PKCS#12 password"
@@ -868,7 +872,7 @@ class TestReplicaInstall(CALessBase):
         assert_error(result, 'Failed to open %s/does_not_exist' %
                      self.master.config.test_dir)
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378')
+    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @replica_install_teardown
     def test_incorect_http_pin(self):
         "IPA replica install with incorrect HTTP PKCS#12 password"
@@ -879,7 +883,7 @@ class TestReplicaInstall(CALessBase):
         assert result.returncode > 0
         assert_error(result, 'incorrect password for pkcs#12 file replica.p12')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378')
+    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @replica_install_teardown
     def test_incorect_ds_pin(self):
         "IPA replica install with incorrect DS PKCS#12 password"
@@ -1181,6 +1185,41 @@ class TestReplicaInstall(CALessBase):
         if self.domain_level > DOMAIN_LEVEL_0:
             self.verify_installation()
 
+    @replica_install_teardown
+    def test_certs_with_no_password(self):
+        # related to https://pagure.io/freeipa/issue/7274
+
+        self.create_pkcs12('ca1/replica', filename='http.p12',
+                           password='')
+        self.create_pkcs12('ca1/replica', filename='dirsrv.p12',
+                           password='')
+        self.prepare_cacert('ca1')
+
+        self.prepare_replica(http_pkcs12='http.p12',
+                             dirsrv_pkcs12='dirsrv.p12',
+                             http_pin='', dirsrv_pin='')
+        if self.domain_level > DOMAIN_LEVEL_0:
+            self.verify_installation()
+
+    @replica_install_teardown
+    def test_certs_with_no_password_interactive(self):
+        # related to https://pagure.io/freeipa/issue/7274
+
+        self.create_pkcs12('ca1/replica', filename='http.p12',
+                           password='')
+        self.create_pkcs12('ca1/replica', filename='dirsrv.p12',
+                           password='')
+        self.prepare_cacert('ca1')
+        stdin_text = '\n\nyes'
+
+        result = self.prepare_replica(http_pkcs12='http.p12',
+                                      dirsrv_pkcs12='dirsrv.p12',
+                                      http_pin=None, dirsrv_pin=None,
+                                      unattended=False, stdin_text=stdin_text)
+        assert result.returncode == 0
+        if self.domain_level > DOMAIN_LEVEL_0:
+            self.verify_installation()
+
 
 class TestClientInstall(CALessBase):
     num_clients = 1
@@ -1340,7 +1379,7 @@ class TestCertInstall(CALessBase):
                                   cert_exists=False)
         assert_error(result, 'Failed to open does_not_exist')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378')
+    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     def test_incorect_http_pin(self):
         "Install new HTTP certificate with incorrect PKCS#12 password"
 
@@ -1348,7 +1387,7 @@ class TestCertInstall(CALessBase):
         assert_error(result,
                      'incorrect password for pkcs#12 file server.p12')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378')
+    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     def test_incorect_dirsrv_pin(self):
         "Install new DS certificate with incorrect PKCS#12 password"
 
@@ -1434,7 +1473,7 @@ class TestCertInstall(CALessBase):
         result = self.certinstall('w', 'ca1/subca/server')
         assert result.returncode == 0, result.stderr_text
 
-    @pytest.mark.xfail(reason='freeipa ticket 6959')
+    @pytest.mark.xfail(reason='freeipa ticket 6959', strict=True)
     def test_ds_intermediate_ca(self):
         "Install new DS certificate issued by intermediate CA"
 

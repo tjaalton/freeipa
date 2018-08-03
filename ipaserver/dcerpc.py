@@ -32,6 +32,7 @@ from ipalib import api, _
 from ipalib import errors
 from ipapython import ipautil
 from ipapython.dn import DN
+from ipapython.dnsutil import query_srv
 from ipapython.ipaldap import ldap_initialize
 from ipaserver.install import installutils
 from ipaserver.dcerpc_common import (TRUST_BIDIRECTIONAL,
@@ -55,7 +56,6 @@ import samba
 import ldap as _ldap
 from ipapython import ipaldap
 from ipapython.dnsutil import DNSName
-from dns import resolver, rdatatype
 from dns.exception import DNSException
 import pysss_nss_idmap
 import pysss
@@ -68,7 +68,7 @@ from time import sleep
 try:
     from ldap.controls import RequestControl as LDAPControl
 except ImportError:
-    from ldap.controls import LDAPControl as LDAPControl
+    from ldap.controls import LDAPControl
 
 if six.PY3:
     unicode = str
@@ -728,11 +728,8 @@ class DomainValidator(object):
                     conn = ipaldap.LDAPClient(
                         ldap_uri,
                         no_schema=True,
-                        decode_attrs=False,
-                        sasl_nocanon=True)
-                    # sasl_nocanon used to avoid hard requirement for PTR
-                    # records pointing back to the same host name
-
+                        decode_attrs=False
+                    )
                     conn.gssapi_bind()
 
                     if basedn is None:
@@ -749,6 +746,7 @@ class DomainValidator(object):
                         logger.warning('%s', msg)
 
                 return entries
+        return None
 
     def __retrieve_trusted_domain_gc_list(self, domain):
         """
@@ -802,7 +800,7 @@ class DomainValidator(object):
             gc_name = '_gc._tcp.%s.' % info['dns_domain']
 
             try:
-                answers = resolver.query(gc_name, rdatatype.SRV)
+                answers = query_srv(gc_name)
             except DNSException as e:
                 answers = []
 
@@ -1051,7 +1049,7 @@ class TrustDomainInstance(object):
         Only top level name and top level name exclusions are handled here.
         """
         if not another_domain.ftinfo_records:
-            return
+            return None
 
         ftinfo_records = []
         info = lsa.ForestTrustInformation()
@@ -1140,22 +1138,41 @@ class TrustDomainInstance(object):
 
                 # Copy over the entries, extend with TLN exclusion
                 entries = []
+                is_our_record = False
                 for e in dominfo.entries:
                     e1 = lsa.ForestTrustRecord()
                     e1.type = e.type
                     e1.flags = e.flags
                     e1.time = e.time
                     e1.forest_trust_data = e.forest_trust_data
+
+                    # Search for a match in the topology of another domain
+                    # if there is a match, we have to convert a record
+                    # into a TLN exclusion to allow its routing to the
+                    # another domain
+                    for r in another_domain.ftinfo_records:
+                        if r['rec_name'] == e.forest_trust_data.string:
+                            is_our_record = True
+
+                            # Convert e1 into an exclusion record
+                            e1.type = lsa.LSA_FOREST_TRUST_TOP_LEVEL_NAME_EX
+                            e1.flags = 0
+                            e1.time = trust_timestamp
+                            break
                     entries.append(e1)
 
-                # Create TLN exclusion record
-                record = lsa.ForestTrustRecord()
-                record.type = lsa.LSA_FOREST_TRUST_TOP_LEVEL_NAME_EX
-                record.flags = 0
-                record.time = trust_timestamp
-                record.forest_trust_data.string = \
-                    another_domain.info['dns_domain']
-                entries.append(record)
+                # If no candidate for the exclusion entry was found
+                # make sure it is the other domain itself, this covers
+                # a most common case
+                if not is_our_record:
+                    # Create TLN exclusion record for the top level domain
+                    record = lsa.ForestTrustRecord()
+                    record.type = lsa.LSA_FOREST_TRUST_TOP_LEVEL_NAME_EX
+                    record.flags = 0
+                    record.time = trust_timestamp
+                    record.forest_trust_data.string = \
+                        another_domain.info['dns_domain']
+                    entries.append(record)
 
                 fti = lsa.ForestTrustInformation()
                 fti.count = len(entries)
@@ -1273,7 +1290,7 @@ class TrustDomainInstance(object):
                 ttype = trust_type_string(
                     res.info_ex.trust_type, res.info_ex.trust_attributes
                 )
-                err = unicode(msg).format(
+                err = msg.format(
                     ipa_domain=another_domain.info['dns_domain'],
                     trust_type=ttype)
 
@@ -1709,8 +1726,8 @@ class TrustDomainJoins(object):
         self.local_domain.establish_trust(self.remote_domain,
                                           trustdom_passwd,
                                           trust_type, trust_external)
-        return dict(
-                    local=self.local_domain,
-                    remote=self.remote_domain,
-                    verified=False
-                   )
+        return {
+            'local': self.local_domain,
+            'remote': self.remote_domain,
+            'verified': False,
+        }

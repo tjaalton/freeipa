@@ -20,13 +20,13 @@
 #
 
 import binascii
+import errno
 import logging
 import time
 import datetime
 from decimal import Decimal
 from copy import deepcopy
 import contextlib
-import collections
 import os
 import pwd
 import warnings
@@ -51,6 +51,13 @@ from ipapython.ipautil import format_netloc, CIDict
 from ipapython.dn import DN
 from ipapython.dnsutil import DNSName
 from ipapython.kerberos import Principal
+
+# pylint: disable=no-name-in-module, import-error
+if six.PY3:
+    from collections.abc import MutableMapping
+else:
+    from collections import MutableMapping
+# pylint: enable=no-name-in-module, import-error
 
 if six.PY3:
     unicode = str
@@ -87,28 +94,34 @@ if six.PY2 and hasattr(ldap, 'LDAPBytesWarning'):
 
 def ldap_initialize(uri, cacertfile=None):
     """Wrapper around ldap.initialize()
+
+    The function undoes global and local ldap.conf settings that may cause
+    issues or reduce security:
+
+    * Canonization of SASL host names is disabled.
+    * With cacertfile=None, the connection uses OpenSSL's default verify
+      locations, also known as system-wide trust store.
+    * Cert validation is enforced.
+    * SSLv2 and SSLv3 are disabled.
     """
     conn = ldap.initialize(uri)
 
+    # Do not perform reverse DNS lookups to canonicalize SASL host names
+    conn.set_option(ldap.OPT_X_SASL_NOCANON, ldap.OPT_ON)
+
     if not uri.startswith('ldapi://'):
         if cacertfile:
+            if not os.path.isfile(cacertfile):
+                raise IOError(errno.ENOENT, cacertfile)
             conn.set_option(ldap.OPT_X_TLS_CACERTFILE, cacertfile)
-            newctx = True
-        else:
-            newctx = False
 
-        req_cert = conn.get_option(ldap.OPT_X_TLS_REQUIRE_CERT)
-        if req_cert != ldap.OPT_X_TLS_DEMAND:
-            # libldap defaults to cert validation, but the default can be
-            # overridden in global or user local ldap.conf.
-            conn.set_option(
-                ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND
-            )
-            newctx = True
-
-        # reinitialize TLS context
-        if newctx:
-            conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
+        # SSLv3 and SSLv2 are insecure
+        conn.set_option(ldap.OPT_X_TLS_PROTOCOL_MIN, 0x301)  # TLS 1.0
+        # libldap defaults to cert validation, but the default can be
+        # overridden in global or user local ldap.conf.
+        conn.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+        # reinitialize TLS context to materialize settings
+        conn.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
 
     return conn
 
@@ -195,18 +208,17 @@ class SchemaCache(object):
             info = e.args[0].get('info', '').strip()
             raise errors.DatabaseError(desc = u'uri=%s' % url,
                                 info = u'Unable to retrieve LDAP schema: %s: %s' % (desc, info))
-        except IndexError:
-            # no 'cn=schema' entry in LDAP? some servers use 'cn=subschema'
-            # TODO: DS uses 'cn=schema', support for other server?
-            #       raise a more appropriate exception
-            raise
+
+        # no 'cn=schema' entry in LDAP? some servers use 'cn=subschema'
+        # TODO: DS uses 'cn=schema', support for other server?
+        #       raise a more appropriate exception
 
         return ldap.schema.SubSchema(schema_entry[1])
 
 schema_cache = SchemaCache()
 
 
-class LDAPEntry(collections.MutableMapping):
+class LDAPEntry(MutableMapping):
     __slots__ = ('_conn', '_dn', '_names', '_nice', '_raw', '_sync',
                  '_not_list', '_orig_raw', '_raw_view',
                  '_single_value_view')
@@ -570,7 +582,7 @@ class LDAPEntry(collections.MutableMapping):
         return iter(self._nice)
 
 
-class LDAPEntryView(collections.MutableMapping):
+class LDAPEntryView(MutableMapping):
     __slots__ = ('_entry',)
 
     def __init__(self, entry):
@@ -733,7 +745,7 @@ class LDAPClient(object):
 
     def __init__(self, ldap_uri, start_tls=False, force_schema_updates=False,
                  no_schema=False, decode_attrs=True, cacert=None,
-                 sasl_nocanon=False):
+                 sasl_nocanon=True):
         """Create LDAPClient object.
 
         :param ldap_uri: The LDAP URI to connect to
@@ -1016,7 +1028,12 @@ class LDAPClient(object):
         except ldap.NO_SUCH_OBJECT:
             raise errors.NotFound(reason=arg_desc or 'no such entry')
         except ldap.ALREADY_EXISTS:
+            # entry already exists
             raise errors.DuplicateEntry()
+        except ldap.TYPE_OR_VALUE_EXISTS:
+            # attribute type or attribute value already exists, usually only
+            # occurs, when two machines try to write at the same time.
+            raise errors.DuplicateEntry(message=desc)
         except ldap.CONSTRAINT_VIOLATION:
             # This error gets thrown by the uniqueness plugin
             _msg = 'Another entry with the same attribute value already exists'
@@ -1120,8 +1137,10 @@ class LDAPClient(object):
     def _connect(self):
         with self.error_handler():
             conn = ldap_initialize(self.ldap_uri, cacertfile=self._cacert)
-            if self._sasl_nocanon:
-                conn.set_option(ldap.OPT_X_SASL_NOCANON, ldap.OPT_ON)
+            # SASL_NOCANON is set to ON in Fedora's default ldap.conf and
+            # in the ldap_initialize() function.
+            if not self._sasl_nocanon:
+                conn.set_option(ldap.OPT_X_SASL_NOCANON, ldap.OPT_OFF)
 
             if self._start_tls:
                 conn.start_tls_s()
@@ -1226,7 +1245,7 @@ class LDAPClient(object):
 
         assert isinstance(filters, (list, tuple))
 
-        filters = [f for f in filters if f]
+        filters = [fx for fx in filters if fx]
         if filters and rules == cls.MATCH_NONE:  # unary operator
             return '(%s%s)' % (cls.MATCH_NONE,
                                cls.combine_filters(filters, cls.MATCH_ANY))

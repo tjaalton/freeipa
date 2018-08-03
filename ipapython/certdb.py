@@ -205,6 +205,17 @@ def verify_kdc_cert_validity(kdc_cert, ca_certs, realm):
             raise ValueError("invalid for realm %s" % realm)
 
 
+CERT_RE = re.compile(
+    r'^(?P<nick>.+?)\s+(?P<flags>\w*,\w*,\w*)\s*$'
+)
+KEY_RE = re.compile(
+    r'^<\s*(?P<slot>\d+)>'
+    r'\s+(?P<algo>\w+)'
+    r'\s+(?P<keyid>[0-9a-z]+)'
+    r'\s+(?P<nick>.*?)\s*$'
+)
+
+
 class NSSDatabase(object):
     """A general-purpose wrapper around a NSS cert database
 
@@ -354,7 +365,9 @@ class NSSDatabase(object):
                                  os.O_CREAT | os.O_WRONLY,
                                  pwdfilemode), 'w', closefd=True) as f:
                 f.write(ipautil.ipa_generate_password())
+                # flush and sync tempfile inode
                 f.flush()
+                os.fsync(f.fileno())
 
         # In case dbtype is auto, let certutil decide which type of DB
         # to create.
@@ -465,10 +478,10 @@ class NSSDatabase(object):
         # FIXME, this relies on NSS never changing the formatting of certutil
         certlist = []
         for cert in certs:
-            match = re.match(r'^(.+?)\s+(\w*,\w*,\w*)\s*$', cert)
+            match = CERT_RE.match(cert)
             if match:
-                nickname = match.group(1)
-                trust_flags = parse_trust_flags(match.group(2))
+                nickname = match.group('nick')
+                trust_flags = parse_trust_flags(match.group('flags'))
                 certlist.append((nickname, trust_flags))
 
         return tuple(certlist)
@@ -481,10 +494,14 @@ class NSSDatabase(object):
             return ()
         keylist = []
         for line in result.output.splitlines():
-            mo = re.match(r'^<\s*(\d+)>\s+(\w+)\s+([0-9a-z]+)\s+(.*)$', line)
+            mo = KEY_RE.match(line)
             if mo is not None:
-                slot, algo, keyid, nick = mo.groups()
-                keylist.append((int(slot), algo, keyid, nick.strip()))
+                keylist.append((
+                    int(mo.group('slot')),
+                    mo.group('algo'),
+                    mo.group('keyid'),
+                    mo.group('nick'),
+                ))
         return tuple(keylist)
 
     def find_server_certs(self):

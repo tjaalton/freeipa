@@ -34,6 +34,7 @@ from six.moves.configparser import RawConfigParser
 from ipalib import api
 from ipalib import x509
 from ipaplatform.paths import paths
+from ipapython import directivesetter
 from ipapython import ipautil
 from ipapython.dn import DN
 from ipaserver.install import cainstance
@@ -115,6 +116,7 @@ class KRAInstance(DogtagInstance):
                 "A Dogtag CA must be installed first")
 
         if promote:
+            self.step("creating ACIs for admin", self.add_ipaca_aci)
             self.step("creating installation admin user", self.setup_admin)
         self.step("configuring KRA instance", self.__spawn_instance)
         if not self.clone:
@@ -362,7 +364,7 @@ class KRAInstance(DogtagInstance):
         write operations.
         """
         with installutils.stopped_service('pki-tomcatd', 'pki-tomcat'):
-            installutils.set_directive(
+            directivesetter.set_directive(
                 self.config,
                 'kra.ephemeralRequests',
                 'true', quotes=False, separator='=')
@@ -391,4 +393,4 @@ class KRAInstance(DogtagInstance):
                 directives[nickname], cert)
 
     def __enable_instance(self):
-        self.ldap_enable('KRA', self.fqdn, None, self.suffix)
+        self.ldap_configure('KRA', self.fqdn, None, self.suffix)

@@ -14,8 +14,11 @@ from ipaplatform.base.constants import BaseConstantsNamespace
 
 class DebianConstantsNamespace(BaseConstantsNamespace):
     HTTPD_USER = "www-data"
+    HTTPD_GROUP = "www-data"
     NAMED_USER = "bind"
     NAMED_GROUP = "bind"
+    NAMED_DATA_DIR = ""
+    NAMED_ZONE_COMMENT = "//"
     # ntpd init variable used for daemon options
     NTPD_OPTS_VAR = "NTPD_OPTS"
     # quote used for daemon options

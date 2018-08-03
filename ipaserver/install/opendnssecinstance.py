@@ -14,8 +14,8 @@ from subprocess import CalledProcessError
 
 from ipalib.install import sysrestore
 from ipaserver.install import service
-from ipaserver.install import installutils
 from ipapython.dn import DN
+from ipapython import directivesetter
 from ipapython import ipautil
 from ipaplatform import services
 from ipaplatform.constants import constants
@@ -140,8 +140,8 @@ class OpenDNSSECInstance(service.Service):
 
     def __enable(self):
         try:
-            self.ldap_enable('DNSSEC', self.fqdn, None,
-                             self.suffix, self.extra_config)
+            self.ldap_configure('DNSSEC', self.fqdn, None,
+                                self.suffix, self.extra_config)
         except errors.DuplicateEntry:
             logger.error("DNSSEC service already exists")
 
@@ -199,10 +199,10 @@ class OpenDNSSECInstance(service.Service):
         if not self.fstore.has_file(paths.SYSCONFIG_ODS):
             self.fstore.backup_file(paths.SYSCONFIG_ODS)
 
-        installutils.set_directive(paths.SYSCONFIG_ODS,
-                                   'SOFTHSM2_CONF',
-                                    paths.DNSSEC_SOFTHSM2_CONF,
-                                    quotes=False, separator='=')
+        directivesetter.set_directive(paths.SYSCONFIG_ODS,
+                                      'SOFTHSM2_CONF',
+                                      paths.DNSSEC_SOFTHSM2_CONF,
+                                      quotes=False, separator='=')
 
     def __setup_ownership_file_modes(self):
         assert self.ods_uid is not None
@@ -302,10 +302,10 @@ class OpenDNSSECInstance(service.Service):
 
     def __setup_dnskeysyncd(self):
         # set up dnskeysyncd this is DNSSEC master
-        installutils.set_directive(paths.SYSCONFIG_IPA_DNSKEYSYNCD,
-                                   'ISMASTER',
-                                   '1',
-                                   quotes=False, separator='=')
+        directivesetter.set_directive(paths.SYSCONFIG_IPA_DNSKEYSYNCD,
+                                      'ISMASTER',
+                                      '1',
+                                      quotes=False, separator='=')
 
     def __start(self):
         self.restart()  # needed to reload conf files
@@ -333,9 +333,9 @@ class OpenDNSSECInstance(service.Service):
 
         # remove directive from ipa-dnskeysyncd, this server is not DNSSEC
         # master anymore
-        installutils.set_directive(paths.SYSCONFIG_IPA_DNSKEYSYNCD,
-                                   'ISMASTER', None,
-                                   quotes=False, separator='=')
+        directivesetter.set_directive(paths.SYSCONFIG_IPA_DNSKEYSYNCD,
+                                      'ISMASTER', None,
+                                      quotes=False, separator='=')
 
         restore_list = [paths.OPENDNSSEC_CONF_FILE, paths.OPENDNSSEC_KASP_FILE,
                         paths.SYSCONFIG_ODS, paths.OPENDNSSEC_ZONELIST_FILE]
@@ -372,7 +372,7 @@ class OpenDNSSECInstance(service.Service):
 
         self.restore_state("kasp_db_configured")  # just eat state
 
-        # disabled by default, by ldap_enable()
+        # disabled by default, by ldap_configure()
         if enabled:
             self.enable()
 

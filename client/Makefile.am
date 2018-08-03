@@ -80,6 +80,7 @@ ipa_join_SOURCES =		\
 	$(NULL)
 
 ipa_join_LDADD = 		\
+	$(top_builddir)/util/libutil.la	\
 	$(KRB5_LIBS)		\
 	$(LDAP_LIBS)		\
 	$(SASL_LIBS)		\
@@ -89,6 +90,7 @@ ipa_join_LDADD = 		\
 	$(NULL)
 
 SUBDIRS =			\
+	share		\
 	man			\
 	$(NULL)
 

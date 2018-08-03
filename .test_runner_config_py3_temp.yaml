@@ -30,7 +30,7 @@ steps:
   builddep:
   - rm -rf /var/cache/dnf/*
   - "dnf makecache || :"
-  - dnf builddep -y ${builddep_opts} --spec freeipa.spec.in --best --allowerasing
+  - dnf builddep -y ${builddep_opts} --spec freeipa.spec.in --best --allowerasing --setopt=install_weak_deps=False
   - dnf install -y gdb
   cleanup:
   - chown -R ${uid}:${gid} ${container_working_dir}
@@ -47,6 +47,7 @@ steps:
   configure:
   - ./autogen.sh
   install_packages:
+  - sed -i 's/%_install_langs \(.*\)/\0:fr/g' /etc/rpm/macros.image-language-conf
   - dnf install -y ${container_working_dir}/dist/rpms/*.rpm --best --allowerasing
   - dnf install -y python3-mod_wsgi --best --allowerasing  # Py3 temporary
   install_server:

@@ -23,15 +23,17 @@ import logging
 import os
 import re
 import contextlib
+from tempfile import NamedTemporaryFile
 
 from ipaplatform.paths import paths
 from ipapython.dn import DN
+from ipapython import ipautil
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_plugins.integration import tasks
 from ipatests.test_integration.test_dnssec import wait_until_record_is_signed
 from ipatests.test_integration.test_simple_replication import check_replication
 from ipatests.util import assert_deepequal
-
+from ldap.dn import escape_dn_chars
 
 logger = logging.getLogger(__name__)
 
@@ -177,8 +179,6 @@ class TestBackupAndRestore(IntegrationTest):
 
     def test_full_backup_and_restore_with_removed_users(self):
         """regression test for https://fedorahosted.org/freeipa/ticket/3866"""
-        tasks.uninstall_master(self.master)
-        tasks.install_master(self.master)
         with restore_checker(self.master):
             backup_path = backup(self.master)
 
@@ -202,8 +202,6 @@ class TestBackupAndRestore(IntegrationTest):
 
     def test_full_backup_and_restore_with_selinux_booleans_off(self):
         """regression test for https://fedorahosted.org/freeipa/ticket/4157"""
-        tasks.uninstall_master(self.master)
-        tasks.install_master(self.master)
         with restore_checker(self.master):
             backup_path = backup(self.master)
 
@@ -482,10 +480,9 @@ class TestBackupAndRestoreWithReplica(IntegrationTest):
                 "systemctl", "disable", "oddjobd"
             ])
 
-            dirman_password = self.master.config.dirman_password
             self.master.run_command(
                 ["ipa-restore", backup_path],
-                stdin_text=dirman_password + '\nyes'
+                stdin_text='yes'
             )
 
             status = self.master.run_command([
@@ -547,3 +544,117 @@ class TestUserrootFilesOwnership(IntegrationTest):
         unexp_str = "CRITICAL: db2ldif failed:"
         assert cmd.returncode == 0
         assert unexp_str not in cmd.stdout_text
+
+
+class TestBackupAndRestoreDMPassword(IntegrationTest):
+    """Negative tests for incorrect DM password"""
+    topology = 'star'
+
+    def test_restore_bad_dm_password(self):
+        """backup, uninstall, restore, wrong DM password (expect failure)"""
+        with restore_checker(self.master):
+            backup_path = backup(self.master)
+
+            # No uninstall, just pure restore, the only case where
+            # prompting for the DM password matters.
+            result = self.master.run_command(['ipa-restore', backup_path],
+                                             stdin_text='badpass\nyes',
+                                             raiseonerr=False)
+            assert result.returncode == 1
+
+    def test_restore_dirsrv_not_running(self):
+        """backup, restore, dirsrv not running (expect failure)"""
+
+        # Flying blind without the restore_checker so we can have
+        # an error thrown when dirsrv is down.
+        backup_path = backup(self.master)
+
+        self.master.run_command(['ipactl', 'stop'])
+
+        dirman_password = self.master.config.dirman_password
+        result = self.master.run_command(
+            ['ipa-restore', backup_path],
+            stdin_text=dirman_password + '\nyes',
+            raiseonerr=False)
+        assert result.returncode == 1
+
+
+class TestReplicaInstallAfterRestore(IntegrationTest):
+    """Test to check second replica installation after master restore
+
+    When master is restored from backup and replica1 is re-initialize,
+    second replica installation was failing. The issue was with ipa-backup
+    tool which was not backing up the /etc/ipa/custodia/custodia.conf and
+    /etc/ipa/custodia/server.keys.
+
+    related ticket: https://pagure.io/freeipa/issue/7247
+    """
+
+    num_replicas = 2
+
+    def test_replica_install_after_restore(self):
+        master = self.master
+        replica1 = self.replicas[0]
+        replica2 = self.replicas[1]
+
+        tasks.install_master(master)
+        tasks.install_replica(master, replica1)
+        check_replication(master, replica1, "testuser1")
+
+        # backup master.
+        backup_path = backup(master)
+
+        suffix = ipautil.realm_to_suffix(master.domain.realm)
+        suffix = escape_dn_chars(str(suffix))
+        tf = NamedTemporaryFile()
+        ldif_file = tf.name
+        entry_ldif = (
+            "dn: cn=meTo{hostname},cn=replica,"
+            "cn={suffix},"
+            "cn=mapping tree,cn=config\n"
+            "changetype: modify\n"
+            "replace: nsds5ReplicaEnabled\n"
+            "nsds5ReplicaEnabled: off\n\n"
+
+            "dn: cn=caTo{hostname},cn=replica,"
+            "cn=o\\3Dipaca,cn=mapping tree,cn=config\n"
+            "changetype: modify\n"
+            "replace: nsds5ReplicaEnabled\n"
+            "nsds5ReplicaEnabled: off").format(
+            hostname=replica1.hostname,
+            suffix=suffix)
+        master.put_file_contents(ldif_file, entry_ldif)
+
+        # disable replication agreement
+        arg = ['ldapmodify',
+               '-h', master.hostname,
+               '-p', '389', '-D',
+               str(master.config.dirman_dn),  # pylint: disable=no-member
+               '-w', master.config.dirman_password,
+               '-f', ldif_file]
+        master.run_command(arg)
+
+        # uninstall master.
+        tasks.uninstall_master(master)
+
+        # master restore.
+        dirman_password = master.config.dirman_password
+        master.run_command(['ipa-restore', backup_path],
+                           stdin_text=dirman_password + '\nyes')
+
+        # re-initialize topology after restore.
+        topo_name = "{}-to-{}".format(master.hostname, replica1.hostname)
+        for topo_suffix in 'domain', 'ca':
+            arg = ['ipa',
+                   'topologysegment-reinitialize',
+                   topo_suffix,
+                   topo_name,
+                   '--left']
+            replica1.run_command(arg)
+
+        # wait sometime for re-initialization
+        tasks.wait_for_replication(replica1.ldap_connect())
+
+        # install second replica after restore
+        tasks.install_replica(master, replica2)
+        check_replication(master, replica2, "testuser2")

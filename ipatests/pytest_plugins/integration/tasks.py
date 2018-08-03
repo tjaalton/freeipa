@@ -270,6 +270,18 @@ def enable_replication_debugging(host, log_level=0):
                      stdin_text=logging_ldif)
 
 
+def set_default_ttl_for_ipa_dns_zone(host, raiseonerr=True):
+    args = [
+        'ipa', 'dnszone-mod', host.domain.name,
+        '--default-ttl', '1',
+        '--ttl', '1'
+    ]
+    result = host.run_command(args, raiseonerr=raiseonerr, stdin_text=None)
+    if result.returncode != 0:
+        logger.info('Failed to set TTL and default TTL for DNS zone %s to 1',
+                    host.domain.name)
+
+
 def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
                    extra_args=(), domain_level=None, unattended=True,
                    stdin_text=None, raiseonerr=True):
@@ -308,6 +320,10 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
         enable_replication_debugging(host)
         setup_sssd_debugging(host)
         kinit_admin(host)
+        if setup_dns:
+            # fixup DNS zone default TTL for IPA DNS zone
+            # For tests we should not wait too long
+            set_default_ttl_for_ipa_dns_zone(host, raiseonerr=raiseonerr)
     return result
 
 
@@ -363,7 +379,7 @@ def replica_prepare(master, replica, extra_args=(),
             '-p', replica.config.dirman_password,
             replica.hostname]
     if master_authoritative_for_client_domain(master, replica):
-        args.extend(['--ip-address', replica.ip])
+        args.extend(['--ip-address', replica.ip, '--auto-reverse'])
     args.extend(extra_args)
     result = master.run_command(args, raiseonerr=raiseonerr,
                                 stdin_text=stdin_text)
@@ -431,7 +447,8 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     return result
 
 
-def install_client(master, client, extra_args=()):
+def install_client(master, client, extra_args=(),
+                   user=None, password=None):
     client.collect_log(paths.IPACLIENT_INSTALL_LOG)
 
     apply_common_fixes(client)
@@ -443,12 +460,16 @@ def install_client(master, client, extra_args=()):
     if not error:
         master.run_command(["ipa", "dnszone-mod", zone,
                             "--dynamic-update=TRUE"])
+    if user is None:
+        user = client.config.admin_name
+    if password is None:
+        password = client.config.admin_password
 
     client.run_command(['ipa-client-install', '-U',
                         '--domain', client.domain.name,
                         '--realm', client.domain.realm,
-                        '-p', client.config.admin_name,
-                        '-w', client.config.admin_password,
+                        '-p', user,
+                        '-w', password,
                         '--server', master.hostname]
                        + list(extra_args))
 
@@ -1292,6 +1313,20 @@ def run_certutil(host, args, reqdir, dbtype=None,
                             stdin_text=stdin)
 
 
+def upload_temp_contents(host, contents, encoding='utf-8'):
+    """Upload contents to a temporary file
+
+    :param host: Remote host instance
+    :param contents: file content (str, bytes)
+    :param encoding: file encoding
+    :return: Temporary file name
+    """
+    result = host.run_command(['mktemp'])
+    tmpname = result.stdout_text.strip()
+    host.put_file_contents(tmpname, contents, encoding=encoding)
+    return tmpname
+
+
 def assert_error(result, stderr_text, returncode=None):
     "Assert that `result` command failed and its stderr contains `stderr_text`"
     assert stderr_text in result.stderr_text, result.stderr_text
@@ -1369,6 +1404,18 @@ def ldappasswd_user_change(user, oldpw, newpw, master):
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_user, basedn)
+    master_ldap_uri = "ldap://{}".format(master.external_hostname)
+
+    args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
+            '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
+    master.run_command(args)
+
+
+def ldappasswd_sysaccount_change(user, oldpw, newpw, master):
+    container_sysaccounts = dict(DEFAULT_CONFIG)['container_sysaccounts']
+    basedn = master.domain.basedn
+
+    userdn = "uid={},{},{}".format(user, container_sysaccounts, basedn)
     master_ldap_uri = "ldap://{}".format(master.external_hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,

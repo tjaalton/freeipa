@@ -646,6 +646,16 @@ class UI_driver(object):
         link = self.find(text, By.LINK_TEXT, parent, strict=True)
         link.click()
 
+    def click_undo_button(self, field, parent=None):
+        """
+        Click undo button/s of particular field
+        """
+        self.assert_undo_button(field)
+        undo_btns = self.get_undo_buttons(field, parent)
+        for btn in undo_btns:
+            btn.click()
+        self.assert_undo_button(field, visible=False)
+
     def facet_button_click(self, name):
         """
         Click on facet button with given name
@@ -807,6 +817,12 @@ class UI_driver(object):
         """
         self.fill_input(name, value, "password", parent)
 
+    def fill_search_filter(self, value, parent=None):
+        search_field_s = '.search-filter input[name=filter]'
+        if not parent:
+                parent = self.get_form()
+        self.fill_text(search_field_s, value, parent)
+
     def add_multivalued(self, name, value, parent=None):
         """
         Add new value to multivalued textbox
@@ -888,6 +904,18 @@ class UI_driver(object):
                 clicked = True
 
         assert clicked, 'Value was not removed: %s' % value
+
+    def undo_all_multivalued(self, name, parent=None):
+        """
+        Undo all new values to multivalued textbox
+        """
+        if parent is None:
+            parent = self.get_form()
+        label = "div[name='{}'].multivalued-widget".format(name)
+        widget = self.find(label, By.CSS_SELECTOR, parent, strict=True)
+        add_btn = self.find("button[name=undo_all]", By.CSS_SELECTOR, widget,
+                            strict=True)
+        add_btn.click()
 
     def fill_multivalued(self, name, instructions, parent=None):
         """
@@ -1381,6 +1409,9 @@ class UI_driver(object):
             if record != last_element:
                 btn = add_another_btn
 
+            if not dialog_btn:
+                return
+
             self.dialog_button_click(btn)
             self.wait_for_request()
             self.wait_for_request()
@@ -1611,7 +1642,8 @@ class UI_driver(object):
             self.assert_record(key, negative=True)
 
     def add_table_associations(self, table_name, pkeys, parent=False,
-                               delete=False, negative=False):
+                               delete=False, confirm_btn='add',
+                               negative=False):
         """
         Add value to table (association|rule|...)
         """
@@ -1631,13 +1663,15 @@ class UI_driver(object):
             self.button_click('add')
             self.wait()
 
-        if negative:
-            self.dialog_button_click('cancel')
+        self.dialog_button_click(confirm_btn)
+
+        if confirm_btn == 'cancel':
             self.assert_record(key, parent, table_name, negative=True)
             return
-        else:
-            self.dialog_button_click('add')
         self.wait_for_request(n=2)
+
+        if negative:
+            return
 
         for key in pkeys:
             self.assert_record(key, parent, table_name)
@@ -1665,6 +1699,7 @@ class UI_driver(object):
         expand.click()
         action_link = self.find("li[data-name=%s] a" % name, By.CSS_SELECTOR,
                                 context, strict=True)
+        self.move_to_element_in_page(action_link)
         action_link.click()
         if confirm:
             self.wait(0.5)  # wait for dialog
@@ -1699,6 +1734,8 @@ class UI_driver(object):
         self.action_list_action('disable')
         self.wait_for_request(n=2)
         self.assert_no_error_dialog()
+        self.close_notifications()
+        self.move_to_element_in_page(title)
         self.assert_class(title, 'disabled')
 
     def delete_action(self, entity, pkey, action='delete', facet='search'):

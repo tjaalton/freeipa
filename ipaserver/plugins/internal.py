@@ -19,9 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""
-Plugins not accessible directly through the CLI, commands used internally
-"""
 from ipalib import Command
 from ipalib import Str
 from ipalib.frontend import Local
@@ -30,13 +27,15 @@ from ipalib.text import _
 from ipalib.util import json_serialize
 from ipalib.plugable import Registry
 
+__doc__ = _("""
+Plugins not accessible directly through the CLI, commands used internally
+""")
+
 register = Registry()
 
 @register()
 class json_metadata(Command):
-    """
-    Export plugin meta-data for the webUI.
-    """
+    __doc__ = _('Export plugin meta-data for the webUI.')
     NO_CLI = True
 
 
@@ -149,6 +148,7 @@ class json_metadata(Command):
 
 @register()
 class i18n_messages(Command):
+    __doc__ = _('Internationalization messages')
     NO_CLI = True
 
     messages = {
@@ -340,6 +340,7 @@ class i18n_messages(Command):
             "pad": _("PAD"),
         },
         "login": {
+            "authenticating": _("Authenticating"),
             "form_auth": _(
                 "<i class=\"fa fa-info-circle\"></i> To log in with "
                 "<strong>username and password</strong>, enter them in the "
@@ -349,13 +350,17 @@ class i18n_messages(Command):
                 "<i class=\"fa fa-info-circle\"></i> To log in with "
                 "<strong>Kerberos</strong>, please make sure you have valid "
                 "tickets (obtainable via kinit) and <a href='http://${host}/"
-                "ipa/config/unauthorized.html'>configured</a> the browser "
+                "ipa/config/ssbrowser.html'>configured</a> the browser "
                 "correctly, then click 'Log in'."),
+            "loading": _("Loading"),
             "loading_md": _("Loading data"),
             "login": _("Log in"),
+            "login_certificate": _("Log In Using Certificate"),
+            "login_certificate_desc": _("Log in using personal certificate"),
             "logout": _("Log out"),
             "logout_error": _("Log out error"),
             "password": _("Password"),
+            "password_and_otp": _("Password or Password+One-Time-Password"),
             "sync_otp_token": _("Sync OTP Token"),
             "username": _("Username"),
         },
@@ -924,6 +929,13 @@ class i18n_messages(Command):
             "second_otp": _("Second OTP"),
             "token_id": _("Token ID"),
             "verify_password": _("Verify Password"),
+        },
+        "profile-menu": {
+            "about": _("About"),
+            "configuration": _("Customization"),
+            "logout": _("Log out"),
+            "password_reset": _("Change password"),
+            "profile": _("Profile"),
         },
         "search": {
             "delete_confirm": _("Are you sure you want to delete selected entries?"),

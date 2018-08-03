@@ -5,17 +5,21 @@
 from __future__ import absolute_import
 
 import logging
+import time
 
 import dns.dnssec
 import dns.resolver
 import dns.name
-import time
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_plugins.integration import tasks
 from ipaplatform.paths import paths
 
 logger = logging.getLogger(__name__)
+
+# Sleep 5 seconds at most when waiting for LDAP updates
+# for DNSSEC changes. Test zones should be updated with 1 second TTL
+DNSSEC_SLEEP = 5
 
 test_zone = "dnssec.test."
 test_zone_repl = "dnssec-replica.test."
@@ -63,7 +67,6 @@ def wait_until_record_is_signed(nameserver, record, rtype="SOA",
     Returns True if record is signed, or False on timeout
     :param nameserver: nameserver to query
     :param record: query
-    :param log: logger
     :param rtype: record type
     :param timeout:
     :return: True if records is signed, False if timeout
@@ -76,6 +79,20 @@ def wait_until_record_is_signed(nameserver, record, rtype="SOA",
             return True
         time.sleep(1)
     return False
+
+
+def dnszone_add_dnssec(host, test_zone):
+    """Add dnszone with dnssec and short TTL
+    """
+    args = [
+        "ipa",
+        "dnszone-add", test_zone,
+        "--skip-overlap-check",
+        "--dnssec", "true",
+        "--ttl", "1",
+        "--default-ttl", "1",
+    ]
+    return host.run_command(args)
 
 
 class TestInstallDNSSECLast(IntegrationTest):
@@ -104,14 +121,7 @@ class TestInstallDNSSECLast(IntegrationTest):
 
     def test_if_zone_is_signed_master(self):
         # add zone with enabled DNSSEC signing on master
-        args = [
-            "ipa",
-            "dnszone-add", test_zone,
-            "--skip-overlap-check",
-            "--dnssec", "true",
-        ]
-        self.master.run_command(args)
-
+        dnszone_add_dnssec(self.master, test_zone)
         # test master
         assert wait_until_record_is_signed(
             self.master.ip, test_zone, timeout=100
@@ -124,14 +134,7 @@ class TestInstallDNSSECLast(IntegrationTest):
 
     def test_if_zone_is_signed_replica(self):
         # add zone with enabled DNSSEC signing on replica
-        args = [
-            "ipa",
-            "dnszone-add", test_zone_repl,
-            "--skip-overlap-check",
-            "--dnssec", "true",
-        ]
-        self.replicas[0].run_command(args)
-
+        dnszone_add_dnssec(self.replicas[0], test_zone_repl)
         # test replica
         assert wait_until_record_is_signed(
             self.replicas[0].ip, test_zone_repl, timeout=300
@@ -145,7 +148,6 @@ class TestInstallDNSSECLast(IntegrationTest):
         ), "DNS zone %s is not signed (master)" % test_zone
 
     def test_disable_reenable_signing_master(self):
-
         dnskey_old = resolve_with_dnssec(self.master.ip, test_zone,
                                          rtype="DNSKEY").rrset
 
@@ -157,7 +159,7 @@ class TestInstallDNSSECLast(IntegrationTest):
         ]
         self.master.run_command(args)
 
-        time.sleep(20)  # sleep a bit until LDAP changes are applied to DNS
+        time.sleep(DNSSEC_SLEEP)
 
         # test master
         assert not is_record_signed(
@@ -177,6 +179,8 @@ class TestInstallDNSSECLast(IntegrationTest):
         ]
         self.master.run_command(args)
 
+        # TODO: test require restart
+        tasks.restart_named(self.master, self.replicas[0])
         # test master
         assert wait_until_record_is_signed(
             self.master.ip, test_zone, timeout=100
@@ -192,7 +196,6 @@ class TestInstallDNSSECLast(IntegrationTest):
         assert dnskey_old != dnskey_new, "DNSKEY should be different"
 
     def test_disable_reenable_signing_replica(self):
-
         dnskey_old = resolve_with_dnssec(self.replicas[0].ip, test_zone_repl,
                                          rtype="DNSKEY").rrset
 
@@ -204,7 +207,7 @@ class TestInstallDNSSECLast(IntegrationTest):
         ]
         self.master.run_command(args)
 
-        time.sleep(20)  # sleep a bit until LDAP changes are applied to DNS
+        time.sleep(DNSSEC_SLEEP)
 
         # test master
         assert not is_record_signed(
@@ -224,6 +227,8 @@ class TestInstallDNSSECLast(IntegrationTest):
         ]
         self.master.run_command(args)
 
+        # TODO: test require restart
+        tasks.restart_named(self.master, self.replicas[0])
         # test master
         assert wait_until_record_is_signed(
             self.master.ip, test_zone_repl, timeout=100
@@ -273,11 +278,7 @@ class TestInstallDNSSECFirst(IntegrationTest):
         super(TestInstallDNSSECFirst, cls).uninstall(mh)
 
     def test_sign_root_zone(self):
-        args = [
-            "ipa", "dnszone-add", root_zone, "--dnssec", "true",
-            "--skip-overlap-check",
-        ]
-        self.master.run_command(args)
+        dnszone_add_dnssec(self.master, root_zone)
 
         # make BIND happy: add the glue record and delegate zone
         args = [
@@ -290,7 +291,7 @@ class TestInstallDNSSECFirst(IntegrationTest):
             "--a-rec=" + self.replicas[0].ip
         ]
         self.master.run_command(args)
-        time.sleep(10)  # sleep a bit until data are provided by bind-dyndb-ldap
+        time.sleep(DNSSEC_SLEEP)
 
         args = [
             "ipa", "dnsrecord-add", root_zone, self.master.domain.name,
@@ -312,14 +313,7 @@ class TestInstallDNSSECFirst(IntegrationTest):
         Validate signed DNS records, using our own signed root zone
         :return:
         """
-
-        # add test zone
-        args = [
-            "ipa", "dnszone-add", example_test_zone, "--dnssec", "true",
-            "--skip-overlap-check",
-        ]
-
-        self.master.run_command(args)
+        dnszone_add_dnssec(self.master, example_test_zone)
 
         # delegation
         args = [
@@ -327,6 +321,10 @@ class TestInstallDNSSECFirst(IntegrationTest):
             "--ns-rec=" + self.master.hostname
         ]
         self.master.run_command(args)
+
+        # TODO: test require restart
+        tasks.restart_named(self.master, self.replicas[0])
+
         # wait until zone is signed
         assert wait_until_record_is_signed(
             self.master.ip, example_test_zone, timeout=100
@@ -411,7 +409,7 @@ class TestInstallDNSSECFirst(IntegrationTest):
                                            root_keys_rrset.to_text() + '\n')
 
         # verify signatures
-        time.sleep(1)
+        time.sleep(DNSSEC_SLEEP)
         args = [
             "drill", "@localhost", "-k",
             paths.DNSSEC_TRUSTED_KEY, "-S",
@@ -457,13 +455,7 @@ class TestMigrateDNSSECMaster(IntegrationTest):
         replica_backup_filename = "/tmp/ipa-kasp.db.backup"
 
         # add test zone
-        args = [
-            "ipa", "dnszone-add", example_test_zone, "--dnssec", "true",
-            "--skip-overlap-check",
-        ]
-
-        self.master.run_command(args)
-
+        dnszone_add_dnssec(self.master, example_test_zone)
         # wait until zone is signed
         assert wait_until_record_is_signed(
             self.master.ip, example_test_zone, timeout=100
@@ -515,11 +507,7 @@ class TestMigrateDNSSECMaster(IntegrationTest):
         assert dnskey_old == dnskey_new, "DNSKEY should be the same"
 
         # add test zone
-        args = [
-            "ipa", "dnszone-add", example2_test_zone, "--dnssec", "true",
-            "--skip-overlap-check",
-        ]
-        self.replicas[0].run_command(args)
+        dnszone_add_dnssec(self.replicas[0], example2_test_zone)
         # wait until zone is signed
         assert wait_until_record_is_signed(
             self.replicas[0].ip, example2_test_zone, timeout=100
@@ -547,11 +535,7 @@ class TestMigrateDNSSECMaster(IntegrationTest):
             % example2_test_zone)
 
         # add new zone to new replica
-        args = [
-            "ipa", "dnszone-add", example3_test_zone, "--dnssec", "true",
-            "--skip-overlap-check",
-        ]
-        self.replicas[1].run_command(args)
+        dnszone_add_dnssec(self.replicas[0], example3_test_zone)
         # wait until zone is signed
         assert wait_until_record_is_signed(
             self.replicas[1].ip, example3_test_zone, timeout=200

@@ -63,7 +63,7 @@ def get_pkinit_request_ca():
         {'cert-file': paths.KDC_CERT})
 
     if pkinit_request_id is None:
-        return
+        return None
 
     return certmonger.get_request_value(pkinit_request_id, 'ca-name')
 
@@ -242,7 +242,7 @@ class KrbInstance(service.Service):
         # We do not let the system start IPA components on its own,
         # Instead we reply on the IPA init script to start only enabled
         # components as found in our LDAP configuration tree
-        self.ldap_enable('KDC', self.fqdn, None, self.suffix)
+        self.ldap_configure('KDC', self.fqdn, None, self.suffix)
 
     def __start_instance(self):
         try:
@@ -299,22 +299,30 @@ class KrbInstance(service.Service):
             logger.debug("Persistent keyring CCACHE is not enabled")
             self.sub_dict['OTHER_LIBDEFAULTS'] = ''
 
+        # Create kadm5.acl if it doesn't exist
+        if not os.path.exists(paths.KRB5KDC_KADM5_ACL):
+            open(paths.KRB5KDC_KADM5_ACL, 'a').close()
+            os.chmod(paths.KRB5KDC_KADM5_ACL, 0o600)
+
     def __add_krb_container(self):
         self._ldap_mod("kerberos.ldif", self.sub_dict)
 
     def __add_default_acis(self):
         self._ldap_mod("default-aci.ldif", self.sub_dict)
 
-    def __template_file(self, path, chmod=0o644):
-        template = os.path.join(paths.USR_SHARE_IPA_DIR,
-                                os.path.basename(path) + ".template")
+    def __template_file(self, path, chmod=0o644, client_template=False):
+        if client_template:
+            sharedir = paths.USR_SHARE_IPA_CLIENT_DIR
+        else:
+            sharedir = paths.USR_SHARE_IPA_DIR
+        template = os.path.join(
+            sharedir, os.path.basename(path) + ".template")
         conf = ipautil.template_file(template, self.sub_dict)
         self.fstore.backup_file(path)
-        fd = open(path, "w+")
-        fd.write(conf)
-        fd.close()
-        if chmod is not None:
-            os.chmod(path, chmod)
+        with open(path, 'w') as f:
+            if chmod is not None:
+                os.fchmod(f.fileno(), chmod)
+            f.write(conf)
 
     def __init_ipa_kdb(self):
         # kdb5_util may take a very long time when entropy is low
@@ -339,7 +347,7 @@ class KrbInstance(service.Service):
     def __configure_instance(self):
         self.__template_file(paths.KRB5KDC_KDC_CONF, chmod=None)
         self.__template_file(paths.KRB5_CONF)
-        self.__template_file(paths.KRB5_FREEIPA)
+        self.__template_file(paths.KRB5_FREEIPA, client_template=True)
         self.__template_file(paths.HTML_KRB5_INI)
         self.__template_file(paths.KRB_CON)
         self.__template_file(paths.HTML_KRBREALM_CON)
@@ -400,13 +408,16 @@ class KrbInstance(service.Service):
     def _wait_for_replica_kdc_entry(self):
         master_dn = self.api.Object.server.get_dn(self.fqdn)
         kdc_dn = DN(('cn', 'KDC'), master_dn)
-
-        ldap_uri = 'ldap://{}'.format(self.master_fqdn)
-
+        ldap_uri = ipaldap.get_ldap_uri(self.master_fqdn)
         with ipaldap.LDAPClient(
-                ldap_uri, cacert=paths.IPA_CA_CRT) as remote_ldap:
+                ldap_uri, cacert=paths.IPA_CA_CRT, start_tls=True
+        ) as remote_ldap:
             remote_ldap.gssapi_bind()
-            replication.wait_for_entry(remote_ldap, kdc_dn, timeout=60)
+            replication.wait_for_entry(
+                remote_ldap,
+                kdc_dn,
+                timeout=api.env.replication_wait_timeout
+            )
 
     def _call_certmonger(self, certmonger_ca='IPA'):
         subject = str(DN(('cn', self.fqdn), self.subject_base))
@@ -445,7 +456,8 @@ class KrbInstance(service.Service):
                 storage='FILE',
                 profile=KDC_PROFILE,
                 post_command='renew_kdc_cert',
-                perms=(0o644, 0o600)
+                perms=(0o644, 0o600),
+                resubmit_timeout=api.env.replication_wait_timeout
             )
         except dbus.DBusException as e:
             # if the certificate is already tracked, ignore the error
@@ -494,7 +506,7 @@ class KrbInstance(service.Service):
                                           self.api.env.realm,
                                           False)
         ca_certs = [c for c, _n, t, _u in ca_certs if t is not False]
-        x509.write_certificate_list(ca_certs, paths.CACERT_PEM)
+        x509.write_certificate_list(ca_certs, paths.CACERT_PEM, mode=0o644)
 
     def issue_selfsigned_pkinit_certs(self):
         self._call_certmonger(certmonger_ca="SelfSign")
@@ -608,7 +620,7 @@ class KrbInstance(service.Service):
             except ValueError as error:
                 logger.debug("%s", error)
 
-        # disabled by default, by ldap_enable()
+        # disabled by default, by ldap_configure()
         if enabled:
             self.enable()
 

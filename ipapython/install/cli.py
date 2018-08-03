@@ -58,7 +58,24 @@ def _get_usage(configurable_class):
 
 def install_tool(configurable_class, command_name, log_file_name,
                  debug_option=False, verbose=False, console_format=None,
-                 use_private_ccache=True, uninstall_log_file_name=None):
+                 use_private_ccache=True, uninstall_log_file_name=None,
+                 ignore_return_codes=()):
+    """
+    Some commands represent multiple related tools, e.g.
+    ``ipa-server-install`` and ``ipa-server-install --uninstall`` would be
+    represented by separate classes. Only their options are the same.
+
+    :param configurable_class: the command class for options
+    :param command_name: the command name shown in logs/output
+    :param log_file_name: if None, logging is to stderr only
+    :param debug_option: log level is DEBUG
+    :param verbose: log level is INFO
+    :param console_format: logging format for stderr
+    :param use_private_ccache: a temporary ccache is created and used
+    :param uninstall_log_file_name: if not None the log for uninstall
+    :param ignore_return_codes: tuple of error codes to not log errors
+                                for. Let the caller do it if it wants.
+    """
     if uninstall_log_file_name is not None:
         uninstall_kwargs = dict(
             configurable_class=configurable_class,
@@ -67,6 +84,7 @@ def install_tool(configurable_class, command_name, log_file_name,
             debug_option=debug_option,
             verbose=verbose,
             console_format=console_format,
+            ignore_return_codes=ignore_return_codes,
         )
     else:
         uninstall_kwargs = None
@@ -84,12 +102,14 @@ def install_tool(configurable_class, command_name, log_file_name,
             console_format=console_format,
             uninstall_kwargs=uninstall_kwargs,
             use_private_ccache=use_private_ccache,
+            ignore_return_codes=ignore_return_codes,
         )
     )
 
 
 def uninstall_tool(configurable_class, command_name, log_file_name,
-                   debug_option=False, verbose=False, console_format=None):
+                   debug_option=False, verbose=False, console_format=None,
+                   ignore_return_codes=()):
     return type(
         'uninstall_tool({0})'.format(configurable_class.__name__),
         (UninstallTool,),
@@ -101,6 +121,7 @@ def uninstall_tool(configurable_class, command_name, log_file_name,
             debug_option=debug_option,
             verbose=verbose,
             console_format=console_format,
+            ignore_return_codes=ignore_return_codes,
         )
     )
 
@@ -282,7 +303,11 @@ class ConfigureTool(admintool.AdminTool):
         elif not no_file:
             logger.debug('Not logging to a file')
 
-    def run(self):
+    def init_configurator(self):
+        """Executes transformation, getting a flattened Installer object
+
+        :returns: common.installer.Installer object
+        """
         kwargs = {}
 
         transformed_cls = self._transform(self.configurable_class)
@@ -297,7 +322,7 @@ class ConfigureTool(admintool.AdminTool):
             kwargs['interactive'] = True
 
         try:
-            cfgr = transformed_cls(**kwargs)
+            return transformed_cls(**kwargs)
         except core.KnobValueError as e:
             knob_cls = knob_classes[e.name]
             try:
@@ -310,6 +335,9 @@ class ConfigureTool(admintool.AdminTool):
             self.option_parser.error("{0}: {1}".format(desc, e))
         except RuntimeError as e:
             self.option_parser.error(str(e))
+
+    def run(self):
+        cfgr = self.init_configurator()
 
         signal.signal(signal.SIGTERM, self.__signal_handler)
 

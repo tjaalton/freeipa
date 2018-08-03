@@ -51,6 +51,7 @@ class BasePathNamespace(object):
     HTTPD_IPA_CONF = "/etc/httpd/conf.d/ipa.conf"
     HTTPD_NSS_CONF = "/etc/httpd/conf.d/nss.conf"
     HTTPD_SSL_CONF = "/etc/httpd/conf.d/ssl.conf"
+    HTTPD_SSL_SITE_CONF = "/etc/httpd/conf.d/ssl.conf"
     HTTPD_CERT_FILE = "/var/lib/ipa/certs/httpd.crt"
     HTTPD_KEY_FILE = "/var/lib/ipa/private/httpd.key"
     HTTPD_PASSWD_FILE_FMT = "/var/lib/ipa/passwds/{host}-443-RSA"
@@ -167,7 +168,8 @@ class BasePathNamespace(object):
     CHROMIUM_BROWSER = "/usr/bin/chromium-browser"
     FIREFOX = "/usr/bin/firefox"
     GETCERT = "/usr/bin/getcert"
-    GPG = "/usr/bin/gpg"
+    GPG2 = "/usr/bin/gpg2"
+    GPG_CONNECT_AGENT = "/usr/bin/gpg-connect-agent"
     GPG_AGENT = "/usr/bin/gpg-agent"
     IPA_GETCERT = "/usr/bin/ipa-getcert"
     KADMIN_LOCAL = '/usr/sbin/kadmin.local'
@@ -243,6 +245,7 @@ class BasePathNamespace(object):
     USERADD = "/usr/sbin/useradd"
     FONTS_DIR = "/usr/share/fonts"
     USR_SHARE_IPA_DIR = "/usr/share/ipa/"
+    USR_SHARE_IPA_CLIENT_DIR = "/usr/share/ipa/client"
     CA_TOPOLOGY_ULDIF = "/usr/share/ipa/ca-topology.uldif"
     IPA_HTML_DIR = "/usr/share/ipa/html"
     CA_CRT = "/usr/share/ipa/html/ca.crt"
@@ -384,6 +387,7 @@ class BasePathNamespace(object):
     GETENT = '/usr/bin/getent'
     SSHD = '/usr/sbin/sshd'
     SSSCTL = '/usr/sbin/sssctl'
+    LIBARCH = "64"
 
 
 paths = BasePathNamespace()

@@ -1307,7 +1307,7 @@ class cert_find(Search, CertMethod):
     takes_options = (
         Str('subject?',
             label=_('Subject'),
-            doc=_('Subject'),
+            doc=_('Match cn attribute in subject'),
             autofill=False,
         ),
         Int('min_serial_number?',
@@ -1692,7 +1692,7 @@ class cert_find(Search, CertMethod):
                     self.obj._fill_owners(obj)
 
         result = list(six.itervalues(result))
-        if sizelimit > 0 and len(result) > sizelimit:
+        if (len(result) > sizelimit > 0):
             if not truncated:
                 self.add_message(messages.SearchResultTruncated(
                         reason=errors.SizeLimitExceeded()))
@@ -1709,9 +1709,7 @@ class cert_find(Search, CertMethod):
 
 @register()
 class ca_is_enabled(Command):
-    """
-    Checks if any of the servers has the CA service enabled.
-    """
+    __doc__ = _('Checks if any of the servers has the CA service enabled.')
     NO_CLI = True
     has_output = output.standard_value
 

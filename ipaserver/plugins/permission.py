@@ -127,6 +127,7 @@ def strip_ldap_prefix(uri):
 def prevalidate_filter(ugettext, value):
     if not value.startswith('(') or not value.endswith(')'):
         return _('must be enclosed in parentheses')
+    return None
 
 
 class DNOrURL(DNParam):
@@ -148,6 +149,7 @@ def validate_type(ugettext, typestr):
         return _('"%s" is not an object type') % typestr
     if not getattr(obj, 'permission_filter_objectclasses', None):
         return _('"%s" is not a valid permission type') % typestr
+    return None
 
 
 def _disallow_colon(option):
@@ -904,6 +906,8 @@ class permission(baseldap.LDAPObject):
             options['ipapermtargetfilter'] = list(options.get(
                 'ipapermtargetfilter') or []) + filter_ops['add']
 
+        return None
+
     def validate_permission(self, entry):
         ldap = self.Backend.ldap2
 
@@ -1295,10 +1299,9 @@ class permission_find(baseldap.LDAPSearch):
                 self.obj.upgrade_permission(entry, output_only=True)
 
         if not truncated:
-            if 'sizelimit' in options:
-                max_entries = options['sizelimit']
-            else:
-                max_entries = self.api.Backend.ldap2.size_limit
+            max_entries = options.get(
+                'sizelimit', self.api.Backend.ldap2.size_limit
+            )
 
             if max_entries > 0:
                 # should we get more entries than current sizelimit, fail
@@ -1390,7 +1393,7 @@ class permission_show(baseldap.LDAPRetrieve):
 
 @register()
 class permission_add_member(baseldap.LDAPAddMember):
-    """Add members to a permission."""
+    __doc__ = _('Add members to a permission.')
     NO_CLI = True
 
     def pre_callback(self, ldap, dn, member_dns, failed, *keys, **options):
@@ -1402,5 +1405,5 @@ class permission_add_member(baseldap.LDAPAddMember):
 
 @register()
 class permission_remove_member(baseldap.LDAPRemoveMember):
-    """Remove members from a permission."""
+    __doc__ = _('Remove members from a permission.')
     NO_CLI = True

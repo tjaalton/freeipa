@@ -2,7 +2,6 @@
 # Copyright (C) 2016  FreeIPA Contributors see COPYING for license
 #
 
-import collections
 import errno
 import json
 import logging
@@ -23,9 +22,17 @@ from ipalib.errors import SchemaUpToDate
 from ipalib.frontend import Object
 from ipalib.output import Output
 from ipalib.parameters import DefaultFrom, Flag, Password, Str
+from ipapython import ipautil
 from ipapython.ipautil import fsdecode
 from ipapython.dn import DN
 from ipapython.dnsutil import DNSName
+
+# pylint: disable=no-name-in-module, import-error
+if six.PY3:
+    from collections.abc import Mapping, Sequence
+else:
+    from collections import Mapping, Sequence
+# pylint: enable=no-name-in-module, import-error
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +46,7 @@ _TYPES = {
     'DNSName': DNSName,
     'Principal': unicode,
     'NoneType': type(None),
-    'Sequence': collections.Sequence,
+    'Sequence': Sequence,
     'bool': bool,
     'dict': dict,
     'int': int,
@@ -315,7 +322,7 @@ class _SchemaObjectPlugin(_SchemaPlugin):
     schema_key = 'classes'
 
 
-class _SchemaNameSpace(collections.Mapping):
+class _SchemaNameSpace(Mapping):
 
     def __init__(self, schema, name):
         self.name = name
@@ -486,8 +493,7 @@ class Schema(object):
                                          dir=self._DIR, delete=False) as f:
             try:
                 self._write_schema_data(f)
-                f.flush()
-                os.fsync(f.fileno())
+                ipautil.flush_sync(f)
                 f.close()
             except Exception:
                 os.unlink(f.name)
@@ -602,7 +608,7 @@ def get_package(server_info, client):
             s = topic['topic_topic']
             if isinstance(s, bytes):
                 s = s.decode('utf-8')
-            module.topic = s.partition('/')[0]
+            module.topic = str(s).partition('/')[0]
         else:
             module.topic = None
 

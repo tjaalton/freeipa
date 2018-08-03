@@ -55,6 +55,7 @@ from ipaplatform import services
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 
+from ipapython import directivesetter
 from ipapython import dogtag
 from ipapython import ipautil
 from ipapython import ipaldap
@@ -173,6 +174,7 @@ def find_substring(data, value):
     for d in data:
         if d.startswith(value):
             return get_value(d)
+    return None
 
 
 def get_defList(data):
@@ -261,7 +263,7 @@ def is_step_one_done():
     path = paths.CA_CS_CFG_PATH
     if not os.path.exists(path):
         return False
-    test = installutils.get_directive(path, 'preop.ca.type', '=')
+    test = directivesetter.get_directive(path, 'preop.ca.type', '=')
     if test == "otherca":
         return True
     return False
@@ -400,6 +402,7 @@ class CAInstance(DogtagInstance):
                 # Setup Database
                 self.step("creating certificate server db", self.__create_ds_db)
                 self.step("setting up initial replication", self.__setup_replication)
+                self.step("creating ACIs for admin", self.add_ipaca_aci)
                 self.step("creating installation admin user", self.setup_admin)
             self.step("configuring certificate server instance",
                       self.__spawn_instance)
@@ -417,6 +420,9 @@ class CAInstance(DogtagInstance):
                           self.teardown_admin)
             self.step("starting certificate server instance",
                       self.start_instance)
+            if promote:
+                self.step("Finalize replication settings",
+                          self.finalize_replica_config)
         # Step 1 of external is getting a CSR so we don't need to do these
         # steps until we get a cert back from the external CA.
         if self.external != 1:
@@ -626,7 +632,7 @@ class CAInstance(DogtagInstance):
             with open(self.cert_file, 'rb') as f:
                 ext_cert = x509.load_unknown_x509_certificate(f.read())
             cert_file.write(ext_cert.public_bytes(x509.Encoding.PEM))
-            cert_file.flush()
+            ipautil.flush_sync(cert_file)
 
             result = ipautil.run(
                 [paths.OPENSSL, 'crl2pkcs7',
@@ -723,7 +729,7 @@ class CAInstance(DogtagInstance):
         os.chown(self.config, pent.pw_uid, pent.pw_gid)
 
     def enable_pkix(self):
-        installutils.set_directive(paths.SYSCONFIG_PKI_TOMCAT,
+        directivesetter.set_directive(paths.SYSCONFIG_PKI_TOMCAT,
                                    'NSS_ENABLE_PKIX_VERIFY', '1',
                                    quotes=False, separator='=')
 
@@ -762,7 +768,7 @@ class CAInstance(DogtagInstance):
         self.configure_agent_renewal()
 
     def __import_ra_key(self):
-        self._custodia.import_ra_key(self.master_host)
+        self._custodia.import_ra_key()
         self.__set_ra_cert_perms()
 
         self.configure_agent_renewal()
@@ -847,7 +853,7 @@ class CAInstance(DogtagInstance):
         for path in [paths.IPA_CA_CRT,
                      paths.KDC_CA_BUNDLE_PEM,
                      paths.CA_BUNDLE_PEM]:
-            x509.write_certificate_list(certlist, path)
+            x509.write_certificate_list(certlist, path, mode=0o644)
 
     def __request_ra_certificate(self):
         """
@@ -921,7 +927,9 @@ class CAInstance(DogtagInstance):
                 profile='caServerCert',
                 pre_command='renew_ra_cert_pre',
                 post_command='renew_ra_cert',
-                storage="FILE")
+                storage="FILE",
+                resubmit_timeout=api.env.replication_wait_timeout
+            )
             self.__set_ra_cert_perms()
 
             self.requestId = str(reqId)
@@ -964,9 +972,8 @@ class CAInstance(DogtagInstance):
 
         https://access.redhat.com/knowledge/docs/en-US/Red_Hat_Certificate_System/8.0/html/Admin_Guide/Setting_up_Publishing.html
         """
-        with installutils.DirectiveSetter(self.config,
-                                          quotes=False, separator='=') as ds:
-
+        with directivesetter.DirectiveSetter(
+                self.config, quotes=False, separator='=') as ds:
             # Enable file publishing, disable LDAP
             ds.set('ca.publish.enable', 'true')
             ds.set('ca.publish.ldappublish.enable', 'false')
@@ -1050,7 +1057,7 @@ class CAInstance(DogtagInstance):
         cmonger.stop()
 
         # remove CRL files
-        logger.info("Remove old CRL files")
+        logger.debug("Remove old CRL files")
         try:
             for f in get_crl_files():
                 logger.debug("Remove %s", f)
@@ -1059,7 +1066,7 @@ class CAInstance(DogtagInstance):
             logger.warning("Error while removing old CRL files: %s", e)
 
         # remove CRL directory
-        logger.info("Remove CRL directory")
+        logger.debug("Remove CRL directory")
         if os.path.exists(paths.PKI_CA_PUBLISH_DIR):
             try:
                 shutil.rmtree(paths.PKI_CA_PUBLISH_DIR)
@@ -1124,7 +1131,7 @@ class CAInstance(DogtagInstance):
         """
         # Check the default validity period of the audit signing cert
         # and set it to 2 years if it is 6 months.
-        cert_range = installutils.get_directive(
+        cert_range = directivesetter.get_directive(
             paths.CASIGNEDLOGCERT_CFG,
             'policyset.caLogSigningSet.2.default.params.range',
             separator='='
@@ -1132,14 +1139,14 @@ class CAInstance(DogtagInstance):
         logger.debug(
             'caSignedLogCert.cfg profile validity range is %s', cert_range)
         if cert_range == "180":
-            installutils.set_directive(
+            directivesetter.set_directive(
                 paths.CASIGNEDLOGCERT_CFG,
                 'policyset.caLogSigningSet.2.default.params.range',
                 '720',
                 quotes=False,
                 separator='='
             )
-            installutils.set_directive(
+            directivesetter.set_directive(
                 paths.CASIGNEDLOGCERT_CFG,
                 'policyset.caLogSigningSet.2.constraint.params.range',
                 '720',
@@ -1252,12 +1259,15 @@ class CAInstance(DogtagInstance):
         api.Backend.ldap2.add_entry(entry)
 
     def __setup_replication(self):
-
         repl = replication.CAReplicationManager(self.realm, self.fqdn)
         repl.setup_cs_replication(self.master_host)
 
         # Activate Topology for o=ipaca segments
         self.__update_topology()
+
+    def finalize_replica_config(self):
+        repl = replication.CAReplicationManager(self.realm, self.fqdn)
+        repl.finalize_replica_config(self.master_host)
 
     def __enable_instance(self):
         basedn = ipautil.realm_to_suffix(self.realm)
@@ -1265,18 +1275,18 @@ class CAInstance(DogtagInstance):
             config = ['caRenewalMaster']
         else:
             config = []
-        self.ldap_enable('CA', self.fqdn, None, basedn, config)
+        self.ldap_configure('CA', self.fqdn, None, basedn, config)
 
     def setup_lightweight_ca_key_retrieval(self):
         if sysupgrade.get_upgrade_state('dogtag', 'setup_lwca_key_retrieval'):
             return
 
-        logger.info('[Set up lightweight CA key retrieval]')
+        logger.debug('Set up lightweight CA key retrieval')
 
         self.__setup_lightweight_ca_key_retrieval_kerberos()
         self.__setup_lightweight_ca_key_retrieval_custodia()
 
-        logger.info('Configuring key retriever')
+        logger.debug('Configuring key retriever')
         directives = [
             ('features.authority.keyRetrieverClass',
                 'com.netscape.ca.ExternalProcessKeyRetriever'),
@@ -1284,7 +1294,7 @@ class CAInstance(DogtagInstance):
                 '/usr/libexec/ipa/ipa-pki-retrieve-key'),
         ]
         for k, v in directives:
-            installutils.set_directive(
+            directivesetter.set_directive(
                 self.config, k, v, quotes=False, separator='=')
 
         sysupgrade.set_upgrade_state('dogtag', 'setup_lwca_key_retieval', True)
@@ -1292,12 +1302,12 @@ class CAInstance(DogtagInstance):
     def __setup_lightweight_ca_key_retrieval_kerberos(self):
         pent = pwd.getpwnam(self.service_user)
 
-        logger.info('Creating principal')
+        logger.debug('Creating principal')
         installutils.kadmin_addprinc(self.principal)
         self.suffix = ipautil.realm_to_suffix(self.realm)
         self.move_service(self.principal)
 
-        logger.info('Retrieving keytab')
+        logger.debug('Retrieving keytab')
         installutils.create_keytab(self.keytab, self.principal)
         os.chmod(self.keytab, 0o600)
         os.chown(self.keytab, pent.pw_uid, pent.pw_gid)
@@ -1305,7 +1315,7 @@ class CAInstance(DogtagInstance):
     def __setup_lightweight_ca_key_retrieval_custodia(self):
         pent = pwd.getpwnam(self.service_user)
 
-        logger.info('Creating Custodia keys')
+        logger.debug('Creating Custodia keys')
         custodia_basedn = DN(
             ('cn', 'custodia'), ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
         ensure_entry(
@@ -1686,7 +1696,7 @@ def import_included_profiles():
             # Create the profile, replacing any existing profile of same name
             profile_data = __get_profile_config(profile_id)
             _create_dogtag_profile(profile_id, profile_data, overwrite=True)
-            logger.info("Imported profile '%s'", profile_id)
+            logger.debug("Imported profile '%s'", profile_id)
 
     api.Backend.ra_certprofile.override_port = None
     conn.disconnect()
@@ -1794,8 +1804,8 @@ def _create_dogtag_profile(profile_id, profile_data, overwrite):
         # import the profile
         try:
             profile_api.create_profile(profile_data)
-            logger.info("Profile '%s' successfully migrated to LDAP",
-                        profile_id)
+            logger.debug("Profile '%s' successfully migrated to LDAP",
+                         profile_id)
         except errors.RemoteRetrieveError as e:
             logger.debug("Error migrating '%s': %s", profile_id, e)
 
@@ -1980,10 +1990,12 @@ class ExternalCAProfile(object):
             _oid = univ.ObjectIdentifier(parts[0])
 
             # It is; construct a V2 template
+            # pylint: disable=too-many-function-args
             return MSCSTemplateV2.__new__(MSCSTemplateV2, s)
 
         except pyasn1.error.PyAsn1Error:
             # It is not an OID; treat as a template name
+            # pylint: disable=too-many-function-args
             return MSCSTemplateV1.__new__(MSCSTemplateV1, s)
 
     def __getstate__(self):

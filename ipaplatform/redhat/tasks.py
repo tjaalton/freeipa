@@ -40,6 +40,7 @@ from subprocess import CalledProcessError
 from pyasn1.error import PyAsn1Error
 from six.moves import urllib
 
+from ipapython import directivesetter
 from ipapython import ipautil
 import ipapython.errors
 
@@ -206,9 +207,10 @@ class RedHatTaskNamespace(BaseTaskNamespace):
         with open(paths.SYSCONF_NETWORK, 'w') as f:
             f.writelines(content)
 
-    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
+    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore,
+                                  sudo=True):
         auth_config = get_auth_tool()
-        auth_config.configure(sssd, mkhomedir, statestore)
+        auth_config.configure(sssd, mkhomedir, statestore, sudo)
 
     def is_nosssd_supported(self):
         # The flag --no-sssd is not supported any more for rhel-based distros
@@ -231,7 +233,7 @@ class RedHatTaskNamespace(BaseTaskNamespace):
         mkhomedir = statestore.get_state('authconfig', 'mkhomedir')
 
         # Force authselect 'sssd' profile
-        authselect_cmd = [paths.AUTHSELECT, "select", "sssd"]
+        authselect_cmd = [paths.AUTHSELECT, "select", "sssd", "with-sudo"]
         if mkhomedir:
             authselect_cmd.append("with-mkhomedir")
         authselect_cmd.append("--force")
@@ -278,6 +280,7 @@ class RedHatTaskNamespace(BaseTaskNamespace):
 
         try:
             f = open(new_cacert_path, 'w')
+            os.fchmod(f.fileno(), 0o644)
         except IOError as e:
             logger.info("Failed to open %s: %s", new_cacert_path, e)
             return False
@@ -389,7 +392,7 @@ class RedHatTaskNamespace(BaseTaskNamespace):
         statestore.backup_state('network', 'hostname', old_hostname)
 
     def restore_hostname(self, fstore, statestore):
-        old_hostname = statestore.get_state('network', 'hostname')
+        old_hostname = statestore.restore_state('network', 'hostname')
 
         if old_hostname is not None:
             try:
@@ -564,6 +567,14 @@ class RedHatTaskNamespace(BaseTaskNamespace):
             # exist
             pass
         return False
+
+    def setup_httpd_logging(self):
+        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
+                                      'ErrorLog',
+                                      'logs/error_log', False)
+        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
+                                      'TransferLog',
+                                      'logs/access_log', False)
 
 
 tasks = RedHatTaskNamespace()

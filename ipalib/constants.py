@@ -149,6 +149,8 @@ DEFAULT_CONFIG = (
     ('startup_timeout', 300),
     # How long http connection should wait for reply [seconds].
     ('http_timeout', 30),
+    # How long to wait for an entry to appear on a replica
+    ('replication_wait_timeout', 300),
 
     # Web Application mount points
     ('mount_ipa', '/ipa/'),
@@ -286,7 +288,9 @@ RENEWAL_REUSE_CA_NAME = 'dogtag-ipa-ca-renew-agent-reuse'
 CA_DBUS_TIMEOUT = 120
 
 # regexp definitions
-PATTERN_GROUPUSER_NAME = '^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*[a-zA-Z0-9_.$-]?$'
+PATTERN_GROUPUSER_NAME = (
+    '(?!^[0-9]+$)^[a-zA-Z0-9_.][a-zA-Z0-9_.-]*[a-zA-Z0-9_.$-]?$'
+)
 
 # Kerberos Anonymous principal name
 ANON_USER = 'WELLKNOWN/ANONYMOUS'

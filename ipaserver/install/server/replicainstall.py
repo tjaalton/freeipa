@@ -22,11 +22,12 @@ import traceback
 from pkg_resources import parse_version
 import six
 
+from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
 import ipaclient.install.timeconf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
-from ipapython import ipaldap, ipautil
+from ipapython import ipaldap, ipautil, version
 from ipapython.certdb import IPA_CA_TRUST_FLAGS, EXTERNAL_CA_TRUST_FLAGS
 from ipapython.dn import DN
 from ipapython.admintool import ScriptError
@@ -144,7 +145,7 @@ def install_ca_cert(ldap, base_dn, realm, cafile, destfile=paths.IPA_CA_CRT):
                 pass
         else:
             certs = [c[0] for c in certs if c[2] is not False]
-            x509.write_certificate_list(certs, destfile)
+            x509.write_certificate_list(certs, destfile, mode=0o644)
     except Exception as e:
         raise ScriptError("error copying files: " + str(e))
     return destfile
@@ -240,11 +241,9 @@ def create_ipa_conf(fstore, config, ca_enabled, master=None):
         gopts.extend([
             ipaconf.setOption('enable_ra', 'True'),
             ipaconf.setOption('ra_plugin', 'dogtag'),
-            ipaconf.setOption('dogtag_version', '10')
+            ipaconf.setOption('dogtag_version', '10'),
+            ipaconf.setOption('ca_host', config.ca_host_name)
         ])
-
-        if not config.setup_ca:
-            gopts.append(ipaconf.setOption('ca_host', config.ca_host_name))
     else:
         gopts.extend([
             ipaconf.setOption('enable_ra', 'False'),
@@ -563,13 +562,14 @@ def check_remote_version(client, local_version):
     remote_version = parse_version(env['version'])
     if remote_version > local_version:
         raise ScriptError(
-            "Cannot install replica of a server of higher version ({}) than"
+            "Cannot install replica of a server of higher version ({}) than "
             "the local version ({})".format(remote_version, local_version))
 
 
 def common_check(no_ntp):
     tasks.check_ipv6_stack_enabled()
     tasks.check_selinux_status()
+    check_ldap_conf()
 
     if is_ipa_configured():
         raise ScriptError(
@@ -679,6 +679,10 @@ def install_check(installer):
     options = installer
     filename = installer.replica_file
     installer._enrollment_performed = False
+
+    print("This program will set up FreeIPA replica.")
+    print("Version {}".format(version.VERSION))
+    print("")
 
     if tasks.is_fips_enabled():
         raise RuntimeError(
@@ -1443,15 +1447,12 @@ def install(installer):
         pkcs12_info=pkinit_pkcs12_info,
         promote=promote)
 
-    # we now need to enable ssl on the ds
-    ds.enable_ssl()
-
     if promote:
         # We need to point to the master when certmonger asks for
-        # HTTP certificate.
-        # During http installation, the HTTP/hostname principal is created
-        # locally then the installer waits for the entry to appear on the
-        # master selected for the installation.
+        # a DS or HTTP certificate.
+        # During http installation, the <service>/hostname principal is
+        # created locally then the installer waits for the entry to appear
+        # on the master selected for the installation.
         # In a later step, the installer requests a SSL certificate through
         # Certmonger (and the op adds the principal if it does not exist yet).
         # If xmlrpc_uri points to the soon-to-be replica,
@@ -1464,6 +1465,9 @@ def install(installer):
         # setting xmlrpc_uri
         create_ipa_conf(fstore, config, ca_enabled,
                         master=config.master_host_name)
+
+    # we now need to enable ssl on the ds
+    ds.enable_ssl()
 
     install_http(
         config,
@@ -1481,7 +1485,10 @@ def install(installer):
     otpd.create_instance('OTPD', config.host_name,
                          ipautil.realm_to_suffix(config.realm_name))
 
-    if ca_enabled:
+    if kra_enabled:
+        # A KRA peer always provides a CA, too.
+        mode = custodiainstance.CustodiaModes.KRA_PEER
+    elif ca_enabled:
         mode = custodiainstance.CustodiaModes.CA_PEER
     else:
         mode = custodiainstance.CustodiaModes.MASTER_PEER
@@ -1501,6 +1508,8 @@ def install(installer):
     # Apply any LDAP updates. Needs to be done after the replica is synced-up
     service.print_msg("Applying LDAP updates")
     ds.apply_updates()
+    service.print_msg("Finalize replication settings")
+    ds.finalize_replica_config()
 
     if kra_enabled:
         kra.install(api, config, options, custodia=custodia)
@@ -1509,20 +1518,15 @@ def install(installer):
     krb.restart()
 
     if promote:
-        custodia.import_dm_password(config.master_host_name)
+        custodia.import_dm_password()
         promote_sssd(config.host_name)
         promote_openldap_conf(config.host_name, config.master_host_name)
 
     if options.setup_dns:
         dns.install(False, True, options, api)
-    else:
-        api.Command.dns_update_system_records()
 
     if options.setup_adtrust:
         adtrust.install(False, options, fstore, api)
-
-    ca_servers = service.find_providing_servers('CA', api.Backend.ldap2, api)
-    api.Backend.ldap2.disconnect()
 
     if not promote:
         # Call client install script
@@ -1550,6 +1554,12 @@ def install(installer):
 
         # remove the extracted replica file
         remove_replica_info_dir(installer)
+
+    # Enable configured services and update DNS SRV records
+    service.enable_services(config.host_name)
+    api.Command.dns_update_system_records()
+    ca_servers = service.find_providing_servers('CA', api.Backend.ldap2, api)
+    api.Backend.ldap2.disconnect()
 
     # Everything installed properly, activate ipa service.
     services.knownservices.ipa.enable()

@@ -45,7 +45,6 @@ import gzip
 from cryptography import x509 as crypto_x509
 
 import gssapi
-from dns import resolver, rdatatype
 from dns.exception import DNSException
 from ssl import SSLError
 import six
@@ -61,7 +60,7 @@ from ipalib.x509 import Encoding as x509_Encoding
 from ipapython import ipautil
 from ipapython import session_storage
 from ipapython.cookie import Cookie
-from ipapython.dnsutil import DNSName
+from ipapython.dnsutil import DNSName, query_srv
 from ipalib.text import _
 from ipalib.util import create_https_connection
 from ipalib.krb_utils import KRB5KDC_ERR_S_PRINCIPAL_UNKNOWN, KRB5KRB_AP_ERR_TKT_EXPIRED, \
@@ -878,7 +877,7 @@ class RPCClient(Connectible):
         name = '_ldap._tcp.%s.' % self.env.domain
 
         try:
-            answers = resolver.query(name, rdatatype.SRV)
+            answers = query_srv(name)
         except DNSException:
             answers = []
 
@@ -886,17 +885,11 @@ class RPCClient(Connectible):
             server = str(answer.target).rstrip(".")
             servers.append('https://%s%s' % (ipautil.format_netloc(server), path))
 
-        servers = list(set(servers))
-        # the list/set conversion won't preserve order so stick in the
-        # local config file version here.
-        cfg_server = rpc_uri
-        if cfg_server in servers:
-            # make sure the configured master server is there just once and
-            # it is the first one
-            servers.remove(cfg_server)
-            servers.insert(0, cfg_server)
-        else:
-            servers.insert(0, cfg_server)
+        # make sure the configured master server is there just once and
+        # it is the first one.
+        if rpc_uri in servers:
+            servers.remove(rpc_uri)
+        servers.insert(0, rpc_uri)
 
         return servers
 
@@ -1053,7 +1046,7 @@ class RPCClient(Connectible):
                     transport_class = LanguageAwareTransport
                 proxy_kw['transport'] = transport_class(
                     protocol=self.protocol, service='HTTP', ccache=ccache)
-                logger.info('trying %s', url)
+                logger.debug('trying %s', url)
                 setattr(context, 'request_url', url)
                 serverproxy = self.server_proxy_class(url, **proxy_kw)
                 if len(urls) == 1:
@@ -1078,9 +1071,11 @@ class RPCClient(Connectible):
                             )
                     # We don't care about the response, just that we got one
                     return serverproxy
+                # pylint: disable=try-except-raise
                 except errors.KerberosError:
                     # kerberos error on one server is likely on all
                     raise
+                # pylint: enable=try-except-raise
                 except ProtocolError as e:
                     if hasattr(context, 'session_cookie') and e.errcode == 401:
                         # Unauthorized. Remove the session and try again.
@@ -1143,8 +1138,8 @@ class RPCClient(Connectible):
         # each time should we be getting UNAUTHORIZED error from the server
         max_tries = 5
         for try_num in range(0, max_tries):
-            logger.info("[try %d]: Forwarding '%s' to %s server '%s'",
-                        try_num+1, name, self.protocol, server)
+            logger.debug("[try %d]: Forwarding '%s' to %s server '%s'",
+                         try_num + 1, name, self.protocol, server)
             try:
                 return self._call_command(command, params)
             except Fault as e:

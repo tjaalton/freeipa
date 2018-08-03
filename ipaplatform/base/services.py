@@ -28,7 +28,6 @@ from __future__ import absolute_import
 import os
 import json
 import time
-import collections
 import logging
 import warnings
 
@@ -37,6 +36,12 @@ import six
 from ipapython import ipautil
 from ipaplatform.paths import paths
 
+# pylint: disable=no-name-in-module, import-error
+if six.PY3:
+    from collections.abc import Mapping
+else:
+    from collections import Mapping
+# pylint: enable=no-name-in-module, import-error
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +67,7 @@ wellknownports = {
 SERVICE_POLL_INTERVAL = 0.1 # seconds
 
 
-class KnownServices(collections.Mapping):
+class KnownServices(Mapping):
     """
     KnownServices is an abstract class factory that should give out instances
     of well-known platform services. Actual implementation must create these
@@ -135,8 +140,6 @@ class PlatformService(object):
         with open(paths.SVC_LIST_FILE, 'w') as f:
             json.dump(svc_list, f)
 
-        return
-
     def stop(self, instance_name="", capture_output=True,
              update_service_list=True):
         """
@@ -158,14 +161,12 @@ class PlatformService(object):
         with open(paths.SVC_LIST_FILE, 'w') as f:
             json.dump(svc_list, f)
 
-        return
-
     def reload_or_restart(self, instance_name="", capture_output=True,
                           wait=True):
-        return
+        pass
 
     def restart(self, instance_name="", capture_output=True, wait=True):
-        return
+        pass
 
     def is_running(self, instance_name="", wait=True):
         return False
@@ -180,22 +181,22 @@ class PlatformService(object):
         return False
 
     def enable(self, instance_name=""):
-        return
+        pass
 
     def disable(self, instance_name=""):
-        return
+        pass
 
     def mask(self, instance_name=""):
-        return
+        pass
 
     def unmask(self, instance_name=""):
-        return
+        pass
 
     def install(self, instance_name=""):
-        return
+        pass
 
     def remove(self, instance_name=""):
-        return
+        pass
 
 
 class SystemdService(PlatformService):
@@ -366,7 +367,7 @@ class SystemdService(PlatformService):
                 return False
             else:
                 svar = self.parse_variables(result.output)
-                if not self.service_instance("") in svar:
+                if self.service_instance("") not in svar:
                     # systemd doesn't show the service
                     return False
         except ipautil.CalledProcessError:

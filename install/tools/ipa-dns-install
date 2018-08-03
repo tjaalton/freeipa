@@ -141,6 +141,7 @@ def main():
 
     dns_installer.install_check(True, api, False, options, hostname=api.env.host)
     dns_installer.install(True, False, options)
+    # Services are enabled in dns_installer.install()
 
     # execute ipactl to refresh services status
     ipautil.run([paths.IPACTL, 'start', '--ignore-service-failures'],

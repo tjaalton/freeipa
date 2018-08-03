@@ -25,7 +25,6 @@ import logging
 import socket
 import getpass
 import gssapi
-import io
 import ldif
 import os
 import re
@@ -33,7 +32,6 @@ import fileinput
 import sys
 import tempfile
 import shutil
-import stat
 import traceback
 import textwrap
 from contextlib import contextmanager
@@ -211,7 +209,7 @@ def verify_fqdn(host_name, no_host_dns=False, local_hostname=True):
         address = a[4][0]
         if address in verified:
             continue
-        if address == '127.0.0.1' or address == '::1':
+        if address in ('127.0.0.1', '::1'):
             raise HostForwardLookupError("The IPA Server hostname must not resolve to localhost (%s). A routable IP address must be used. Check /etc/hosts to see if %s is an alias for %s" % (address, host_name, address))
         try:
             logger.debug('Check reverse address of %s', address)
@@ -406,229 +404,6 @@ def update_file(filename, orig, subst):
         return 1
 
 
-def quote_directive_value(value, quote_char):
-    """Quote a directive value
-    :param value: string to quote
-    :param quote_char: character which is used for quoting. All prior
-        occurences will be escaped before quoting to avoid unparseable value.
-    :returns: processed value
-    """
-    if value.startswith(quote_char) and value.endswith(quote_char):
-        return value
-
-    return "{quote}{value}{quote}".format(
-        quote=quote_char,
-        value="".join(ipautil.escape_seq(quote_char, value))
-    )
-
-
-def unquote_directive_value(value, quote_char):
-    """Unquote a directive value
-    :param value: string to unquote
-    :param quote_char: character to strip. All escaped occurences of
-        `quote_char` will be uncescaped during processing
-    :returns: processed value
-    """
-    unescaped_value = "".join(ipautil.unescape_seq(quote_char, value))
-    if (unescaped_value.startswith(quote_char) and
-            unescaped_value.endswith(quote_char)):
-        return unescaped_value[1:-1]
-
-    return unescaped_value
-
-
-_SENTINEL = object()
-
-
-class DirectiveSetter(object):
-    """Safe directive setter
-
-    with DirectiveSetter('/path/to/conf') as ds:
-        ds.set(key, value)
-    """
-    def __init__(self, filename, quotes=True, separator=' ', comment='#'):
-        self.filename = os.path.abspath(filename)
-        self.quotes = quotes
-        self.separator = separator
-        self.comment = comment
-        self.lines = None
-        self.stat = None
-
-    def __enter__(self):
-        with io.open(self.filename) as f:
-            self.stat = os.fstat(f.fileno())
-            self.lines = list(f)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is not None:
-            # something went wrong, reset
-            self.lines = None
-            self.stat = None
-            return
-
-        directory, prefix = os.path.split(self.filename)
-        # use tempfile in same directory to have atomic rename
-        fd, name = tempfile.mkstemp(prefix=prefix, dir=directory, text=True)
-        with io.open(fd, mode='w', closefd=True) as f:
-            for line in self.lines:
-                if not isinstance(line, six.text_type):
-                    line = line.decode('utf-8')
-                f.write(line)
-            self.lines = None
-            os.fchmod(f.fileno(), stat.S_IMODE(self.stat.st_mode))
-            os.fchown(f.fileno(), self.stat.st_uid, self.stat.st_gid)
-            self.stat = None
-            # flush and sync tempfile inode
-            f.flush()
-            os.fsync(f.fileno())
-
-        # rename file and sync directory inode
-        os.rename(name, self.filename)
-        dirfd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(dirfd)
-        finally:
-            os.close(dirfd)
-
-    def set(self, directive, value, quotes=_SENTINEL, separator=_SENTINEL,
-            comment=_SENTINEL):
-        """Set a single directive
-        """
-        if quotes is _SENTINEL:
-            quotes = self.quotes
-        if separator is _SENTINEL:
-            separator = self.separator
-        if comment is _SENTINEL:
-            comment = self.comment
-        # materialize lines
-        # set_directive_lines() modify item, shrink or enlage line count
-        self.lines = list(set_directive_lines(
-            quotes, separator, directive, value, self.lines, comment
-        ))
-
-    def setitems(self, items):
-        """Set multiple directives from a dict or list with key/value pairs
-        """
-        if isinstance(items, dict):
-            # dict-like, use sorted for stable order
-            items = sorted(items.items())
-        for k, v in items:
-            self.set(k, v)
-
-
-def set_directive(filename, directive, value, quotes=True, separator=' ',
-                  comment='#'):
-    """Set a name/value pair directive in a configuration file.
-
-    A value of None means to drop the directive.
-
-    Does not tolerate (or put) spaces around the separator.
-
-    :param filename: input filename
-    :param directive: directive name
-    :param value: value of the directive
-    :param quotes: whether to quote `value` in double quotes. If true, then
-        any existing double quotes are first escaped to avoid
-        unparseable directives.
-    :param separator: character serving as separator between directive and
-        value.  Correct value required even when dropping a directive.
-    :param comment: comment character for the file to keep new values near
-                    their commented-out counterpart
-    """
-    st = os.stat(filename)
-    with open(filename, 'r') as f:
-        lines = list(f)  # read the whole file
-        # materialize new list
-        new_lines = list(set_directive_lines(
-            quotes, separator, directive, value, lines, comment
-        ))
-    with open(filename, 'w') as f:
-        # don't construct the whole string; write line-wise
-        for line in new_lines:
-            f.write(line)
-    os.chown(filename, st.st_uid, st.st_gid)  # reset perms
-
-
-def set_directive_lines(quotes, separator, k, v, lines, comment):
-    """Set a name/value pair in a configuration (iterable of lines).
-
-    Replaces the value of the key if found, otherwise adds it at
-    end.  If value is ``None``, remove the key if found.
-
-    Takes an iterable of lines (with trailing newline).
-    Yields lines (with trailing newline).
-
-    """
-    new_line = ""
-    if v is not None:
-        v_quoted = quote_directive_value(v, '"') if quotes else v
-        new_line = ''.join([k, separator, v_quoted, '\n'])
-
-    # Special case: consider space as "white space" so tabs are allowed
-    if separator == ' ':
-        separator = '[ \t]+'
-
-    found = False
-    addnext = False  # add on next line, found a comment
-    matcher = re.compile(r'\s*{}\s*{}'.format(re.escape(k), separator))
-    cmatcher = re.compile(r'\s*{}\s*{}\s*{}'.format(comment,
-                                                    re.escape(k), separator))
-    for line in lines:
-        if matcher.match(line):
-            found = True
-            addnext = False
-            if v is not None:
-                yield new_line
-        elif addnext:
-            found = True
-            addnext = False
-            yield new_line
-            yield line
-        elif cmatcher.match(line):
-            addnext = True
-            yield line
-        else:
-            yield line
-
-    if not found and v is not None:
-        yield new_line
-
-
-def get_directive(filename, directive, separator=' '):
-    """
-    A rather inefficient way to get a configuration directive.
-
-    :param filename: input filename
-    :param directive: directive name
-    :param separator: separator between directive and value
-
-    :returns: The (unquoted) value if the directive was found, None otherwise
-    """
-    # Special case: consider space as "white space" so tabs are allowed
-    if separator == ' ':
-        separator = '[ \t]+'
-
-    fd = open(filename, "r")
-    for line in fd:
-        if line.lstrip().startswith(directive):
-            line = line.strip()
-
-            match = re.match(r'{}\s*{}\s*(.*)'.format(directive, separator),
-                             line)
-            if match:
-                value = match.group(1)
-            else:
-                raise ValueError("Malformed directive: {}".format(line))
-
-            result = unquote_directive_value(value.strip(), '"')
-            result = result.strip(' ')
-            fd.close()
-            return result
-    fd.close()
-    return None
-
-
 def kadmin(command):
     return ipautil.run(
         [
@@ -786,6 +561,26 @@ def _ensure_nonempty_string(string, message):
         raise ValueError(message)
 
 
+def gpg_command(extra_args, password=None, workdir=None):
+    tempdir = tempfile.mkdtemp('', 'ipa-', workdir)
+    args = [
+        paths.GPG_AGENT,
+        '--batch',
+        '--homedir', tempdir,
+        '--daemon', paths.GPG2,
+        '--batch',
+        '--homedir', tempdir,
+        '--passphrase-fd', '0',
+        '--yes',
+        '--no-tty',
+    ]
+    args.extend(extra_args)
+    try:
+        ipautil.run(args, stdin=password, skip_output=True)
+    finally:
+        shutil.rmtree(tempdir, ignore_errors=True)
+
+
 # uses gpg to compress and encrypt a file
 def encrypt_file(source, dest, password, workdir=None):
     _ensure_nonempty_string(source, 'Missing Source File')
@@ -795,32 +590,11 @@ def encrypt_file(source, dest, password, workdir=None):
     _ensure_nonempty_string(dest, 'Missing Destination File')
     _ensure_nonempty_string(password, 'Missing Password')
 
-    # create a tempdir so that we can clean up with easily
-    tempdir = tempfile.mkdtemp('', 'ipa-', workdir)
-    gpgdir = os.path.join(tempdir, ".gnupg")
-
-    try:
-        try:
-            # give gpg a fake dir so that we can leater remove all
-            # the cruft when we clean up the tempdir
-            os.mkdir(gpgdir)
-            args = [paths.GPG_AGENT,
-                    '--batch',
-                    '--homedir', gpgdir,
-                    '--daemon', paths.GPG,
-                    '--batch',
-                    '--homedir', gpgdir,
-                    '--passphrase-fd', '0',
-                    '--yes',
-                    '--no-tty',
-                    '-o', dest,
-                    '-c', source]
-            ipautil.run(args, password, skip_output=True)
-        except:
-            raise
-    finally:
-        # job done, clean up
-        shutil.rmtree(tempdir, ignore_errors=True)
+    extra_args = [
+        '-o', dest,
+        '-c', source,
+    ]
+    gpg_command(extra_args, password, workdir)
 
 
 def decrypt_file(source, dest, password, workdir=None):
@@ -831,32 +605,12 @@ def decrypt_file(source, dest, password, workdir=None):
     _ensure_nonempty_string(dest, 'Missing Destination File')
     _ensure_nonempty_string(password, 'Missing Password')
 
-    # create a tempdir so that we can clean up with easily
-    tempdir = tempfile.mkdtemp('', 'ipa-', workdir)
-    gpgdir = os.path.join(tempdir, ".gnupg")
+    extra_args = [
+        '-o', dest,
+        '-d', source,
+    ]
 
-    try:
-        try:
-            # give gpg a fake dir so that we can leater remove all
-            # the cruft when we clean up the tempdir
-            os.mkdir(gpgdir)
-            args = [paths.GPG_AGENT,
-                    '--batch',
-                    '--homedir', gpgdir,
-                    '--daemon', paths.GPG,
-                    '--batch',
-                    '--homedir', gpgdir,
-                    '--passphrase-fd', '0',
-                    '--yes',
-                    '--no-tty',
-                    '-o', dest,
-                    '-d', source]
-            ipautil.run(args, password, skip_output=True)
-        except:
-            raise
-    finally:
-        # job done, clean up
-        shutil.rmtree(tempdir, ignore_errors=True)
+    gpg_command(extra_args, password, workdir)
 
 
 def expand_replica_info(filename, password):
@@ -1350,7 +1104,11 @@ def load_external_cert(files, ca_subject):
     cert_file.flush()
 
     ca_file = tempfile.NamedTemporaryFile()
-    x509.write_certificate_list(ca_cert_chain[1:], ca_file.name)
+    x509.write_certificate_list(
+        ca_cert_chain[1:],
+        ca_file.name,
+        mode=0o644
+    )
     ca_file.flush()
 
     return cert_file, ca_file

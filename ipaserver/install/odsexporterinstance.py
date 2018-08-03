@@ -14,6 +14,7 @@ import ldap
 from ipaserver.install import service
 from ipaserver.install import installutils
 from ipapython.dn import DN
+from ipapython import directivesetter
 from ipapython import ipautil
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
@@ -73,13 +74,13 @@ class ODSExporterInstance(service.Service):
     def __enable(self):
 
         try:
-            self.ldap_enable('DNSKeyExporter', self.fqdn, None,
-                             self.suffix)
+            self.ldap_configure('DNSKeyExporter', self.fqdn, None,
+                                self.suffix)
         except errors.DuplicateEntry:
             logger.error("DNSKeyExporter service already exists")
 
     def __setup_key_exporter(self):
-        installutils.set_directive(paths.SYSCONFIG_IPA_ODS_EXPORTER,
+        directivesetter.set_directive(paths.SYSCONFIG_IPA_ODS_EXPORTER,
                                    'SOFTHSM2_CONF',
                                    paths.DNSSEC_SOFTHSM2_CONF,
                                    quotes=False, separator='=')

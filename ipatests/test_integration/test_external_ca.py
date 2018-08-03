@@ -27,7 +27,7 @@ from ipatests.test_integration.base import IntegrationTest
 from ipaplatform.paths import paths
 
 from itertools import chain, repeat
-from ipatests.create_external_ca import ExternalCA
+from ipatests.create_external_ca import ExternalCA, ISSUER_CN
 
 IPA_CA = 'ipa_ca.crt'
 ROOT_CA = 'root_ca.crt'
@@ -37,7 +37,7 @@ PKI_START_STR = 'Started pki_tomcatd'
 
 
 def check_CA_flag(host, nssdb=paths.PKI_TOMCAT_ALIAS_DIR,
-                  cn='example.test'):
+                  cn=ISSUER_CN):
     """
     Check if external CA (by default 'example.test' in our test env) has
     CA flag in nssdb.
@@ -109,11 +109,11 @@ def service_control_dirsrv(host, function):
 
 class TestExternalCA(IntegrationTest):
     """
-    Test of FreeIPA server installation with exernal CA
+    Test of FreeIPA server installation with external CA
     """
     num_replicas = 1
+    num_clients = 1
 
-    @tasks.collect_logs
     def test_external_ca(self):
         # Step 1 of ipa-server-install.
         result = install_server_external_ca_step1(self.master)
@@ -135,6 +135,48 @@ class TestExternalCA(IntegrationTest):
 
         # check that we can also install replica
         tasks.install_replica(self.master, self.replicas[0])
+
+        # check that nsds5ReplicaReleaseTimeout option was set
+        result = self.master.run_command([
+            'ldapsearch',
+            '-x',
+            '-D',
+            'cn=directory manager',
+            '-w', self.master.config.dirman_password,
+            '-b', 'cn=mapping tree,cn=config',
+            '(cn=replica)',
+            '-LLL',
+            '-o',
+            'ldif-wrap=no'])
+        # case insensitive match
+        text = result.stdout_text.lower()
+        # see ipaserver.install.replication.REPLICA_FINAL_SETTINGS
+        assert 'nsds5ReplicaReleaseTimeout: 60'.lower() in text
+        assert 'nsDS5ReplicaBindDnGroupCheckInterval: 60'.lower() in text
+
+    def test_client_installation_with_otp(self):
+        # Test for issue 7526: client installation fails with one-time
+        # password when the master is installed with an externally signed
+        # CA because the whole cert chain is not published in
+        # /usr/share/ipa/html/ca.crt
+
+        # Create a random password for the client
+        client = self.clients[0]
+        client_pwd = 'Secret123'
+        args = ['ipa',
+                'host-add', client.hostname,
+                '--ip-address', client.ip,
+                '--no-reverse',
+                '--password', client_pwd]
+        self.master.run_command(args)
+
+        # Enroll the client with the client_pwd
+        client.run_command(
+            ['ipa-client-install',
+             '--domain', self.master.domain.name,
+             '--server', self.master.hostname,
+             '-w', client_pwd,
+             '-U'])
 
 
 class TestSelfExternalSelf(IntegrationTest):
@@ -170,6 +212,15 @@ class TestSelfExternalSelf(IntegrationTest):
         # Check if external CA have "C" flag after the switch
         result = check_CA_flag(self.master)
         assert bool(result), ('External CA does not have "C" flag')
+
+    def test_issuerDN_after_renew_to_external(self):
+        """ Check if issuer DN is updated after self-signed > external-ca
+
+        This test checks if issuer DN is updated properly after CA is
+        renewed from self-signed to external-ca
+        """
+        result = self.master.run_command(['ipa', 'ca-show', 'ipa'])
+        assert "Issuer DN: CN={}".format(ISSUER_CN) in result.stdout_text
 
     def test_switch_back_to_self_signed(self):
 

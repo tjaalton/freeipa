@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 #
 # Copyright (C) 2014  FreeIPA Contributors see COPYING for license
 #
@@ -107,7 +106,7 @@ class LDAPZoneListReader(ZoneListReader):
         super(LDAPZoneListReader, self).__init__()
 
     def process_ipa_zone(self, op, uuid, zone_ldap):
-        assert (op == 'add' or op == 'del'), 'unsupported op %s' % op
+        assert (op in ['add', 'del']), 'unsupported op %s' % op
         assert uuid is not None
         assert 'idnsname' in zone_ldap, \
             'LDAP zone UUID %s without idnsName' % uuid
@@ -178,7 +177,7 @@ class ODSMgr(object):
 
         Change is only recorded to memory.
         self.sync() have to be called to synchronize change to ODS."""
-        assert op == 'add' or op == 'del'
+        assert op in ('add', 'del')
         self.zl_ldap.process_ipa_zone(op, uuid, attrs)
         logger.debug("LDAP zones: %s", self.zl_ldap.mapping)
 

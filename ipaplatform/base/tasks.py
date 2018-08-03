@@ -133,7 +133,8 @@ class BaseTaskNamespace(object):
 
         raise NotImplementedError()
 
-    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore):
+    def modify_nsswitch_pam_stack(self, sssd, mkhomedir, statestore,
+                                  sudo=True):
         """
         If sssd flag is true, configure pam and nsswitch so that SSSD is used
         for retrieving user information and authentication.
@@ -176,7 +177,7 @@ class BaseTaskNamespace(object):
         """
         Migrate pam stack configuration to authselect.
         """
-        return
+        pass
 
     def set_selinux_booleans(self, required_settings, backup_func=None):
         """Set the specified SELinux booleans
@@ -239,6 +240,9 @@ class BaseTaskNamespace(object):
             logger.debug('Done adding user to group')
         except ipautil.CalledProcessError as e:
             logger.debug('Failed to add user to group: %s', e)
+
+    def setup_httpd_logging(self):
+        raise NotImplementedError()
 
 
 tasks = BaseTaskNamespace()

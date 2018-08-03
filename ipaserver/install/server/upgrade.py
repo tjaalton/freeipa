@@ -4,12 +4,14 @@
 
 from __future__ import print_function, absolute_import
 
+import errno
 import logging
 import re
 import os
 import shutil
 import pwd
 import fileinput
+import stat
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -25,7 +27,7 @@ from ipaclient.install.client import sssd_enable_service
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipapython import ipautil, version
-from ipapython import dnsutil
+from ipapython import dnsutil, directivesetter
 from ipapython.dn import DN
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
@@ -46,6 +48,7 @@ from ipaserver.install import dnskeysyncinstance
 from ipaserver.install import dogtaginstance
 from ipaserver.install import krbinstance
 from ipaserver.install import adtrustinstance
+from ipaserver.install import replication
 from ipaserver.install.upgradeinstance import IPAUpgrade
 from ipaserver.install.ldapupdate import BadSyntax
 
@@ -352,7 +355,7 @@ def ca_enable_ldap_profile_subsystem(ca):
     try:
         for i in range(15):
             directive = "subsystem.{}.class".format(i)
-            value = installutils.get_directive(
+            value = directivesetter.get_directive(
                 paths.CA_CS_CFG_PATH,
                 directive,
                 separator='=')
@@ -365,7 +368,7 @@ def ca_enable_ldap_profile_subsystem(ca):
         return False
 
     if needs_update:
-        installutils.set_directive(
+        directivesetter.set_directive(
             paths.CA_CS_CFG_PATH,
             directive,
             'com.netscape.cmscore.profile.LDAPProfileSubsystem',
@@ -407,14 +410,14 @@ def ca_add_default_ocsp_uri(ca):
         logger.info('CA is not configured')
         return False
 
-    value = installutils.get_directive(
+    value = directivesetter.get_directive(
         paths.CA_CS_CFG_PATH,
         'ca.defaultOcspUri',
         separator='=')
     if value:
         return False  # already set; restart not needed
 
-    installutils.set_directive(
+    directivesetter.set_directive(
         paths.CA_CS_CFG_PATH,
         'ca.defaultOcspUri',
         'http://ipa-ca.%s/ca/ocsp' % ipautil.format_netloc(api.env.domain),
@@ -1107,7 +1110,7 @@ def migrate_crl_publish_dir(ca):
         return False
 
     try:
-        old_publish_dir = installutils.get_directive(
+        old_publish_dir = directivesetter.get_directive(
             paths.CA_CS_CFG_PATH,
             'ca.publish.publisher.instance.FileBaseCRLPublisher.directory',
             separator='=')
@@ -1144,7 +1147,7 @@ def migrate_crl_publish_dir(ca):
                 logger.error('Cannot move CRL file to new directory: %s', e)
 
     try:
-        installutils.set_directive(
+        directivesetter.set_directive(
             paths.CA_CS_CFG_PATH,
             'ca.publish.publisher.instance.FileBaseCRLPublisher.directory',
             publishdir, quotes=False, separator='=')
@@ -1213,6 +1216,7 @@ def find_subject_base():
 
     logger.error('Unable to determine certificate subject base. '
                  'certmap.conf will not be updated.')
+    return None
 
 
 def uninstall_selfsign(ds, http):
@@ -1678,11 +1682,14 @@ def update_replica_config(db_suffix):
     except ipalib.errors.NotFound:
         return  # entry does not exist until a replica is installed
 
-    if 'nsds5replicareleasetimeout' not in entry:
-        # See https://pagure.io/freeipa/issue/7488
-        logger.info("Adding nsds5replicaReleaseTimeout=60 to %s", dn)
-        entry['nsds5replicareleasetimeout'] = '60'
+    for key, value in replication.REPLICA_FINAL_SETTINGS.items():
+        entry[key] = value
+    try:
         api.Backend.ldap2.update_entry(entry)
+    except ipalib.errors.EmptyModlist:
+        pass
+    else:
+        logger.info("Updated entry %s", dn)
 
 
 def migrate_to_authselect():
@@ -1698,6 +1705,34 @@ def migrate_to_authselect():
         raise RuntimeError(
             "Failed to migrate to authselect profile: %s" % e, 1)
     sysupgrade.set_upgrade_state('authcfg', 'migrated_to_authselect', True)
+
+
+def fix_permissions():
+    """Fix permission of public accessible files and directories
+
+    In case IPA was installed with restricted umask, some public files and
+    directories may not be readable and accessible.
+
+    See https://pagure.io/freeipa/issue/7594
+    """
+    candidates = [
+        os.path.dirname(paths.GSSAPI_SESSION_KEY),
+        paths.CA_BUNDLE_PEM,
+        paths.KDC_CA_BUNDLE_PEM,
+        paths.IPA_CA_CRT,
+        paths.IPA_P11_KIT,
+    ]
+    for filename in candidates:
+        try:
+            s = os.stat(filename)
+        except OSError as e:
+            if e.errno != errno.ENOENT:
+                raise
+            continue
+        mode = 0o755 if stat.S_ISDIR(s.st_mode) else 0o644
+        if mode != stat.S_IMODE(s.st_mode):
+            logger.debug("Fix permission of %s to %o", filename, mode)
+            os.chmod(filename, mode)
 
 
 def upgrade_configuration():
@@ -1724,6 +1759,7 @@ def upgrade_configuration():
         ntpd_cleanup(fqdn, fstore)
 
     check_certs()
+    fix_permissions()
 
     auto_redirect = find_autoredirect(fqdn)
     sub_dict = dict(
@@ -1734,6 +1770,7 @@ def upgrade_configuration():
         DOGTAG_PORT=8009,
         CLONE='#',
         WSGI_PREFIX_DIR=paths.WSGI_PREFIX_DIR,
+        WSGI_PROCESSES=constants.WSGI_PROCESSES,
         GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
         FONTS_DIR=paths.FONTS_DIR,
         IPA_CCACHES=paths.IPA_CCACHES,
@@ -1765,7 +1802,7 @@ def upgrade_configuration():
         ca_restart = migrate_crl_publish_dir(ca)
 
         if ca.is_configured():
-            crl = installutils.get_directive(
+            crl = directivesetter.get_directive(
                 paths.CA_CS_CFG_PATH, 'ca.crl.MasterCRL.enableCRLUpdates', '=')
             sub_dict['CLONE']='#' if crl.lower() == 'true' else ''
 
@@ -1797,7 +1834,7 @@ def upgrade_configuration():
         if kra.is_installed():
             logger.info('[Ensuring ephemeralRequest is enabled in KRA]')
             kra.backup_config()
-            value = installutils.get_directive(
+            value = directivesetter.get_directive(
                 paths.KRA_CS_CFG_PATH,
                 'kra.ephemeralRequests',
                 separator='=')

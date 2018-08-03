@@ -16,9 +16,10 @@ import textwrap
 
 import six
 
+from ipaclient.install.client import check_ldap_conf
 from ipaclient.install.ipachangeconf import IPAChangeConf
 from ipalib.install import certmonger, sysrestore
-from ipapython import ipautil
+from ipapython import ipautil, version
 from ipapython.ipautil import (
     ipa_generate_password, run, user_input)
 from ipapython.admintool import ScriptError
@@ -312,6 +313,7 @@ def install_check(installer):
 
     tasks.check_ipv6_stack_enabled()
     tasks.check_selinux_status()
+    check_ldap_conf()
 
     if options.master_password:
         msg = ("WARNING:\noption '-P/--master-password' is deprecated. "
@@ -380,6 +382,7 @@ def install_check(installer):
     print("======================================="
           "=======================================")
     print("This program will set up the FreeIPA Server.")
+    print("Version {}".format(version.VERSION))
     print("")
     print("This includes:")
     if setup_ca:
@@ -767,10 +770,7 @@ def install(installer):
         # chrony will be handled here in uninstall() method as well by invoking
         # the ipa-server-install --uninstall
         if not options.no_ntp:
-            print("Synchronizing time")
-            if ipaclient.install.client.sync_time(options, fstore, sstore):
-                print("Time synchronization was successful.")
-            else:
+            if not ipaclient.install.client.sync_time(options, fstore, sstore):
                 print("Warning: IPA was unable to sync time with chrony!")
                 print("         Time synchronization is required for IPA "
                       "to work correctly")
@@ -901,14 +901,6 @@ def install(installer):
 
     if options.setup_dns:
         dns.install(False, False, options)
-    else:
-        # Create a BIND instance
-        bind = bindinstance.BindInstance(fstore)
-        bind.setup(host_name, ip_addresses, realm_name,
-                   domain_name, (), 'first', (),
-                   zonemgr=options.zonemgr,
-                   no_dnssec_validation=options.no_dnssec_validation)
-        bind.create_file_with_system_records()
 
     if options.setup_adtrust:
         adtrust.install(False, options, fstore, api)
@@ -940,6 +932,16 @@ def install(installer):
         print()
     except Exception:
         raise ScriptError("Configuration of client side components failed!")
+
+    # Enable configured services and update DNS SRV records
+    service.enable_services(host_name)
+    api.Command.dns_update_system_records()
+
+    if not options.setup_dns:
+        # After DNS and AD trust are configured and services are
+        # enabled, create a dummy instance to dump DNS configuration.
+        bind = bindinstance.BindInstance(fstore)
+        bind.create_file_with_system_records()
 
     # Everything installed properly, activate ipa service.
     services.knownservices.ipa.enable()
@@ -1110,9 +1112,9 @@ def uninstall(installer):
     dsinstance.DsInstance(fstore=fstore).uninstall()
     if _server_trust_ad_installed:
         adtrustinstance.ADTRUSTInstance(fstore).uninstall()
-    # ldap_uri isn't used, but IPAKEMKeys parses /etc/ipa/default.conf
+    # realm isn't used, but IPAKEMKeys parses /etc/ipa/default.conf
     # otherwise, see https://pagure.io/freeipa/issue/7474 .
-    custodiainstance.CustodiaInstance(ldap_uri='ldapi://invalid').uninstall()
+    custodiainstance.CustodiaInstance(realm='REALM.INVALID').uninstall()
     otpdinstance.OtpdInstance().uninstall()
     tasks.restore_hostname(fstore, sstore)
     fstore.restore_all_files()

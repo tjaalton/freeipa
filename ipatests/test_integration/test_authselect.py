@@ -51,7 +51,7 @@ class TestClientInstallation(IntegrationTest):
     Tests the client installation with authselect profile.
 
     When the system is a fresh installation, authselect tool is available
-    and the default profile 'sssd' without any option is set be default.
+    and the default profile 'sssd' without any option is set by default.
     But when the system has been upgraded from older version, even though
     authselect tool is available, no profile is set (authselect current would
     return 'No existing configuration detected').
@@ -121,7 +121,8 @@ class TestClientInstallation(IntegrationTest):
         assert result.returncode == 0
         assert self.msg_warn_install in result.stderr_text
         # Client installation must configure the 'sssd' profile
-        check_authselect_profile(self.client, default_profile)
+        # with sudo
+        check_authselect_profile(self.client, default_profile, ('with-sudo',))
 
     def test_uninstall_client_no_preconfigured_profile(self):
         """
@@ -143,14 +144,25 @@ class TestClientInstallation(IntegrationTest):
         # Configure a profile winbind with feature with-fingerprint
         apply_authselect_profile(
             self.client, preconfigured_profile, preconfigured_options)
+        # Make sure that oddjobd is disabled and stopped
+        self.client.run_command(["systemctl", "disable", "oddjobd", "--now"])
 
         # Call the installer, must succeed and store the winbind profile
         # in the statestore, but install sssd profile with-mkhomedir
         result = self._install_client(extraargs=['-f', '--mkhomedir'])
         assert result.returncode == 0
         assert self.msg_warn_install not in result.stderr_text
+        # Client installation must configure the 'sssd' profile
+        # with mkhomedir (because of extraargs) and with sudo
         check_authselect_profile(
-            self.client, default_profile, ('with-mkhomedir',))
+            self.client, default_profile, ('with-mkhomedir', 'with-sudo'))
+
+        # Test for ticket 7604:
+        # ipa-client-install --mkhomedir doesn't enable oddjobd
+        # Check that oddjobd has been enabled and started
+        # because --mkhomedir was used
+        status = self.client.run_command(["systemctl", "status", "oddjobd"])
+        assert "active (running)" in status.stdout_text
 
     def test_uninstall_client_preconfigured_profile(self):
         """
@@ -163,6 +175,17 @@ class TestClientInstallation(IntegrationTest):
         assert self.msg_warn_uninstall not in result.stderr_text
         check_authselect_profile(
             self.client, preconfigured_profile, preconfigured_options)
+
+    def test_install_client_no_sudo(self):
+        """
+        Test client installation with --no-sudo option
+        """
+        result = self._install_client(extraargs=['-f', '--no-sudo'])
+        assert result.returncode == 0
+        assert self.msg_warn_install not in result.stderr_text
+        # Client installation must configure the 'sssd' profile
+        # but not with sudo (because of extraargs)
+        check_authselect_profile(self.client, default_profile, ())
 
     @classmethod
     def uninstall(cls, mh):
@@ -179,7 +202,7 @@ class TestServerInstallation(IntegrationTest):
     Tests the server installation with authselect profile.
 
     When the system is a fresh installation, authselect tool is available
-    and the default profile 'sssd' without any option is set be default.
+    and the default profile 'sssd' without any option is set by default.
     But when the system has been upgraded from older version, even though
     authselect tool is available, no profile is set (authselect current would
     return 'No existing configuration detected').
@@ -200,7 +223,7 @@ class TestServerInstallation(IntegrationTest):
         apply_authselect_profile(
             self.master, preconfigured_profile, preconfigured_options)
         tasks.install_master(self.master, setup_dns=False)
-        check_authselect_profile(self.master, default_profile)
+        check_authselect_profile(self.master, default_profile, ('with-sudo',))
 
     def test_uninstall(self):
         """
