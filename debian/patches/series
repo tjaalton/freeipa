@@ -1,12 +1,12 @@
 # upstreamed
 
 # not upstreamable
-
-# send upstream
 fix-replicainstall.diff
 create-sysconfig-ods.diff
-fix-opendnssec-setup.diff
 hack-tomcat-race.diff
+
+# send upstream
+fix-opendnssec-setup.diff
 fix-fontawesome-path.diff
 fix-krb5kdc-cert-path.diff
 ipa-httpd-pwdreader-force-fqdn.diff
