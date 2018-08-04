@@ -1,6 +1,6 @@
 Source: freeipa
 Section: net
-Priority: extra
+Priority: optional
 Maintainer: Debian FreeIPA Team <pkg-freeipa-devel@lists.alioth.debian.org>
 Uploaders: Timo Aaltonen <tjaalton@debian.org>
 Build-Depends:

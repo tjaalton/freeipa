@@ -32,6 +32,7 @@ freeipa (4.7.0-1) UNRELEASED; urgency=medium
   * control: Add python3-pkg-resources to build-depends.
   * client.install: Add new template.
   * control: Update vcs urls.
+  * control: Mark priority as optional.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 
