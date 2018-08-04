@@ -6,6 +6,7 @@ usr/sbin/ipa-getkeytab
 usr/sbin/ipa-join
 usr/sbin/ipa-rmkeytab
 usr/share/bash-completion/completions/ipa
+usr/share/ipa/client/*.template
 usr/share/man/man1/ipa.1*
 usr/share/man/man1/ipa-certupdate.1*
 usr/share/man/man1/ipa-client-automount.1*
