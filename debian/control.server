@@ -5,6 +5,7 @@ Replaces: freeipa-server-trust-ad (<< 4.3.0-1)
 Depends:
  389-ds-base (>= 1.3.7.9),
  acl,
+ adduser,
  apache2,
  certmonger (>= 0.79.5-2),
  chrony,

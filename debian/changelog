@@ -34,6 +34,7 @@ freeipa (4.7.0-1) UNRELEASED; urgency=medium
   * control: Update vcs urls.
   * control: Mark priority as optional.
   * control, rules: Bump dh to 11.
+  * control: Add adduser to server depends.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 
