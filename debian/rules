@@ -98,11 +98,11 @@ override_dh_missing:
 	dh_missing --fail-missing
 
 ifneq ($(ONLY_CLIENT), 1)
-override_dh_systemd_enable:
-	dh_systemd_enable -pfreeipa-server --no-enable ipa.service
-	dh_systemd_enable -pfreeipa-server --no-enable ipa-dnskeysyncd.service
-	dh_systemd_enable -pfreeipa-server --no-enable ipa-custodia.service
-	dh_systemd_enable -pfreeipa-server --no-enable ipa-ods-exporter.service
+override_dh_installsystemd:
+	dh_installsystemd -pfreeipa-server --no-enable ipa.service
+	dh_installsystemd -pfreeipa-server --no-enable ipa-dnskeysyncd.service
+	dh_installsystemd -pfreeipa-server --no-enable ipa-custodia.service
+	dh_installsystemd -pfreeipa-server --no-enable ipa-ods-exporter.service
 endif
 
 override_dh_fixperms:
@@ -115,5 +115,5 @@ override_dh_fixperms:
 	fi
 
 %:
-	dh $@ --with autoreconf,python2,systemd
+	dh $@ --with python2
 #		--builddirectory=build

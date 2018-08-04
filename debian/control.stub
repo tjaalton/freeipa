@@ -6,10 +6,8 @@ Uploaders: Timo Aaltonen <tjaalton@debian.org>
 Build-Depends:
  389-ds-base-dev (>= 1.3.7.9),
  check,
- debhelper (>= 9),
- dh-autoreconf,
+ debhelper (>= 11),
  dh-python,
- dh-systemd,
  gettext,
  krb5-user,
  libcmocka-dev,
