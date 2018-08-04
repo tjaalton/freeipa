@@ -2,10 +2,10 @@
 freeipa source: source-is-missing debian/missing-sources/qrcode.js line length is 602 characters (>512)
 
 # missing-sources/dojo/*, see install/ui/src/dojo.profile.js
-freeipa source: source-is-missing install/ui/build/dojo/dojo.js line length is 32768 characters (>512)
+freeipa source: source-is-missing install/ui/build/dojo/dojo.js line length is 31968 characters (>512)
 
 # missing-sources/jquery-*.js
 freeipa source: source-is-missing install/ui/src/libs/jquery.js line length is 32023 characters (>512)
 
 # missing-sources/build/*, see install/ui/src/build.profile.js
-freeipa source: source-is-missing install/ui/util/build/build.js line length is 32768 characters (>512)
+freeipa source: source-is-missing install/ui/util/build/build.js line length is 31954 characters (>512)
