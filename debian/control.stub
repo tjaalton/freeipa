@@ -64,7 +64,7 @@ Build-Depends:
  systemd,
  uuid-dev
 Standards-Version: 3.9.6
-Vcs-Git: https://anonscm.debian.org/git/pkg-freeipa/freeipa.git
-Vcs-Browser: https://anonscm.debian.org/cgit/pkg-freeipa/freeipa.git
+Vcs-Git: https://salsa.debian.org/freeipa-team/freeipa.git
+Vcs-Browser: https://salsa.debian.org/freeipa-team/freeipa
 Homepage: http://www.freeipa.org
 
