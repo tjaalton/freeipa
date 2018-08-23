@@ -37,6 +37,7 @@ freeipa (4.7.0-1) UNRELEASED; urgency=medium
   * control: Add adduser to server depends.
   * source/lintian-overrides: Updated.
   * control: Bump policy to 4.1.5.
+  * control: Update maintainer list address.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 
