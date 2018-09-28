@@ -39,7 +39,7 @@ Build-Depends:
  python-gssapi,
  python-jinja2,
  python-kdcproxy,
- python-ldap (>= 2.4.15),
+ python-ldap (>= 3.1),
  python-lesscpy,
  python-libipa-hbac,
  python-libsss-nss-idmap,

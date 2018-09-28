@@ -40,6 +40,7 @@ freeipa (4.7.0-1) UNRELEASED; urgency=medium
   * control: Update maintainer list address.
   * control: Build the server only on archs where 389-ds-base is
     available.
+  * control: Bump python-ldap build-dep to 3.1.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Wed, 18 Apr 2018 17:50:11 +0300
 
