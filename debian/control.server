@@ -1,5 +1,5 @@
 Package: freeipa-server
-Architecture: any
+Architecture: amd64 arm64 mips64el ppc64el s390x
 Breaks: freeipa-server-trust-ad (<< 4.3.0-1)
 Replaces: freeipa-server-trust-ad (<< 4.3.0-1)
 Depends:
@@ -76,7 +76,7 @@ Description: FreeIPA centralized identity framework -- IPA DNS integration
  This package adds DNS integration with BIND 9.
 
 Package: freeipa-server-trust-ad
-Architecture: any
+Architecture: amd64 arm64 mips64el ppc64el s390x
 Depends:
  freeipa-common (= ${source:Version}),
  freeipa-server (= ${binary:Version}),
