@@ -12,3 +12,4 @@ fix-krb5kdc-cert-path.diff
 ipa-httpd-pwdreader-force-fqdn.diff
 fix-gzip-path.diff
 fix-py3-lesscpy-name.diff
+dont-migrate-to-authselect.diff
