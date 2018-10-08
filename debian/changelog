@@ -5,6 +5,7 @@ freeipa (4.7.1-1) UNRELEASED; urgency=medium
     return true when trying to migrate to it. (LP: #1793994)
   * control: Move client dependency on chrony to recommends. (Closes:
     #909803)
+  * control: Build server on any arch again.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 01 Oct 2018 11:37:15 +0300
 
