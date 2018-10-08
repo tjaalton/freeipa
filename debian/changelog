@@ -6,6 +6,8 @@ freeipa (4.7.1-1) UNRELEASED; urgency=medium
   * control: Move client dependency on chrony to recommends. (Closes:
     #909803)
   * control: Build server on any arch again.
+  * tests: Don't fail the tests, just dump the log if something goes
+    wrong.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 01 Oct 2018 11:37:15 +0300
 
