@@ -1,7 +1,9 @@
 # 389-ds-base 1.4 no longer supports i686 platform, build only client
 # packages, https://bugzilla.redhat.com/show_bug.cgi?id=1544386
-%ifarch %{ix86}
-%{!?ONLY_CLIENT:%global ONLY_CLIENT 1}
+%if 0%{?fedora} >= 28 || 0%{?rhel} > 7
+    %ifarch %{ix86}
+        %{!?ONLY_CLIENT:%global ONLY_CLIENT 1}
+    %endif
 %endif
 
 # Define ONLY_CLIENT to only make the ipa-client and ipa-python
@@ -92,13 +94,17 @@
 
 %endif  # Fedora
 
-# Require Dogtag PKI 10.6.1 with Python 3 and SQL NSSDB fixes for external
-# CA support, https://bugzilla.redhat.com/show_bug.cgi?id=1573094
-%global pki_version 10.6.1
+# Require Dogtag PKI 10.6.6 to detect when fips is available,
+# https://pagure.io/freeipa/issue/7608
+%global pki_version 10.6.6
 
 # NSS release with fix for CKA_LABEL import bug in shared SQL database.
 # https://bugzilla.redhat.com/show_bug.cgi?id=1568271
 %global nss_version 3.36.1-1.1
+
+# One-Way Trust authenticated by trust secret
+# https://bugzilla.redhat.com/show_bug.cgi?id=1345975#c20
+%global sssd_version 1.16.3-2
 
 %define krb5_base_version %(LC_ALL=C rpm -q --qf '%%{VERSION}' krb5-devel | grep -Eo '^[^.]+\.[^.]+')
 
@@ -167,8 +173,7 @@ BuildRequires:  libtevent-devel
 BuildRequires:  libuuid-devel
 BuildRequires:  libsss_idmap-devel
 BuildRequires:  libsss_certmap-devel
-# 1.15.3: sss_nss_getlistbycert (https://pagure.io/SSSD/sssd/issue/3050)
-BuildRequires:  libsss_nss_idmap-devel >= 1.15.3
+BuildRequires:  libsss_nss_idmap-devel >= %{sssd_version}
 BuildRequires:  nodejs
 BuildRequires:  uglify-js
 BuildRequires:  libverto-devel
@@ -291,7 +296,7 @@ BuildRequires:  python3-samba
 BuildRequires:  python3-six
 BuildRequires:  python3-sss
 BuildRequires:  python3-sss-murmur
-BuildRequires:  python3-sssdconfig
+BuildRequires:  python3-sssdconfig >= %{sssd_version}
 BuildRequires:  python3-systemd
 BuildRequires:  python3-yubico
 %endif # with_lint
@@ -329,6 +334,7 @@ Requires: python2-ipaserver = %{version}-%{release}
 Requires: python2-ldap >= %{python_ldap_version}
 %endif
 Requires: 389-ds-base >= %{ds_version}
+Requires: 389-ds-base-legacy-tools >= %{ds_version}
 Requires: openldap-clients > 2.4.35-4
 Requires: nss >= %{nss_version}
 Requires: nss-tools >= %{nss_version}
@@ -386,8 +392,7 @@ Requires: gzip
 Requires: oddjob
 # 0.7.0-2: https://pagure.io/gssproxy/pull-request/172
 Requires: gssproxy >= 0.7.0-2
-# 1.15.2: FindByNameAndCertificate (https://pagure.io/SSSD/sssd/issue/3050)
-Requires: sssd-dbus >= 1.15.2
+Requires: sssd-dbus >= %{sssd_version}
 
 Provides: %{alt_name}-server = %{version}
 Conflicts: %{alt_name}-server
@@ -470,7 +475,7 @@ Requires: python3-kdcproxy >= 0.3
 Requires: python3-lxml
 Requires: python3-pki >= %{pki_version}
 Requires: python3-pyasn1 >= 0.3.2-2
-Requires: python3-sssdconfig
+Requires: python3-sssdconfig >= %{sssd_version}
 Requires: rpm-libs
 
 %description -n python3-ipaserver
@@ -580,12 +585,12 @@ Requires: %{name}-common = %{version}-%{release}
 Requires: python3-gssapi >= 1.2.0-5
 Requires: python3-ipaclient = %{version}-%{release}
 Requires: python3-ldap >= %{python_ldap_version}
-Requires: python3-sssdconfig
+Requires: python3-sssdconfig >= %{sssd_version}
 %else
 Requires: python2-gssapi >= 1.2.0-5
 Requires: python2-ipaclient = %{version}-%{release}
 Requires: python2-ldap >= %{python_ldap_version}
-Requires: python2-sssdconfig
+Requires: python2-sssdconfig >= %{sssd_version}
 %endif
 Requires: cyrus-sasl-gssapi%{?_isa}
 Requires: chrony
@@ -600,7 +605,7 @@ Requires: initscripts
 %endif
 Requires: libcurl >= 7.21.7-2
 Requires: xmlrpc-c >= 1.27.4
-Requires: sssd >= 1.14.0
+Requires: sssd-ipa >= %{sssd_version}
 Requires: certmonger >= 0.79.5-1
 Requires: nss-tools >= %{nss_version}
 Requires: bind-utils
@@ -609,7 +614,7 @@ Requires: libsss_autofs
 Requires: autofs
 Requires: libnfsidmap
 Requires: nfs-utils
-Requires: sssd-tools
+Requires: sssd-tools >= %{sssd_version}
 Requires(post): policycoreutils
 
 Provides: %{alt_name}-client = %{version}
@@ -907,7 +912,7 @@ Requires: python3-polib
 Requires: python3-pytest >= 2.6
 Requires: python3-pytest-multihost >= 0.5
 Requires: python3-pytest-sourceorder
-Requires: python3-sssdconfig
+Requires: python3-sssdconfig >= %{sssd_version}
 Requires: tar
 Requires: xz
 
@@ -960,6 +965,7 @@ find \
 	-type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
 	-exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!%{__python2}|' {} \;
 
+autoreconf -ivf
 %configure --with-vendor-suffix=-%{release} \
            %{enable_server_option} \
            %{with_ipatests_option} \
@@ -969,6 +975,7 @@ popd
 
 export PYTHON=%{__python3}
 pushd %{_builddir}/freeipa-%{version}-python3
+autoreconf -ivf
 %configure --with-vendor-suffix=-%{release} \
            %{enable_server_option} \
            %{with_ipatests_option} \
@@ -1015,7 +1022,7 @@ ln -rs %{buildroot}%{_bindir}/ipa-test-task-%{python3_version} %{buildroot}%{_bi
 pushd %{_builddir}/freeipa-%{version}-python2
 %{__make} python_install DESTDIR=%{?buildroot} INSTALL="%{__install} -p"
 popd
-%if 0%{?with_python2} && 0%{?fedora} < 29
+%if 0%{?with_ipatests} && 0%{?fedora} < 29
 # Fedora 29 workaround: don't ship ipatests binaries
 mv %{buildroot}%{_bindir}/ipa-run-tests %{buildroot}%{_bindir}/ipa-run-tests-%{python2_version}
 mv %{buildroot}%{_bindir}/ipa-test-config %{buildroot}%{_bindir}/ipa-test-config-%{python2_version}
@@ -1297,7 +1304,6 @@ fi
 %{_sbindir}/ipa-server-install
 %{_sbindir}/ipa-replica-conncheck
 %{_sbindir}/ipa-replica-install
-%{_sbindir}/ipa-replica-prepare
 %{_sbindir}/ipa-replica-manage
 %{_sbindir}/ipa-csreplica-manage
 %{_sbindir}/ipa-server-certinstall
@@ -1353,7 +1359,6 @@ fi
 %{_mandir}/man1/ipa-replica-install.1*
 %{_mandir}/man1/ipa-replica-manage.1*
 %{_mandir}/man1/ipa-csreplica-manage.1*
-%{_mandir}/man1/ipa-replica-prepare.1*
 %{_mandir}/man1/ipa-server-certinstall.1*
 %{_mandir}/man1/ipa-server-install.1*
 %{_mandir}/man1/ipa-server-upgrade.1*
@@ -1415,9 +1420,7 @@ fi
 %{_usr}/share/ipa/html/ssbrowser.html
 %{_usr}/share/ipa/html/unauthorized.html
 %dir %{_usr}/share/ipa/migration
-%{_usr}/share/ipa/migration/error.html
 %{_usr}/share/ipa/migration/index.html
-%{_usr}/share/ipa/migration/invalid.html
 %{_usr}/share/ipa/migration/migration.py*
 %dir %{_usr}/share/ipa/ui
 %{_usr}/share/ipa/ui/index.html
@@ -1425,7 +1428,6 @@ fi
 %{_usr}/share/ipa/ui/sync_otp.html
 %{_usr}/share/ipa/ui/*.ico
 %{_usr}/share/ipa/ui/*.css
-%{_usr}/share/ipa/ui/*.js
 %dir %{_usr}/share/ipa/ui/css
 %{_usr}/share/ipa/ui/css/*.css
 %dir %{_usr}/share/ipa/ui/js

@@ -27,6 +27,7 @@ define(['dojo/_base/declare',
         'dojo/topic',
         '../ipa',
         '../auth',
+        '../config',
         '../reg',
         '../FieldBinder',
         '../text',
@@ -34,7 +35,8 @@ define(['dojo/_base/declare',
         './LoginScreenBase'
        ],
        function(declare, Deferred, construct, dom_style, query, on, topic,
-                IPA, auth, reg, FieldBinder, text, util, LoginScreenBase) {
+                IPA, auth, config, reg, FieldBinder, text, util,
+                LoginScreenBase) {
 
 
     /**
@@ -51,34 +53,39 @@ define(['dojo/_base/declare',
 
         expired_msg: "Your session has expired. Please re-login.",
 
-        form_auth_msg: "<i class=\"fa fa-info-circle\"></i> To log in with <strong>username and password</strong>, enter them in the corresponding fields, then click Login.",
+        form_auth_msg: "<i class=\"fa fa-info-circle\"></i> To log in with " +
+            "<strong>username and password</strong>, enter them in the " +
+            "corresponding fields, then click Login.",
 
-        kerberos_msg: "<i class=\"fa fa-info-circle\"></i> To log in with <strong>Kerberos</strong>, please make sure you" +
-                    " have valid tickets (obtainable via kinit) and " +
-                    "<a href='http://${host}/ipa/config/ssbrowser.html'>configured</a>" +
-                    " the browser correctly, then click Login. ",
-        cert_msg: "<i class=\"fa fa-info-circle\"></i> To log in with <strong>certificate</strong>," +
-              " please make sure you have valid personal certificate. ",
+        kerberos_msg: "<i class=\"fa fa-info-circle\"></i> To log in with " +
+            "<strong>Kerberos</strong>, please make sure you" +
+            " have valid tickets (obtainable via kinit) and <a href=" +
+            "'http://${host}/ipa/config/ssbrowser.html'>configured</a>" +
+            " the browser correctly, then click Login. ",
+        cert_msg: "<i class=\"fa fa-info-circle\"></i> To log in with " +
+            "<strong>certificate</strong>, please make sure you have valid " +
+            "personal certificate. ",
 
-        form_auth_failed: "Login failed due to an unknown reason. ",
+        continue_msg: "Continue to next page",
+
+        form_auth_failed: "Login failed due to an unknown reason",
 
         krb_auth_failed: "Authentication with Kerberos failed",
 
         cert_auth_failed: "Authentication with personal certificate failed",
 
-        password_expired: "Your password has expired. Please enter a new password.",
+        password_expired: "Your password has expired. Please enter a new " +
+            "password.",
 
         password_change_complete: "Password change complete",
 
-        denied: "Sorry you are not allowed to access this service.",
+        redirect_msg: "You will be redirected in ${count}s",
 
-        krbprincipal_expired: "Kerberos Principal you entered is expired.",
+        krbprincipal_expired: "Kerberos Principal you entered is expired",
 
-        invalid_password: "The password you entered is incorrect. ",
+        invalid_password: "The password or username you entered is incorrect",
 
-        user_locked: "The user account you entered is locked. ",
-
-        x509_url: '/ipa/session/login_x509',
+        user_locked: "The user account you entered is locked",
 
         //nodes:
         login_btn_node: null,
@@ -88,7 +95,7 @@ define(['dojo/_base/declare',
         /**
          * View this form is in.
          *
-         * Possible views: ['login', 'reset']
+         * Possible views: ['login', 'reset', 'reset_and_login']
          * @property {string}
          */
         view: 'login',
@@ -97,7 +104,7 @@ define(['dojo/_base/declare',
 
             this.cert_btn_node = IPA.button({
                 name: 'cert_auth',
-		title: text.get('@i18n:login.login_certificate_desc',
+                title: text.get('@i18n:login.login_certificate_desc',
                     'Log in using personal certificate'),
                 label: text.get('@i18n:login.login_certificate',
                     'Log In Using Certificate'),
@@ -136,7 +143,8 @@ define(['dojo/_base/declare',
 
             this.reset_btn_node = IPA.button({
                 name: 'reset',
-                label: text.get('@i18n:buttons.reset_password', "Reset Password"),
+                label: text.get('@i18n:buttons.reset_password',
+                                "Reset Password"),
                 'class': 'btn-primary btn-lg',
                 click: this.on_confirm.bind(this)
             })[0];
@@ -145,7 +153,8 @@ define(['dojo/_base/declare',
 
             this.reset_and_login_btn_node = IPA.button({
                 name: 'reset_and_login',
-                label: text.get('@i18n:buttons.reset_password_and_login', "Reset Password and Login"),
+                label: text.get('@i18n:buttons.reset_password_and_login',
+                                "Reset Password and Log in"),
                 'class': 'btn-primary btn-lg',
                 click: this.on_confirm.bind(this)
             })[0];
@@ -164,14 +173,16 @@ define(['dojo/_base/declare',
         },
 
         post_create_fields: function() {
-            var u_f = this.get_field('username');
-            var p_f = this.get_field('password');
-            var otp_f = this.get_field('otp');
+            if (this.view === 'login') {
+                var u_f = this.get_field('username');
+                var p_f = this.get_field('password');
+                var otp_f = this.get_field('otp');
 
-            u_f.on('value-change', this.on_form_change.bind(this));
-            p_f.on('value-change', this.on_form_change.bind(this));
-            otp_f.on('value-change', this.on_otp_change.bind(this));
-            this.on_form_change();
+                u_f.on('value-change', this.on_form_change.bind(this));
+                p_f.on('value-change', this.on_form_change.bind(this));
+                otp_f.on('value-change', this.on_otp_change.bind(this));
+                this.on_form_change();
+            }
         },
 
         on_form_change: function(event) {
@@ -185,7 +196,7 @@ define(['dojo/_base/declare',
         },
 
         on_otp_change: function(event) {
-            if (this.view === 'login') return;
+            if (this.view === 'login' || this.view === 'reset') return;
             if (!event.value[0]) {
                 this.set_visible_buttons(['cancel', 'reset_and_login']);
             } else {
@@ -200,10 +211,12 @@ define(['dojo/_base/declare',
         },
 
         on_confirm: function() {
-            if (this.view == 'login') {
+            if (this.view === 'login') {
                 this.login();
-            } else {
-                this.login_and_reset();
+            } else if (this.view === 'reset_and_login') {
+                this.reset_and_login();
+            } else if (this.view === 'reset') {
+                this.reset();
             }
         },
 
@@ -254,7 +267,7 @@ define(['dojo/_base/declare',
                     this.emit('logged_in');
                     password_f.set_value('');
                 } else if (result === 'password-expired') {
-                    this.set('view', 'reset');
+                    this.set('view', 'reset_and_login');
                     val_summary.add_info('login', this.password_expired);
                 } else if (result === 'krbprincipal-expired') {
                     password_f.set_value('');
@@ -284,12 +297,70 @@ define(['dojo/_base/declare',
             }.bind(this));
         },
 
-        login_and_reset: function() {
+        parse_uri: function() {
+            var opts = {};
+            if (window.location.search.length > 1) {
+                var couples = window.location.search.substr(1).split("&");
+                for (var i=0,l=couples.length; i < l; i++) {
+                    var couple = couples[i].split("=");
+                    var key = decodeURIComponent(couple[0]);
+                    var value = couple.length > 1 ? decodeURIComponent(couple[1]) : '';
+                    opts[key] = value;
+                }
+            }
+            return opts;
+        },
+
+        redir_count_down: function(redir_url, redir_delay) {
+            var val_summary = this.get_widget('validation');
+            val_summary.add_info('redirect',
+                this.redirect_msg.replace('${count}', Math.max(redir_delay, 0)));
+
+            if (redir_delay <= 0) {
+                window.location = redir_url;
+                return;
+            }
+            window.setTimeout(this.redir_count_down.bind(this), 1000,
+                redir_url, redir_delay-1);
+        },
+
+        /* If password reset was initiated due to a failed log in to some
+         * external application one could use a redirection to the desired URL
+         * after a successfull password reset.
+         *
+         * The next uri components are supported:
+         * - 'url' destination URL, which must be URI encoded
+         * - 'delay' time in seconds to delay before redirection
+         *
+         * For example,
+         * https://ipa.demo1.freeipa.org/ipa/ui/reset_password.html?url=http%3A%2F%2Fpvoborni.fedorapeople.org%2Fdoc%2F%23!%2Fguide%2FDebugging&delay=5
+        */
+        redirect: function() {
+            var opts = this.parse_uri();
+            var url = opts['url'];
+            var delay = parseInt(opts['delay'], 10);
 
             var val_summary = this.get_widget('validation');
-            val_summary.remove('login');
+            // button for manual redirection
+            if (url) {
+                val_summary.add_success(
+                    'login',
+                    "".concat(
+                        this.password_change_complete,
+                        ' <a href="', url, '">',
+                        this.continue_msg, '</a>'
+                    )
+                );
+            } else {
+                return;
+            }
 
-            if (!this.validate()) return;
+            if (delay <= 0 || delay > 0) { // NaN check
+                this.redir_count_down(url, delay);
+            }
+        },
+
+        reset_password: function() {
 
             var psw_f = this.get_field('password');
             var psw_f2 = this.get_field('current_password');
@@ -310,7 +381,29 @@ define(['dojo/_base/declare',
             if (result.status === 'ok') {
                 psw_f.set_value('');
                 psw_f2.set_value('');
-                // do not login if otp is used because it will fail (reuse of OTP)
+            } else {
+                otp_f.set_value('');
+                new_f.set_value('');
+                ver_f.set_value('');
+            }
+            return result;
+        },
+
+        reset_and_login: function() {
+
+            if (!this.validate()) return;
+            var val_summary = this.get_widget('validation');
+            val_summary.remove('login');
+            var psw_f = this.get_field('password');
+            var new_f = this.get_field('new_password');
+            var otp_f = this.get_field('otp');
+            var otp = otp_f.get_value()[0];
+
+            var result = this.reset_password();
+            if (result.status === 'ok') {
+                /* do not login if otp is used because it will fail
+                 * (reuse of OTP)
+                */
                 if (!otp) {
                     psw_f.set_value(new_f.get_value());
                     this.login();
@@ -318,12 +411,29 @@ define(['dojo/_base/declare',
                 val_summary.add_success('login', this.password_change_complete);
                 this.set('view', 'login');
             } else {
+                val_summary.add_error('login', result.message);
+            }
+        },
+
+        reset: function() {
+
+            if (!this.validate()) return;
+            var val_summary = this.get_widget('validation');
+            val_summary.remove('login');
+            var otp_f = this.get_field('otp');
+            var new_f = this.get_field('new_password');
+            var ver_f = this.get_field('verify_password');
+
+            var result = this.reset_password();
+            if (result.status === 'ok') {
                 otp_f.set_value('');
                 new_f.set_value('');
                 ver_f.set_value('');
+                val_summary.add_success('login', this.password_change_complete);
+                this.redirect();
+            } else {
                 val_summary.add_error('login', result.message);
             }
-
         },
 
         lookup_credentials: function() {
@@ -345,7 +455,7 @@ define(['dojo/_base/declare',
             var login = this.get_field('username').get_value()[0];
 
             var request = {
-                url: this.x509_url,
+                url: config.x509_login_url,
                 cache: false,
                 type: "GET",
                 data: $.param({
@@ -363,6 +473,8 @@ define(['dojo/_base/declare',
         refresh: function() {
             if (this.view === 'reset') {
                 this.show_reset_view();
+            } else if (this.view === 'reset_and_login') {
+                    this.show_reset_and_login_view();
             } else {
                 this.show_login_view();
             }
@@ -392,8 +504,23 @@ define(['dojo/_base/declare',
         show_reset_view: function() {
 
             this.set_reset_aside_text();
+            this.set_visible_buttons(['reset']);
+            this.use_fields(['username', 'current_password', 'otp',
+                             'new_password', 'verify_password']);
+
+            var val_summary = this.get_widget('validation');
+            this.fields.get('username').set_required(true);
+            this.fields.get('current_password').set_required(true);
+
+            this.get_widget('username').focus_input();
+        },
+
+        show_reset_and_login_view: function() {
+
+            this.set_reset_aside_text();
             this.set_visible_buttons(['cancel', 'reset_and_login']);
-            this.use_fields(['username_r', 'current_password', 'otp', 'new_password', 'verify_password']);
+            this.use_fields(['username_r', 'current_password', 'otp',
+                             'new_password', 'verify_password']);
 
             var val_summary = this.get_widget('validation');
 
@@ -425,21 +552,81 @@ define(['dojo/_base/declare',
         constructor: function(spec) {
             spec = spec || {};
 
-            this.expired_msg = text.get(spec.expired_msg || '@i18n:ajax.401.message',
-                this.expired_msg);
+            this.expired_msg = text.get(
+                spec.expired_msg || '@i18n:ajax.401.message',
+                this.expired_msg
+            );
 
-            this.form_auth_msg = text.get(spec.form_auth_msg || '@i18n:login.form_auth',
-                this.form_auth_msg);
+            this.form_auth_msg = text.get(
+                spec.form_auth_msg || '@i18n:login.form_auth',
+                this.form_auth_msg
+            );
 
-            this.kerberos_msg = text.get(spec.kerberos_msg || '@i18n:login.krb_auth_msg',
-                this.kerberos_msg);
+            this.kerberos_msg = text.get(
+                spec.kerberos_msg || '@i18n:login.krb_auth_msg',
+                this.kerberos_msg
+            );
 
-            this.kerberos_msg = this.kerberos_msg.replace('${host}', window.location.hostname);
+            this.cert_msg = text.get(
+                spec.cert_msg || '@i18n:login.cert_msg',
+                this.cert_msg
+            );
 
-            this.password_change_complete = text.get(spec.password_change_complete ||
-                '@i18n:password.password_change_complete', this.password_change_complete);
+            this.redirect_msg = text.get(
+                spec.redirect_msg || '@i18n:login.redirect_msg',
+                this.redirect_msg
+            );
 
-            this.krb_auth_failed = text.get(spec.krb_auth_failed, this.krb_auth_failed);
+            this.continue_msg = text.get(
+                spec.continue_msg || '@i18n:login.continue_msg',
+                this.continue_msg
+            );
+
+            this.kerberos_msg = this.kerberos_msg.replace(
+                '${host}', window.location.hostname
+            );
+
+            this.password_change_complete = text.get(
+                spec.password_change_complete ||
+                    '@i18n:password.password_change_complete',
+                this.password_change_complete
+            );
+
+            this.form_auth_failed = text.get(
+                spec.form_auth_failed || '@i18n:login.form_auth_failed',
+                this.form_auth_failed
+            );
+
+            this.krb_auth_failed = text.get(
+                spec.krb_auth_failed || '@i18n:login.krb_auth_failed',
+                this.krb_auth_failed
+            );
+
+            this.cert_auth_failed = text.get(
+                spec.cert_auth_failed || '@i18n:login.cert_auth_failed',
+                this.cert_auth_failed
+            );
+
+            this.password_expired = text.get(
+                spec.password_expired || '@i18n:password.password_expired',
+                this.password_expired
+            );
+
+            this.krbprincipal_expired = text.get(
+                spec.krbprincipal_expired ||
+                    '@i18n:login.krbprincipal_expired',
+                this.krbprincipal_expired
+            );
+
+            this.invalid_password = text.get(
+                spec.invalid_password || '@i18n:password.invalid_password',
+                this.invalid_password
+            );
+
+            this.user_locked = text.get(
+                spec.user_locked || '@i18n:login.user_locked',
+                this.user_locked
+            );
 
             this.field_specs = LoginScreen.field_specs;
         }
@@ -458,7 +645,10 @@ define(['dojo/_base/declare',
             $type: 'password',
             name: 'password',
             label: text.get('@i18n:login.password', "Password"),
-            placeholder: text.get('@i18n:login.password_and_otp', 'Password or Password+One-Time-Password'),
+            placeholder: text.get(
+                '@i18n:login.password_and_otp',
+                'Password or Password+One-Time-Password'
+            ),
             show_errors: false,
             undo: false
         },
@@ -472,8 +662,14 @@ define(['dojo/_base/declare',
         {
             name: 'current_password',
             $type: 'password',
-            label: text.get('@i18n:login.current_password', "Current Password"),
-            placeholder: text.get('@i18n:login.current_password', "Current Password"),
+            label: text.get(
+                '@i18n:password.current_password',
+                "Current Password"
+            ),
+            placeholder: text.get(
+                '@i18n:password.current_password',
+                "Current Password"
+            ),
             show_errors: false,
             undo: false
         },
@@ -481,7 +677,10 @@ define(['dojo/_base/declare',
             name: 'otp',
             $type: 'password',
             label: text.get('@i18n:password.otp', "OTP"),
-            placeholder: text.get('@i18n:password.otp_long', 'One-Time-Password'),
+            placeholder: text.get(
+                '@i18n:password.otp_long',
+                'One-Time-Password'
+            ),
             show_errors: false,
             undo: false
         },
@@ -489,8 +688,14 @@ define(['dojo/_base/declare',
             name: 'new_password',
             $type: 'password',
             required: true,
-            label: text.get('@i18n:password.new_password)', "New Password"),
-            placeholder: text.get('@i18n:password.new_password)', "New Password"),
+            label: text.get(
+                '@i18n:password.new_password',
+                "New Password"
+            ),
+            placeholder: text.get(
+                '@i18n:password.new_password',
+                "New Password"
+            ),
             show_errors: false,
             undo: false
         },
@@ -498,8 +703,14 @@ define(['dojo/_base/declare',
             name: 'verify_password',
             $type: 'password',
             required: true,
-            label: text.get('@i18n:password.verify_password', "Verify Password"),
-            placeholder: text.get('@i18n:password.new_password)', "New Password"),
+            label: text.get(
+                '@i18n:password.verify_password',
+                "Verify Password"
+            ),
+            placeholder: text.get(
+                '@i18n:password.new_password',
+                "New Password"
+            ),
             validators: [{
                 $type: 'same_password',
                 other_field: 'new_password'

@@ -205,10 +205,13 @@ return {
         {
             $type: 'association',
             name: 'member_privilege',
-            facet_group: 'privilege'
+            facet_group: 'privilege',
+            add_title: '@i18n:objects.acipermission.add_privileges',
+            remove_title: '@i18n:objects.acipermission.remove_privileges'
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.acipermission.add',
         height: 450,
         fields: [
             {
@@ -298,6 +301,9 @@ return {
                 widget_name: 'target'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.acipermission.remove'
     }
 };};
 
@@ -349,19 +355,24 @@ return {
             name: 'member_role',
             facet_group: 'role',
             add_method: 'add_privilege',
+            add_title: '@i18n:objects.aciprivilege.add_roles',
             remove_method: 'remove_privilege',
-            associator: IPA.serial_associator
+            associator: IPA.serial_associator,
+            remove_title: '@i18n:objects.aciprivilege.remove_roles'
         },
         {
             $type: 'association',
             name: 'memberof_permission',
             facet_group: 'permission',
             add_method: 'add_permission',
-            remove_method: 'remove_permission'
+            add_title: '@i18n:objects.aciprivilege.add_into_permissions',
+            remove_method: 'remove_permission',
+            remove_title: '@i18n:objects.aciprivilege.remove_from_permissions'
         }
     ],
     standard_association_facets: true,
     adder_dialog: {
+        title: '@i18n:objects.aciprivilege.add',
         fields: [
             'cn',
             {
@@ -369,6 +380,9 @@ return {
                 name: 'description'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.aciprivilege.remove'
     }
 };};
 
@@ -389,7 +403,7 @@ return {
             sections: [
                 {
                     name: 'identity',
-                    label: '@i18n:objects.role.identity',
+                    label: '@i18n:objects.acirole.identity',
                     fields: [
                         'cn',
                         {
@@ -402,14 +416,47 @@ return {
         },
         {
             $type: 'association',
+            name: 'member_user',
+            add_title: '@i18n:objects.acirole.add_users',
+            remove_title: '@i18n:objects.acirole.remove_users'
+        },
+        {
+            $type: 'association',
+            name: 'member_group',
+            add_title: '@i18n:objects.acirole.add_groups',
+            remove_title: '@i18n:objects.acirole.remove_groups'
+        },
+        {
+            $type: 'association',
+            name: 'member_host',
+            add_title: '@i18n:objects.acirole.add_hosts',
+            remove_title: '@i18n:objects.acirole.remove_hosts'
+        },
+        {
+            $type: 'association',
+            name: 'member_hostgroup',
+            add_title: '@i18n:objects.acirole.add_hostgroups',
+            remove_title: '@i18n:objects.acirole.remove_hostgroups'
+        },
+        {
+            $type: 'association',
+            name: 'member_service',
+            add_title: '@i18n:objects.acirole.add_services',
+            remove_title: '@i18n:objects.acirole.remove_services'
+        },
+        {
+            $type: 'association',
             name: 'memberof_privilege',
             facet_group: 'privilege',
             add_method: 'add_privilege',
-            remove_method: 'remove_privilege'
+            add_title: '@i18n:objects.acirole.add_into_privileges',
+            remove_method: 'remove_privilege',
+            remove_title: '@i18n:objects.acirole.remove_from_privileges'
         }
     ],
     standard_association_facets: true,
     adder_dialog: {
+        title: '@i18n:objects.acirole.add',
         fields: [
             'cn',
             {
@@ -417,6 +464,9 @@ return {
                 name: 'description'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.acirole.remove'
     }
 };};
 
@@ -449,6 +499,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.aciselfservice.add',
         fields: [
             'aciname',
             {
@@ -457,6 +508,9 @@ return {
                 name: 'attrs'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.aciselfservice.remove'
     }
 };};
 
@@ -509,6 +563,7 @@ return {
     ],
     standard_association_facets: false,
     adder_dialog: {
+        title: '@i18n:objects.acidelegation.add',
         fields: [
             'aciname',
             {
@@ -534,6 +589,9 @@ return {
                 object_type: 'user'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.acidelegation.remove'
     }
 };};
 

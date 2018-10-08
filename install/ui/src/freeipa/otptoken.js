@@ -226,11 +226,14 @@ return {
             $type: 'association',
             name: 'managedby_user',
             add_method: 'add_managedby',
-            remove_method: 'remove_managedby'
+            add_title: '@i18n:objects.otptoken.add_users_managing',
+            remove_method: 'remove_managedby',
+            remove_title: '@i18n:objects.otptoken.remove_users_managing'
         }
     ],
 
     adder_dialog: {
+        title: '@i18n:objects.otptoken.add',
         $factory: otptoken.adder_dialog,
         $pre_ops: [
             otptoken.adder_dialog_preop
@@ -305,6 +308,9 @@ return {
             },
             'description'
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.otptoken.remove'
     }
 };};
 

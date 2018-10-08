@@ -51,6 +51,7 @@ function(IPA, $, phases, reg, cert) {
              }
          ],
          adder_dialog: {
+             title: '@i18n:objects.ca.add',
              fields: [
                  {
                      $type: 'text',
@@ -63,6 +64,9 @@ function(IPA, $, phases, reg, cert) {
                      name: 'description'
                  }
              ]
+         },
+         deleter_dialog: {
+             title: '@i18n:objects.ca.remove'
          }
      };
 

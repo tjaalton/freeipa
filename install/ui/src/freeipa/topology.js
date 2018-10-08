@@ -170,6 +170,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.topologysegment.add',
         fields: [
             {
                 name: 'cn',
@@ -190,6 +191,9 @@ return {
                 z_index: 1
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.topologysegment.remove'
     }
 };};
 
@@ -445,7 +449,9 @@ return {
                                 {
                                     name: 'service_relative_weight'
                                 }
-                            ]
+                            ],
+                            add_title: '@i18n:objects.topologylocation.add_server',
+                            remove_title: '@i18n:objects.topologylocation.remove_servers'
                         }
                     ]
                 }
@@ -453,6 +459,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.topologylocation.add',
         fields: [
             {
                 $type: 'text',
@@ -461,6 +468,9 @@ return {
             },
             'description'
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.topologylocation.remove'
     }
 };};
 
@@ -706,14 +716,10 @@ topology.location_association_table_widget = function(spec) {
 
     that.create_add_dialog = function() {
 
-        var entity_label = that.entity.metadata.label_singular;
         var pkey = that.facet.get_pkey();
-        var other_entity_label = that.other_entity.metadata.label_singular;
 
         var title = that.add_title;
-        title = title.replace('${entity}', entity_label);
         title = title.replace('${primary_key}', pkey);
-        title = title.replace('${other_entity}', other_entity_label);
 
         return topology.location_server_adder_dialog({
             title: title,
@@ -1008,10 +1014,7 @@ topology.create_add_dialog = function(spec) {
 
     spec.entity = spec.entity || 'topologysegment';
 
-    var entity = reg.entity.get('topologysegment');
-    var title = text.get('@i18n:dialogs.add_title');
-    var label = entity.metadata.label_singular;
-    spec.title = title.replace('${entity}', label);
+    spec.title = text.get('@i18n:objects.topologysegment.add');
 
     spec.fields = spec.fields || [
         {

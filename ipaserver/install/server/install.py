@@ -743,7 +743,6 @@ def install(installer):
     host_name = options.host_name
     ip_addresses = options.ip_addresses
     setup_ca = options.setup_ca
-    options.promote = False  # first master, no promotion
 
     # Installation has started. No IPA sysrestore items are restored in case of
     # failure to enable root cause investigation
@@ -823,7 +822,7 @@ def install(installer):
                       subject_base=options.subject_base)
 
     custodia = custodiainstance.get_custodia_instance(
-        options, custodiainstance.CustodiaModes.MASTER_PEER)
+        options, custodiainstance.CustodiaModes.FIRST_MASTER)
     custodia.create_instance()
 
     if setup_ca:

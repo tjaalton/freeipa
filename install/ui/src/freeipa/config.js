@@ -49,6 +49,11 @@ define([
         i18n_messages_url: '/ipa/i18n_messages',
 
         /**
+         * password migration url
+         */
+        migration_url: '/ipa/migration/migration.py',
+
+        /**
          * RPC url
          */
         json_url: '/ipa/session/json',
@@ -61,14 +66,24 @@ define([
         /**
          * Forms based login url
          */
-        frms_login_url: '/ipa/session/login_password',
+        forms_login_url: '/ipa/session/login_password',
 
         //logout_url: '/ipa/session/json',
+
+        /**
+         * certificate/smartcard authentication url
+         */
+        x509_login_url: '/ipa/session/login_x509',
 
         /**
          * Password reset url
          */
         reset_psw_url: '/ipa/session/change_password',
+
+        /**
+         * token synchronization url
+         */
+        token_sync_url: '/ipa/session/sync_token',
 
         /**
          * Ajax options for RPC commands

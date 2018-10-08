@@ -418,7 +418,9 @@ class test_user(user_tasks):
 
     @screenshot
     def test_login_without_username(self):
-
+        """
+        Try to login with no username provided
+        """
         self.init_app(login='', password='xxx123')
 
         alert_e = self.find('.alert[data-name="username"]',
@@ -749,7 +751,7 @@ class TestLifeCycles(UI_driver):
         self.button_click('batch_stage')
         self.dialog_button_click('ok')
         self.assert_no_error_dialog()
-        self.wait(0.7)
+        self.wait(2)
         # fix assert after https://pagure.io/freeipa/issue/7477 is closed
         self.assert_notification(assert_text='1 users(s) staged')
 
@@ -811,7 +813,7 @@ class TestLifeCycles(UI_driver):
         self.button_click('batch_stage')
         self.dialog_button_click('ok')
         self.assert_no_error_dialog()
-        self.wait(0.7)
+        self.wait(2)
         self.assert_notification(assert_text='2 users(s) staged')
 
         # activate multiple users from stage

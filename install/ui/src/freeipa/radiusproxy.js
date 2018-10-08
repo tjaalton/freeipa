@@ -85,6 +85,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.radiusproxy.add',
         fields: [
             'cn',
             'ipatokenradiusserver',
@@ -105,6 +106,9 @@ return {
             },
             'ipatokenusermapattribute'
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.radiusproxy.remove'
     }
 };};
 

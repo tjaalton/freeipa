@@ -146,6 +146,7 @@ return {
                 IPA.user.stageuser_sidebar_policy
             ],
             deleter_dialog: {
+                title: '@i18n:objects.user.remove',
                 $factory: IPA.user.deleter_dialog
             }
         },
@@ -416,7 +417,8 @@ return {
                 },
                 {
                     $type: 'cert_request',
-                    hide_cond: ['preserved-user']
+                    hide_cond: ['preserved-user'],
+                    title: '@i18n:objects.cert.issue_for_user'
                 }
             ],
             header_actions: [
@@ -462,19 +464,25 @@ return {
             $type: 'association',
             $pre_ops: [ IPA.user.association_facet_ss_pre_op ],
             name: 'memberof_group',
-            associator: IPA.serial_associator
+            associator: IPA.serial_associator,
+            add_title: '@i18n:objects.user.add_into_groups',
+            remove_title: '@i18n:objects.user.remove_from_groups'
         },
         {
             $type: 'association',
             $pre_ops: [ IPA.user.association_facet_ss_pre_op ],
             name: 'memberof_netgroup',
-            associator: IPA.serial_associator
+            associator: IPA.serial_associator,
+            add_title: '@i18n:objects.user.add_into_netgroups',
+            remove_title: '@i18n:objects.user.remove_from_netgroups'
         },
         {
             $type: 'association',
             $pre_ops: [ IPA.user.association_facet_ss_pre_op ],
             name: 'memberof_role',
-            associator: IPA.serial_associator
+            associator: IPA.serial_associator,
+            add_title: '@i18n:objects.user.add_into_roles',
+            remove_title: '@i18n:objects.user.remove_from_roles'
         },
         {
             $type: 'association',
@@ -482,7 +490,9 @@ return {
             name: 'memberof_hbacrule',
             associator: IPA.serial_associator,
             add_method: 'add_user',
-            remove_method: 'remove_user'
+            add_title: '@i18n:objects.user.add_into_hbac',
+            remove_method: 'remove_user',
+            remove_title: '@i18n:objects.user.remove_from_hbac'
         },
         {
             $type: 'association',
@@ -490,13 +500,16 @@ return {
             name: 'memberof_sudorule',
             associator: IPA.serial_associator,
             add_method: 'add_user',
-            remove_method: 'remove_user'
+            add_title: '@i18n:objects.user.add_into_sudo',
+            remove_method: 'remove_user',
+            remove_title: '@i18n:objects.user.remove_from_sudo'
         }
     ],
     standard_association_facets: {
         $pre_ops: [ IPA.user.association_facet_ss_pre_op ]
     },
     adder_dialog: {
+        title: '@i18n:objects.user.add',
         $factory: IPA.user.adder_dialog,
         sections: [
             {
@@ -840,7 +853,7 @@ IPA.user.add_otptoken_action = function(spec) {
 
     spec = spec || {};
     spec.name = spec.name || 'add_otptoken';
-    spec.label = spec.label || '@i18n:objects.otptoken.add_token';
+    spec.label = spec.label || '@i18n:objects.otptoken.add';
     spec.disable_cond = spec.disable_cond || ['self-service-other'];
 
     var that = IPA.action(spec);

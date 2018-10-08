@@ -92,6 +92,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.idrange.add',
         fields: [
             {
                 name: 'cn'
@@ -145,6 +146,9 @@ return {
         policies: [
                 IPA.idrange_adder_policy
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.idrange.remove'
     }
 };};
 

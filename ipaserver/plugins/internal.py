@@ -169,30 +169,14 @@ class i18n_messages(Command):
             "title": _("Actions"),
         },
         "association": {
-            "add": {
-                "ipasudorunas": _("Add RunAs ${other_entity} into ${entity} ${primary_key}"),
-                "ipasudorunasgroup": _("Add RunAs Groups into ${entity} ${primary_key}"),
-                "managedby": _("Add ${other_entity} Managing ${entity} ${primary_key}"),
-                "member": _("Add ${other_entity} into ${entity} ${primary_key}"),
-                "memberallowcmd": _("Add Allow ${other_entity} into ${entity} ${primary_key}"),
-                "memberdenycmd": _("Add Deny ${other_entity} into ${entity} ${primary_key}"),
-                "memberof": _("Add ${entity} ${primary_key} into ${other_entity}"),
-            },
+            "add_title_default": _("Add"),
             "added": _("${count} item(s) added"),
             "direct_membership": _("Direct Membership"),
             "filter_placeholder": _("Filter available ${other_entity}"),
             "indirect_membership": _("Indirect Membership"),
             "no_entries": _("No entries."),
             "paging": _("Showing ${start} to ${end} of ${total} entries."),
-            "remove": {
-                "ipasudorunas": _("Remove RunAs ${other_entity} from ${entity} ${primary_key}"),
-                "ipasudorunasgroup": _("Remove RunAs Groups from ${entity} ${primary_key}"),
-                "managedby": _("Remove ${other_entity} Managing ${entity} ${primary_key}"),
-                "member": _("Remove ${other_entity} from ${entity} ${primary_key}"),
-                "memberallowcmd": _("Remove Allow ${other_entity} from ${entity} ${primary_key}"),
-                "memberdenycmd": _("Remove Deny ${other_entity} from ${entity} ${primary_key}"),
-                "memberof": _("Remove ${entity} ${primary_key} from ${other_entity}"),
-            },
+            "remove_title_default": _("Remove"),
             "removed": _("${count} item(s) removed"),
             "show_results": _("Show Results"),
         },
@@ -234,13 +218,15 @@ class i18n_messages(Command):
             "issue": _("Issue"),
             "match": _("Match"),
             "match_title": _("Match users according to certificate."),
+            "migrate": _("Migrate"),
             "ok": _("OK"),
             "refresh": _("Refresh"),
             "refresh_title": _("Reload current settings from the server."),
             "remove": _("Delete"),
             "remove_hold": _("Remove hold"),
             "reset": _("Reset"),
-            "reset_password_and_login": _("Reset Password and Login"),
+            "reset_password": _("Reset Password"),
+            "reset_password_and_login": _("Reset Password and Log in"),
             "restore": _("Restore"),
             "retry": _("Retry"),
             "revert": _("Revert"),
@@ -270,7 +256,7 @@ class i18n_messages(Command):
         "dialogs": {
             "add_confirmation": _("${entity} successfully added"),
             "add_custom_value": _("Add custom value"),
-            "add_title": _("Add ${entity}"),
+            "add_title_default": _("Add"),
             "available": _("Available"),
             "batch_error_message": _("Some operations failed."),
             "batch_error_title": _("Operations Error"),
@@ -285,7 +271,7 @@ class i18n_messages(Command):
             "prospective": _("Prospective"),
             "redirection": _("Redirection"),
             "remove_empty": _("Select entries to be removed."),
-            "remove_title": _("Remove ${entity}"),
+            "remove_title_default": _("Remove"),
             "result": _("Result"),
             "show_details": _("Show details"),
             "success": _("Success"),
@@ -320,12 +306,56 @@ class i18n_messages(Command):
         },
         "false": _("False"),
         "keytab": {
-            "add_create": _("Allow ${other_entity} to create keytab of ${primary_key}"),
-            "add_retrive": _("Allow ${other_entity} to retrieve keytab of ${primary_key}"),
+            "add_groups_create": _(
+                "Allow user groups to create keytab of '${primary_key}'"
+            ),
+            "add_groups_retrieve": _(
+                "Allow user groups to retrieve keytab of '${primary_key}'"
+            ),
+            "add_hostgroups_create": _(
+                "Allow host groups to create keytab of '${primary_key}'"
+            ),
+            "add_hostgroups_retrieve": _(
+                "Allow host groups to retrieve keytab of '${primary_key}'"
+            ),
+            "add_hosts_create": _(
+                "Allow hosts to create keytab of '${primary_key}'"
+            ),
+            "add_hosts_retrieve": _(
+                "Allow hosts to retrieve keytab of '${primary_key}'"
+            ),
+            "add_users_create": _(
+                "Allow users to create keytab of '${primary_key}'"
+            ),
+            "add_users_retrieve": _(
+                "Allow users to retrieve keytab of '${primary_key}'"
+            ),
             "allowed_to_create": _("Allowed to create keytab"),
             "allowed_to_retrieve": _("Allowed to retrieve keytab"),
-            "remove_create": _("Disallow ${other_entity} to create keytab of ${primary_key}"),
-            "remove_retrieve": _("Disallow ${other_entity} to retrieve keytab of ${primary_key}"),
+            "remove_groups_create": _(
+                "Disallow user groups to create keytab of '${primary_key}'"
+            ),
+            "remove_groups_retrieve": _(
+                "Disallow user groups to retrieve keytab of '${primary_key}'"
+            ),
+            "remove_hostgroups_create": _(
+                "Disallow host groups to create keytab of '${primary_key}'"
+            ),
+            "remove_hostgroups_retrieve": _(
+                "Disallow host groups to retrieve keytab of '${primary_key}'"
+            ),
+            "remove_hosts_create": _(
+                "Disallow hosts to create keytab of '${primary_key}'"
+            ),
+            "remove_hosts_retrieve": _(
+                "Disallow hosts to retrieve keytab of '${primary_key}'"
+            ),
+            "remove_users_create": _(
+                "Disallow users to create keytab of '${primary_key}'"
+            ),
+            "remove_users_retrieve": _(
+                "Disallow users to retrieve keytab of '${primary_key}'"
+            ),
         },
         "krbaliases": {
             "adder_title": _("Add Kerberos Principal Alias"),
@@ -341,11 +371,21 @@ class i18n_messages(Command):
         },
         "login": {
             "authenticating": _("Authenticating"),
+            "cert_auth_failed": _(
+                "Authentication with personal certificate failed"),
+            "cert_msg": _(
+                "<i class=\"fa fa-info-circle\"></i> To log in with "
+                "<strong>certificate</strong>, please make sure you have "
+                "valid personal certificate. "
+            ),
+            "continue_msg": _("Continue to next page"),
             "form_auth": _(
                 "<i class=\"fa fa-info-circle\"></i> To log in with "
                 "<strong>username and password</strong>, enter them in the "
                 "corresponding fields, then click 'Log in'."),
+            "form_auth_failed": _("Login failed due to an unknown reason"),
             "header": _("Logged In As"),
+            "krb_auth_failed": _("Authentication with Kerberos failed"),
             "krb_auth_msg": _(
                 "<i class=\"fa fa-info-circle\"></i> To log in with "
                 "<strong>Kerberos</strong>, please make sure you have valid "
@@ -353,6 +393,8 @@ class i18n_messages(Command):
                 "ipa/config/ssbrowser.html'>configured</a> the browser "
                 "correctly, then click 'Log in'."),
             "loading": _("Loading"),
+            "krbprincipal_expired": _(
+                "Kerberos Principal you entered is expired"),
             "loading_md": _("Loading data"),
             "login": _("Log in"),
             "login_certificate": _("Log In Using Certificate"),
@@ -361,20 +403,121 @@ class i18n_messages(Command):
             "logout_error": _("Log out error"),
             "password": _("Password"),
             "password_and_otp": _("Password or Password+One-Time-Password"),
+            "redirect_msg": _("You will be redirected in ${count}s"),
             "sync_otp_token": _("Sync OTP Token"),
+            "synchronizing": _("Synchronizing"),
             "username": _("Username"),
+            "user_locked": _("The user account you entered is locked"),
         },
         "measurement_units": {
             "number_of_passwords": _("number of passwords"),
             "seconds": _("seconds"),
         },
+        "migration": {
+            "migrating": _("Migrating"),
+            "migration_error_msg": _(
+                "There was a problem with your request. Please, try again "
+                "later."),
+            "migration_failure_msg": _(
+                "Password migration was not successful"),
+            "migration_info_msg": _(
+                "<h1>Password Migration</h1><p>If you have been sent here by "
+                "your administrator, your personal information is being "
+                "migrated to a new identity management solution (IPA).</p><p>"
+                "Please, enter your credentials in the form to complete the "
+                "process. Upon successful login your kerberos account will be "
+                "activated.</p>"),
+            "migration_invalid_password": _(
+                "The password or username you entered is incorrect"),
+            "migration_success": _("Password migration was successful"),
+        },
         "objects": {
             "aci": {
                 "attribute": _("Attribute"),
             },
+            "acidelegation": {
+                "add": _("Add delegation"),
+                "remove": _("Remove delegations"),
+            },
+            "acipermission": {
+                "add": _("Add permission"),
+                "add_privileges": _(
+                    "Add privileges into permission '${primary_key}'"
+                ),
+                "remove": _("Remove permissions"),
+                "remove_privileges": _(
+                    "Remove privileges from permission '${primary_key}'"
+                ),
+            },
+            "aciprivilege": {
+                "add": _("Add privilege"),
+                "add_into_permissions": _(
+                    "Add privilege '${primary_key}' into permissions"
+                ),
+                "add_roles": _(
+                    "Add roles into privilege '${primary_key}'"
+                ),
+                "remove": _("Remove privileges"),
+                "remove_from_permissions": _(
+                    "Remove privilege '${primary_key}' from permissions"
+                ),
+                "remove_roles": _(
+                    "Remove roles from privilege '${primary_key}'"
+                ),
+            },
+            "acirole": {
+                "identity": _("Role Settings"),
+                "add": _("Add role"),
+                "add_groups": _(
+                    "Add user groups into role '${primary_key}'"
+                ),
+                "add_hosts": _(
+                    "Add hosts into role '${primary_key}'"
+                ),
+                "add_hostgroups": _(
+                    "Add host groups into role '${primary_key}'"
+                ),
+                "add_into_privileges": _(
+                    "Add role '${primary_key}' into privileges"
+                ),
+                "add_services": _(
+                    "Add services into role '${primary_key}'"
+                ),
+                "add_users": _(
+                    "Add users into role '${primary_key}'"
+                ),
+                "remove": _("Remove roles"),
+                "remove_from_privileges": _(
+                    "Remove role '${primary_key}' from privileges"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from role '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from role '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from role '${primary_key}'"
+                ),
+                "remove_services": _(
+                    "Remove services from role '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from role '${primary_key}'"
+                ),
+            },
+            "aciselfservice": {
+                "add": _("Add self service permission"),
+                "remove": _("Remove self service permissions"),
+            },
             "automember": {
-                "add_condition": _("Add Condition into ${pkey}"),
-                "add_rule": _("Add Rule"),
+                "add": _("Add rule"),
+                "add_inc_condition": _(
+                    "Add inclusive condition into '${primary_key}'"
+                ),
+                "add_exc_condition": _(
+                    "Add exclusive condition into '${primary_key}'"
+                ),
                 "attribute": _("Attribute"),
                 "default_host_group": _("Default host group"),
                 "default_user_group": _("Default user group"),
@@ -383,20 +526,60 @@ class i18n_messages(Command):
                 "hostgrouprule": _("Host group rule"),
                 "hostgrouprules": _("Host group rules"),
                 "inclusive": _("Inclusive"),
+                "remove": _("Remove auto membership rules"),
+                "remove_exc_conditions": _(
+                    "Remove exclusive conditions from rule '${primary_key}'"
+                ),
+                "remove_inc_conditions": _(
+                    "Remove inclusive conditions from rule '${primary_key}'"
+                ),
                 "usergrouprule": _("User group rule"),
                 "usergrouprules": _("User group rules"),
             },
             "automountkey": {
+                "add": _("Add automount key"),
+                "remove": _("Remove automount keys"),
             },
             "automountlocation": {
-                "identity": _("Automount Location Settings")
+                "add": _("Add automount location"),
+                "identity": _("Automount Location Settings"),
+                "remove": _("Remove automount locations"),
             },
             "automountmap": {
+                "add": _("Add automount map"),
                 "map_type": _("Map Type"),
                 "direct": _("Direct"),
                 "indirect": _("Indirect"),
+                "remove": _("Remove automount maps"),
+            },
+            "ca": {
+                "add": _("Add certificate authority"),
+                "remove": _("Remove certificate authorities"),
             },
             "caacl": {
+                "add": _("Add CA ACL"),
+                "add_ca": _(
+                    "Add Certificate Authorities into CA ACL "
+                    "'${primary_key}'"
+                ),
+                "add_groups": _(
+                    "Add user groups into CA ACL '${primary_key}'"
+                ),
+                "add_hostgroups": _(
+                    "Add host groups into CA ACL '${primary_key}'"
+                ),
+                "add_hosts": _(
+                    "Add hosts into CA ACL '${primary_key}'"
+                ),
+                "add_profiles": _(
+                    "Add certificate profiles into CA ACL '${primary_key}'"
+                ),
+                "add_services": _(
+                    "Add services into CA ACL '${primary_key}'"
+                ),
+                "add_users": _(
+                    "Add users into CA ACL '${primary_key}'"
+                ),
                 "all": _("All"),
                 "any_ca": _("Any CA"),
                 "any_host": _("Any Host"),
@@ -406,12 +589,38 @@ class i18n_messages(Command):
                 "ipaenabledflag": _("Rule status"),
                 "no_ca_msg": _("If no CAs are specified, requests to the default CA are allowed."),
                 "profile": _("Profiles"),
+                "remove": _("Remove CA ACLs"),
+                "remove_ca": _(
+                    "Remove Certificate Authorities from CA ACL "
+                    "'${primary_key}'"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from CA ACL '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from CA ACL '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from CA ACL '${primary_key}'"
+                ),
+                "remove_profiles": _(
+                    "Remove certificate profiles from CA ACL '${primary_key}'"
+                ),
+                "remove_services": _(
+                    "Remove services from CA ACL '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from CA ACL '${primary_key}'"
+                ),
                 "specified_cas": _("Specified CAs"),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_profiles": _("Specified Profiles"),
                 "specified_services": _("Specified Services and Groups"),
                 "specified_users": _("Specified Users and Groups"),
                 "who": _("Permitted to have certificates issued"),
+            },
+            "caprofile": {
+                "remove": _("Remove certificate profiles"),
             },
             "cert": {
                 "aa_compromise": _("AA Compromise"),
@@ -442,8 +651,16 @@ class i18n_messages(Command):
                 "fingerprints": _("Fingerprints"),
                 "get_certificate": _("Get Certificate"),
                 "hold_removed": _("Certificate Hold Removed"),
-                "issue_certificate": _("Issue New Certificate for ${entity} ${primary_key}"),
-                "issue_certificate_generic": _("Issue New Certificate"),
+                "issue_for_host": _(
+                    "Issue new certificate for host '${primary_key}'"
+                ),
+                "issue_for_service": _(
+                    "Issue new certificate for service '${primary_key}'"
+                ),
+                "issue_for_user": _(
+                    "Issue new certificate for user '${primary_key}'"
+                ),
+                "issue_certificate_generic": _("Issue new certificate"),
                 "issued_by": _("Issued By"),
                 "issued_on": _("Issued On"),
                 "issued_to": _("Issued To"),
@@ -457,17 +674,15 @@ class i18n_messages(Command):
                 "present": _("${count} certificate(s) present"),
                 "privilege_withdrawn": _("Privilege Withdrawn"),
                 "reason": _("Reason for Revocation"),
-                "remove_hold": _("Remove Hold"),
-                "remove_certificate_hold": _("Remove Certificate Hold for ${entity} ${primary_key}"),
-                "remove_certificate_hold_simple": _("Remove Certificate Hold"),
+                "remove_hold": _("Remove hold"),
+                "remove_certificate_hold_simple": _("Remove certificate hold"),
                 "remove_certificate_hold_confirmation": _("Do you want to remove the certificate hold?"),
                 "remove_from_crl": _("Remove from CRL"),
                 "request_message": _("<ol> <li>Create a certificate database or use an existing one. To create a new database:<br/> <code># certutil -N -d &lt;database path&gt;</code> </li> <li>Create a CSR with subject <em>CN=&lt;${cn_name}&gt;,O=&lt;realm&gt;</em>, for example:<br/> <code># certutil -R -d &lt;database path&gt; -a -g &lt;key size&gt; -s 'CN=${cn},O=${realm}'${san}</code> </li> <li> Copy and paste the CSR (from <em>-----BEGIN NEW CERTIFICATE REQUEST-----</em> to <em>-----END NEW CERTIFICATE REQUEST-----</em>) into the text area below: </li> </ol>"),
                 "request_message_san": _(" -8 '${cn}'"),
                 "requested": _("Certificate requested"),
                 "revocation_reason": _("Revocation reason"),
-                "revoke_certificate": _("Revoke Certificate for ${entity} ${primary_key}"),
-                "revoke_certificate_simple": _("Revoke Certificate"),
+                "revoke_certificate_simple": _("Revoke certificate"),
                 "revoke_confirmation": _("Do you want to revoke this certificate? Select a reason from the pull-down list."),
                 "revoked": _("Certificate Revoked"),
                 "revoked_status": _("REVOKED"),
@@ -494,14 +709,16 @@ class i18n_messages(Command):
                 "userlogin": _("User Login"),
             },
             "certmap": {
-                "adder_title": _("Add Certificate Mapping Data"),
+                "add": _("Add certificate identity mapping rule"),
+                "adder_title": _("Add certificate mapping data"),
                 "data_label": _("Certificate mapping data"),
                 "certificate": _("Certificate"),
                 "conf_str": _("Configuration string"),
                 "deleter_content": _("Do you want to remove certificate mapping data ${data}?"),
-                "deleter_title": _("Remove Certificate Mapping Data"),
+                "deleter_title": _("Remove certificate mapping data"),
                 "issuer": _("Issuer"),
                 "issuer_subject": _("Issuer and subject"),
+                "remove": _("Remove certificate identity mapping rules"),
                 "subject": _("Subject"),
                 "version": _("Version"),
             },
@@ -523,7 +740,12 @@ class i18n_messages(Command):
                 "update_dns_dialog_msg": _("Do you want to update system DNS records?"),
                 "updated_dns": _("System DNS records updated"),
             },
+            "dnsforwardzone": {
+                "add": _("Add DNS forward zone"),
+                "remove": _("Remove DNS forward zones"),
+            },
             "dnsrecord": {
+                "add": _("Add DNS resource record"),
                 "data": _("Data"),
                 "deleted_no_data": _("DNS record was deleted because it contained no data."),
                 "other": _("Other Record Types"),
@@ -539,14 +761,17 @@ class i18n_messages(Command):
                 "ptr_redir_zones": _("Fetching DNS zones."),
                 "ptr_redir_zones_err": _("An error occurred while fetching dns zones."),
                 "redirection_dnszone": _("You will be redirected to DNS Zone."),
+                "remove": _("Remove DNS resource records"),
                 "standard": _("Standard Record Types"),
                 "title": _("Records for DNS Zone"),
                 "type": _("Record Type"),
             },
             "dnszone": {
-                "identity": _("DNS Zone Settings"),
-                "add_permission":_("Add Permission"),
+                "add": _("Add DNS zone"),
+                "add_permission": _("Add permission"),
                 "add_permission_confirm":_("Are you sure you want to add permission for DNS Zone ${object}?"),
+                "identity": _("DNS Zone Settings"),
+                "remove": _("Remove DNS zones"),
                 "remove_permission": _("Remove Permission"),
                 "remove_permission_confirm": _("Are you sure you want to remove permission for DNS Zone ${object}?"),
                 "skip_dns_check": _("Skip DNS check"),
@@ -561,6 +786,31 @@ class i18n_messages(Command):
                 "set": _("Set Domain Level"),
             },
             "group": {
+                "add": _("Add user group"),
+                "add_groups": _(
+                    "Add user groups into user group '${primary_key}'"
+                ),
+                "add_into_groups": _(
+                    "Add user group '${primary_key}' into user groups"
+                ),
+                "add_into_hbac": _(
+                    "Add user group '${primary_key}' into HBAC rules"
+                ),
+                "add_into_netgroups": _(
+                    "Add user group '${primary_key}' into netgroups"
+                ),
+                "add_into_roles": _(
+                    "Add user group '${primary_key}' into roles"
+                ),
+                "add_into_sudo": _(
+                    "Add user group '${primary_key}' into sudo rules"
+                ),
+                "add_services": _(
+                    "Add services into user group '${primary_key}'"
+                ),
+                "add_users": _(
+                    "Add users into user group '${primary_key}'"
+                ),
                 "details": _("Group Settings"),
                 "external": _("External"),
                 "groups": _("Groups"),
@@ -569,15 +819,80 @@ class i18n_messages(Command):
                 "make_posix": _("Change to POSIX group"),
                 "nonposix": _("Non-POSIX"),
                 "posix": _("POSIX"),
+                "remove": _("Remove user groups"),
+                "remove_from_groups": _(
+                    "Remove user group '${primary_key}' from user groups"
+                ),
+                "remove_from_netgroups": _(
+                    "Remove user group '${primary_key}' from netgroups"
+                ),
+                "remove_from_roles": _(
+                    "Remove user group '${primary_key}' from roles"
+                ),
+                "remove_from_hbac": _(
+                    "Remove user group '${primary_key}' from HBAC rules"
+                ),
+                "remove_from_sudo": _(
+                    "Remove user group '${primary_key}' from sudo rules"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from user group '${primary_key}'"
+                ),
+                "remove_services": _(
+                    "Remove services from user group '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from user group '${primary_key}'"
+                ),
                 "type": _("Group Type"),
                 "user_groups": _("User Groups"),
             },
             "hbacrule": {
+                "add": _("Add HBAC rule"),
+                "add_groups": _(
+                    "Add user groups into HBAC rule '${primary_key}'"
+                ),
+                "add_hostgroups": _(
+                    "Add host groups into HBAC rule '${primary_key}'"
+                ),
+                "add_hosts": _(
+                    "Add hosts into HBAC rule '${primary_key}'"
+                ),
+                "add_servicegroups": _(
+                    "Add HBAC service groups into HBAC rule "
+                    "'${primary_key}'"
+                ),
+                "add_services": _(
+                    "Add HBAC services into HBAC rule '${primary_key}'"
+                ),
+                "add_users": _(
+                    "Add users into HBAC rule '${primary_key}'"
+                ),
                 "any_host": _("Any Host"),
                 "any_service": _("Any Service"),
                 "anyone": _("Anyone"),
                 "host": _("Accessing"),
                 "ipaenabledflag": _("Rule status"),
+                "remove": _("Remove HBAC rules"),
+                "remove_groups": _(
+                    "Remove user groups from HBAC rule '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from HBAC rule '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from HBAC rule '${primary_key}'"
+                ),
+                "remove_servicegroups": _(
+                    "Remove HBAC service groups from HBAC rule "
+                    "'${primary_key}'"
+                ),
+                "remove_services": _(
+                    "Remove HBAC services from HBAC rule '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from HBAC rule '${primary_key}'"
+                ),
                 "service": _("Via Service"),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_services": _("Specified Services and Groups"),
@@ -585,8 +900,28 @@ class i18n_messages(Command):
                 "user": _("Who"),
             },
             "hbacsvc": {
+                "add": _("Add HBAC service"),
+                "add_hbacsvcgroups": _(
+                    "Add HBAC service '${primary_key}' into HBAC service "
+                    "groups"
+                ),
+                "remove": _("Remove HBAC services"),
+                "remove_from_hbacsvcgroups": _(
+                    "Remove HBAC service '${primary_key}' from HBAC service "
+                    "groups"
+                ),
             },
             "hbacsvcgroup": {
+                "add": _("Add HBAC service group"),
+                "add_hbacsvcs": _(
+                    "Add HBAC services into HBAC service group "
+                    "'${primary_key}'"
+                ),
+                "remove": _("Remove HBAC service groups"),
+                "remove_hbacsvcs": _(
+                    "Remove HBAC services from HBAC service group "
+                    "'${primary_key}'"
+                ),
                 "services": _("Services"),
             },
             "hbactest": {
@@ -604,6 +939,25 @@ class i18n_messages(Command):
                 "unmatched": _("Unmatched"),
             },
             "host": {
+                "add": _("Add host"),
+                "add_hosts_managing": _(
+                    "Add hosts managing host '${primary_key}'"
+                ),
+                "add_into_groups": _(
+                    "Add host '${primary_key}' into host groups"
+                ),
+                "add_into_hbac": _(
+                    "Add host '${primary_key}' into HBAC rules"
+                ),
+                "add_into_netgroups": _(
+                    "Add host '${primary_key}' into netgroups"
+                ),
+                "add_into_roles": _(
+                    "Add host '${primary_key}' into roles"
+                ),
+                "add_into_sudo": _(
+                    "Add host '${primary_key}' into sudo rules"
+                ),
                 "certificate": _("Host Certificate"),
                 "cn": _("Host Name"),
                 "delete_key_unprovision": _("Delete Key, Unprovision"),
@@ -624,15 +978,72 @@ class i18n_messages(Command):
                 "password_set_button": _("Set OTP"),
                 "password_set_success": _("OTP set"),
                 "password_set_title": _("Set One-Time-Password"),
+                "remove": _("Remove hosts"),
+                "remove_hosts_managing": _(
+                    "Remove hosts managing host '${primary_key}'"
+                ),
+                "remove_from_groups": _(
+                    "Remove host '${primary_key}' from host groups"
+                ),
+                "remove_from_netgroups": _(
+                    "Remove host '${primary_key}' from netgroups"
+                ),
+                "remove_from_roles": _(
+                    "Remove host '${primary_key}' from roles"
+                ),
+                "remove_from_hbac": _(
+                    "Remove host '${primary_key}' from HBAC rules"
+                ),
+                "remove_from_sudo": _(
+                    "Remove host '${primary_key}' from sudo rules"
+                ),
                 "status": _("Status"),
                 "unprovision": _("Unprovision"),
                 "unprovision_confirmation": _("Are you sure you want to unprovision this host?"),
-                "unprovision_title": _("Unprovisioning ${entity}"),
+                "unprovision_title": _("Unprovisioning host"),
                 "unprovisioned": _("Host unprovisioned"),
             },
             "hostgroup": {
+                "add": _("Add host group"),
+                "add_hosts": _(
+                    "Add hosts into host group '${primary_key}'"
+                ),
+                "add_hostgroups": _(
+                    "Add host groups into host group '${primary_key}'"
+                ),
+                "add_into_hostgroups": _(
+                    "Add host group '${primary_key}' into host groups"
+                ),
+                "add_into_hbac": _(
+                    "Add host group '${primary_key}' into HBAC rules"
+                ),
+                "add_into_netgroups": _(
+                    "Add host group '${primary_key}' into netgroups"
+                ),
+                "add_into_sudo": _(
+                    "Add host group '${primary_key}' into sudo rules"
+                ),
                 "host_group": _("Host Groups"),
                 "identity": _("Host Group Settings"),
+                "remove": _("Remove host groups"),
+                "remove_from_hostgroups": _(
+                    "Remove host group '${primary_key}' from host groups"
+                ),
+                "remove_from_netgroups": _(
+                    "Remove host group '${primary_key}' from netgroups"
+                ),
+                "remove_from_hbac": _(
+                    "Remove host group '${primary_key}' from HBAC rules"
+                ),
+                "remove_from_sudo": _(
+                    "Remove host group '${primary_key}' from sudo rules"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from host group '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from host group '${primary_key}'"
+                ),
             },
             "idoverrideuser": {
                 "anchor_label": _("User to override"),
@@ -646,28 +1057,58 @@ class i18n_messages(Command):
                 "anchor_tooltip_ad": _("Enter trusted group name."),
             },
             "idview": {
+                "add": _("Add ID view"),
+                "add_group": _("Add group ID override"),
+                "add_user": _("Add user ID override"),
                 "appliesto_tab": _("${primary_key} applies to:"),
                 "appliedtohosts": _("Applied to hosts"),
                 "appliedtohosts_title": _("Applied to hosts"),
                 "apply_hostgroups": _("Apply to host groups"),
-                "apply_hostgroups_title": _("Apply ID View ${primary_key} on hosts of ${entity}"),
+                "apply_hostgroups_title": _(
+                    "Apply ID view '${primary_key}' on hosts of host groups"
+                ),
                 "apply_hosts": _("Apply to hosts"),
-                "apply_hosts_title": _("Apply ID view ${primary_key} on ${entity}"),
+                "apply_hosts_title": _(
+                    "Apply ID view '${primary_key}' on hosts"
+                ),
                 "ipaassignedidview": _("Assigned ID View"),
                 "overrides_tab": _("${primary_key} overrides:"),
+                "remove": _("Remove ID views"),
+                "remove_users": _("Remove user ID overrides"),
+                "remove_groups": _("Remove group ID overrides"),
                 "unapply_hostgroups": _("Un-apply from host groups"),
                 "unapply_hostgroups_all_title": _("Un-apply ID Views from hosts of hostgroups"),
-                "unapply_hostgroups_title": _("Un-apply ID View ${primary_key} from hosts of ${entity}"),
                 "unapply_hosts": _("Un-apply"),
                 "unapply_hosts_all": _("Un-apply from hosts"),
                 "unapply_hosts_all_title": _("Un-apply ID Views from hosts"),
                 "unapply_hosts_confirm": _("Are you sure you want to un-apply ID view from selected entries?"),
-                "unapply_hosts_title": _("Un-apply ID View ${primary_key} from hosts"),
+                "unapply_hosts_title": _(
+                    "Un-apply ID view '${primary_key}' from hosts"
+                ),
             },
             "krbtpolicy": {
                 "identity": _("Kerberos Ticket Policy"),
             },
             "netgroup": {
+                "add": _("Add netgroup"),
+                "add_into_netgroups": _(
+                    "Add netgroup '${primary_key}' into netgroups"
+                ),
+                "add_netgroups": _(
+                    "Add netgroups into netgroup '${primary_key}'"
+                ),
+                "add_groups": _(
+                    "Add user groups into netgroup '${primary_key}'"
+                ),
+                "add_hosts": _(
+                    "Add hosts into netgroup '${primary_key}'"
+                ),
+                "add_hostgroups": _(
+                    "Add host groups into netgroup '${primary_key}'"
+                ),
+                "add_users": _(
+                    "Add users into netgroup '${primary_key}'"
+                ),
                 "any_host": _("Any Host"),
                 "anyone": _("Anyone"),
                 "external": _("External"),
@@ -676,6 +1117,25 @@ class i18n_messages(Command):
                 "hosts": _("Hosts"),
                 "identity": _("Netgroup Settings"),
                 "netgroups": _("Netgroups"),
+                "remove": _("Remove netgroups"),
+                "remove_from_netgroups": _(
+                    "Remove netgroup '${primary_key}' from netgroups"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from netgroup '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from netgroup '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from netgroup '${primary_key}'"
+                ),
+                "remove_netgroups": _(
+                    "Remove netgroups from netgroup '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from netgroup '${primary_key}'"
+                ),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_users": _("Specified Users and Groups"),
                 "user": _("User"),
@@ -683,13 +1143,20 @@ class i18n_messages(Command):
                 "users": _("Users"),
             },
             "otptoken": {
-                "add_token": _("Add OTP Token"),
+                "add": _("Add OTP token"),
+                "add_users_managing": _(
+                    "Add users managing OTP token '${primary_key}'"
+                ),
                 "app_link": _("You can use <a href=\"${link}\" target=\"_blank\">FreeOTP<a/> as a software OTP token application."),
                 "config_title": _("Configure your token"),
                 "config_instructions": _("Configure your token by scanning the QR code below. Click on the QR code if you see this on the device you want to configure."),
                 "details": _("OTP Token Settings"),
                 "disable": _("Disable token"),
                 "enable": _("Enable token"),
+                "remove": _("Remove OTP tokens"),
+                "remove_users_managing": _(
+                    "Remove users managing OTP token '${primary_key}'"
+                ),
                 "show_qr": _("Show QR code"),
                 "show_uri": _("Show configuration uri"),
                 "type_hotp": _("Counter-based (HOTP)"),
@@ -716,15 +1183,19 @@ class i18n_messages(Command):
                 "status_new_s": _("New: key set"),
             },
             "pwpolicy": {
+                "add": _("Add password policy"),
                 "identity": _("Password Policy"),
+                "remove": _("Remove password policies"),
             },
             "idrange": {
+                "add": _("Add ID range"),
                 "details": _("Range Settings"),
                 "ipabaseid": _("Base ID"),
                 "ipabaserid": _("Primary RID base"),
                 "ipaidrangesize": _("Range size"),
                 "ipanttrusteddomainsid": _("Domain SID"),
                 "ipasecondarybaserid": _("Secondary RID base"),
+                "remove": _("Remove ID ranges"),
                 "type": _("Range type"),
                 "type_ad": _("Active Directory domain"),
                 "type_ad_posix": _("Active Directory domain with POSIX attributes"),
@@ -734,7 +1205,9 @@ class i18n_messages(Command):
                 "type_winsync": _("Active Directory winsync"),
             },
             "radiusproxy": {
+                "add": _("Add RADIUS server"),
                 "details": _("RADIUS Proxy Server Settings"),
+                "remove": _("Remove RADIUS servers"),
             },
             "realmdomains": {
                 "identity": _("Realm Domains"),
@@ -742,15 +1215,38 @@ class i18n_messages(Command):
                 "check_dns_confirmation": _("Do you also want to perform DNS check?"),
                 "force_update": _("Force Update"),
             },
-            "role": {
-                "identity": _("Role Settings"),
-            },
             "selfservice": {
             },
             "selinuxusermap": {
+                "add": _("Add SELinux user map"),
+                "add_groups": _(
+                    "Add user groups into SELinux user map '${primary_key}'"
+                ),
+                "add_hostgroups": _(
+                    "Add host groups into SELinux user map '${primary_key}'"
+                ),
+                "add_hosts": _(
+                    "Add hosts into SELinux user map '${primary_key}'"
+                ),
+                "add_users": _(
+                    "Add users into SELinux user map '${primary_key}'"
+                ),
                 "any_host": _("Any Host"),
                 "anyone": _("Anyone"),
                 "host": _("Host"),
+                "remove": _("Remove selinux user maps"),
+                "remove_groups": _(
+                    "Remove user groups from SELinux user map '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from SELinux user map '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from SELinux user map '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from SELinux user map '${primary_key}'"
+                ),
                 "specified_hosts": _("Specified Hosts and Groups"),
                 "specified_users": _("Specified Users and Groups"),
                 "user": _("User"),
@@ -766,17 +1262,31 @@ class i18n_messages(Command):
                 "remove_server_msg": _("Deleting a server removes it permanently from the topology. Note that this is a non-reversible action.")
             },
             "service": {
+                "add": _("Add service"),
+                "add_hosts_managing": _(
+                    "Add hosts managing service '${primary_key}'"
+                ),
+                "add_into_roles": _(
+                    "Add service '${primary_key}' into roles"
+                ),
                 "certificate": _("Service Certificate"),
                 "delete_key_unprovision": _("Delete Key, Unprovision"),
                 "details": _("Service Settings"),
                 "host": _("Host Name"),
                 "missing": _("Kerberos Key Not Present"),
                 "provisioning": _("Provisioning"),
+                "remove": _("Remove services"),
+                "remove_from_roles": _(
+                    "Remove service '${primary_key}' from roles"
+                ),
+                "remove_hosts_managing": _(
+                    "Remove hosts managing service '${primary_key}'"
+                ),
                 "service": _("Service"),
                 "status": _("Status"),
                 "unprovision": _("Unprovision"),
                 "unprovision_confirmation": _("Are you sure you want to unprovision this service?"),
-                "unprovision_title": _("Unprovisioning ${entity}"),
+                "unprovision_title": _("Unprovisioning service"),
                 "unprovisioned": _("Service unprovisioned"),
                 "valid": _("Kerberos Key Present, Service Provisioned"),
             },
@@ -794,8 +1304,11 @@ class i18n_messages(Command):
                 "activate_confirm": _("Are you sure you want to activate selected users?"),
                 "activate_one_confirm": _("Are you sure you want to activate ${object}?"),
                 "activate_success": _("${count} user(s) activated"),
+                "add": _("Add stage user"),
                 "label": _("Stage users"),
                 "preserved_label": _("Preserved users"),
+                "preserved_remove": _("Remove preserved users"),
+                "remove": _("Remove stage users"),
                 "stage_confirm": _("Are you sure you want to stage selected users?"),
                 "stage_success": _("${count} users(s) staged"),
                 "stage_one_confirm": _("Are you sure you want to stage ${object}?"),
@@ -805,12 +1318,71 @@ class i18n_messages(Command):
                 "user_categories": _("User categories"),
             },
             "sudocmd": {
+                "add": _("Add sudo command"),
+                "add_into_sudocmdgroups": _(
+                    "Add sudo command '${primary_key}' into sudo command "
+                    "groups"
+                ),
                 "groups": _("Groups"),
+                "remove": _("Remove sudo commands"),
+                "remove_from_sudocmdgroups": _(
+                    "Remove sudo command '${primary_key}' from sudo command "
+                    "groups"
+                ),
             },
             "sudocmdgroup": {
+                "add": _("Add sudo command group"),
+                "add_sudocmds": _(
+                    "Add sudo commands into sudo command group "
+                    "'${primary_key}'"
+                ),
                 "commands": _("Commands"),
+                "remove": _("Remove sudo command groups"),
+                "remove_sudocmds": _(
+                    "Remove sudo commands from sudo command group "
+                    "'${primary_key}'"
+                ),
             },
             "sudorule": {
+                "add": _("Add sudo rule"),
+                "add_option": _("Add sudo option"),
+                "add_allow_cmds": _(
+                    "Add allow sudo commands into sudo rule "
+                    "'${primary_key}'"
+                ),
+                "add_allow_cmdgroups": _(
+                    "Add allow sudo command groups into sudo rule "
+                    "'${primary_key}'"
+                ),
+                "add_deny_cmds": _(
+                    "Add deny sudo commands into sudo rule "
+                    "'${primary_key}'"
+                ),
+                "add_deny_cmdgroups": _(
+                    "Add deny sudo command groups into sudo rule "
+                    "'${primary_key}'"
+                ),
+                "add_groups": _(
+                    "Add user groups into sudo rule '${primary_key}'"
+                ),
+                "add_hostgroups": _(
+                    "Add host groups into sudo rule '${primary_key}'"
+                ),
+                "add_hosts": _(
+                    "Add hosts into sudo rule '${primary_key}'"
+                ),
+                "add_runas_users": _(
+                    "Add RunAs users into sudo rule '${primary_key}'"
+                ),
+                "add_runas_usergroups": _(
+                    "Add RunAs user groups into sudo rule '${primary_key}'"
+                ),
+                "add_runas_groups": _(
+                    "Add RunAs groups into sudo rule '${primary_key}'"
+                ),
+                "add_users": _(
+                    "Add users into sudo rule '${primary_key}'"
+                ),
                 "allow": _("Allow"),
                 "any_command": _("Any Command"),
                 "any_group": _("Any Group"),
@@ -824,6 +1396,44 @@ class i18n_messages(Command):
                 "option_added": _("Option added"),
                 "option_removed": _("${count} option(s) removed"),
                 "options": _("Options"),
+                "remove": _("Remove sudo rules"),
+                "remove_allow_cmds": _(
+                    "Remove allow sudo commands from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_allow_cmdgroups": _(
+                    "Remove allow sudo command groups from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_deny_cmds": _(
+                    "Remove deny sudo commands from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_deny_cmdgroups": _(
+                    "Remove deny sudo command groups from sudo rule "
+                    "'${primary_key}'"
+                ),
+                "remove_groups": _(
+                    "Remove user groups from sudo rule '${primary_key}'"
+                ),
+                "remove_hostgroups": _(
+                    "Remove host groups from sudo rule '${primary_key}'"
+                ),
+                "remove_hosts": _(
+                    "Remove hosts from sudo rule '${primary_key}'"
+                ),
+                "remove_runas_users": _(
+                    "Remove RunAs users from sudo rule '${primary_key}'"
+                ),
+                "remove_runas_usergroups": _(
+                    "Remove RunAs user groups from sudo rule '${primary_key}'"
+                ),
+                "remove_runas_groups": _(
+                    "Remove RunAs groups from sudo rule '${primary_key}'"
+                ),
+                "remove_users": _(
+                    "Remove users from sudo rule '${primary_key}'"
+                ),
                 "runas": _("As Whom"),
                 "specified_commands": _("Specified Commands and Groups"),
                 "specified_groups": _("Specified Groups"),
@@ -831,14 +1441,32 @@ class i18n_messages(Command):
                 "specified_users": _("Specified Users and Groups"),
                 "user": _("Who"),
             },
+            "sudooptions": {
+                "remove": _("Remove sudo options"),
+            },
             "topology": {
                 "autogenerated": _("Autogenerated"),
                 "segment_details": _("Segment details"),
                 "replication_config": _("Replication configuration"),
                 "insufficient_domain_level" : _("Managed topology requires minimal domain level ${domainlevel}"),
             },
+            "topologylocation": {
+                "add": _("Add IPA location"),
+                "add_server": _(
+                    "Add IPA server into IPA location '${primary_key}'"
+                ),
+                "remove": _("Remove IPA locations"),
+                "remove_servers": _(
+                    "Remove IPA servers from IPA location '${primary_key}'"
+                ),
+            },
+            "topologysegment": {
+                "add": _("Add topology segment"),
+                "remove": _("Remove topology segments"),
+            },
             "trust": {
                 "account": _("Account"),
+                "add": _("Add trust"),
                 "admin_account": _("Administrative account"),
                 "blacklists": _("SID blacklists"),
                 "details": _("Trust Settings"),
@@ -848,6 +1476,8 @@ class i18n_messages(Command):
                 "ipantflatname": _("Domain NetBIOS name"),
                 "ipanttrusteddomainsid": _("Domain Security Identifier"),
                 "preshared_password": _("Pre-shared password"),
+                "remove": _("Remove trusts"),
+                "remove_domains": _("Remove domains"),
                 "trustdirection": _("Trust direction"),
                 "truststatus": _("Trust status"),
                 "trusttype": _("Trust type"),
@@ -860,6 +1490,22 @@ class i18n_messages(Command):
                 "account": _("Account Settings"),
                 "account_status": _("Account Status"),
                 "activeuser_label": _("Active users"),
+                "add": _("Add user"),
+                "add_into_groups": _(
+                    "Add user '${primary_key}' into user groups"
+                ),
+                "add_into_hbac": _(
+                    "Add user '${primary_key}' into HBAC rules"
+                ),
+                "add_into_netgroups": _(
+                    "Add user '${primary_key}' into netgroups"
+                ),
+                "add_into_roles": _(
+                    "Add user '${primary_key}' into roles"
+                ),
+                "add_into_sudo": _(
+                    "Add user '${primary_key}' into sudo rules"
+                ),
                 "contact": _("Contact Settings"),
                 "delete_mode": _("Delete mode"),
                 "employee": _("Employee Information"),
@@ -870,12 +1516,47 @@ class i18n_messages(Command):
                 "mode_delete": _("delete"),
                 "mode_preserve": _("preserve"),
                 "noprivate": _("No private group"),
+                "remove": _("Remove users"),
+                "remove_from_groups": _(
+                    "Remove user '${primary_key}' from user groups"
+                ),
+                "remove_from_netgroups": _(
+                    "Remove user '${primary_key}' from netgroups"
+                ),
+                "remove_from_roles": _(
+                    "Remove user '${primary_key}' from roles"
+                ),
+                "remove_from_hbac": _(
+                    "Remove user '${primary_key}' from HBAC rules"
+                ),
+                "remove_from_sudo": _(
+                    "Remove user '${primary_key}' from sudo rules"
+                ),
                 "status_confirmation": _("Are you sure you want to ${action} the user?<br/>The change will take effect immediately."),
                 "status_link": _("Click to ${action}"),
                 "unlock": _("Unlock"),
                 "unlock_confirm": _("Are you sure you want to unlock user ${object}?"),
             },
             "vault": {
+                "add": _("Add vault"),
+                "add_member_groups": _(
+                    "Add user groups into members of vault '${primary_key}'"
+                ),
+                "add_member_services": _(
+                    "Add services into members of vault '${primary_key}'"
+                ),
+                "add_member_users": _(
+                    "Add users into members of vault '${primary_key}'"
+                ),
+                "add_owner_groups": _(
+                    "Add user groups into owners of vault '${primary_key}'"
+                ),
+                "add_owner_services": _(
+                    "Add services into owners of vault '${primary_key}'"
+                ),
+                "add_owner_users": _(
+                    "Add users into owners of vault '${primary_key}'"
+                ),
                 "add_warn_arch_ret": _(
                     "Secrets can be added/retrieved to vault only by using "
                     "vault-archive and vault-retrieve from CLI."
@@ -890,6 +1571,25 @@ class i18n_messages(Command):
                 "members": _("Members"),
                 "my_vaults_title": _("My User Vaults"),
                 "owners": _("Owners"),
+                "remove": _("Remove vaults"),
+                "remove_member_groups": _(
+                    "Remove user groups from members of vault '${primary_key}'"
+                ),
+                "remove_member_services": _(
+                    "Remove services from members of vault '${primary_key}'"
+                ),
+                "remove_member_users": _(
+                    "Remove users from members of vault '${primary_key}'"
+                ),
+                "remove_owner_groups": _(
+                    "Remove user groups from owners of vault '${primary_key}'"
+                ),
+                "remove_owner_services": _(
+                    "Remove services from owners of vault '${primary_key}'"
+                ),
+                "remove_owner_users": _(
+                    "Remove users from owners of vault '${primary_key}'"
+                ),
                 "service": _("Service"),
                 "service_vaults_title": _("Service Vaults"),
                 "shared": _("Shared"),
@@ -910,7 +1610,8 @@ class i18n_messages(Command):
             "current_password_required": _("Current password is required"),
             "expires_in": _("Your password expires in ${days} days."),
             "first_otp": _("First OTP"),
-            "invalid_password": _("The password or username you entered is incorrect."),
+            "invalid_password": _(
+                "The password or username you entered is incorrect"),
             "new_password": _("New Password"),
             "new_password_required": _("New password is required"),
             "otp": _("OTP"),
@@ -922,6 +1623,8 @@ class i18n_messages(Command):
             "password": _("Password"),
             "password_and_otp": _("Password or Password+One-Time-Password"),
             "password_change_complete": _("Password change complete"),
+            "password_expired": _(
+                "Your password has expired. Please enter a new password."),
             "password_must_match": _("Passwords must match"),
             "reset_failure": _("Password reset was not successful."),
             "reset_password": _("Reset Password"),
@@ -952,6 +1655,188 @@ class i18n_messages(Command):
             "truncated": _("Query returned more results than the configured size limit. Displaying the first ${counter} results."),
             "unselect_all": _("Unselect All"),
         },
+        "ssbrowser-page": {
+            "header": _(
+                "<h1>Browser Kerberos Setup</h1>\n"
+                "\n"
+            ),
+            "firefox-header": _(
+                "<h2>Firefox</h2>\n"
+                "\n"
+                "<p>\n"
+                "            You can configure Firefox to use Kerberos for "
+                "Single Sign-on. The following instructions will guide you in "
+                "configuring your web browser to send your Kerberos "
+                "credentials to the appropriate Key Distribution Center which "
+                "enables Single Sign-on.\n"
+                "</p>\n"
+                "\n"
+            ),
+            "firefox-actions": _(
+                "<ol>\n"
+                "<li>\n"
+                "<p>\n"
+                "<a href=\"ca.crt\" id=\"ca-link\" class=\"btn btn-default\">"
+                "Import Certificate Authority certificate</a>\n"
+                "</p>\n"
+                "<p>\n"
+                "                    Make sure you select <b>all three</b> "
+                "checkboxes.\n"
+                "</p>\n"
+                "</li>\n"
+                "<li>\n"
+                "                In the address bar of Firefox, type <code>"
+                "about:config</code> to display the list of current "
+                "configuration options.\n"
+                "</li>\n"
+                "<li>\n"
+                "                In the Filter field, type <code>negotiate"
+                "</code> to restrict the list of options.\n"
+                "</li>\n"
+                "<li>\n"
+                "                Double-click the <code>network.negotiate-auth"
+                ".trusted-uris</code> entry to display the Enter string value "
+                "dialog box.\n"
+                "</li>\n"
+                "<li>\n"
+                "                Enter the name of the domain against which "
+                "you want to authenticate, for example, <code class=\""
+                "example-domain\">.example.com.</code>\n"
+                "</li>\n"
+                "<li><a href=\"../ui/index.html\" id=\"return-link\" class=\""
+                "btn btn-default\">Return to Web UI</a></li>\n"
+                "</ol>\n"
+                "\n"
+            ),
+            "chrome-header": _(
+                "<h2>Chrome</h2>\n"
+                "\n"
+                "<p>\n"
+                "            You can configure Chrome to use Kerberos for "
+                "Single Sign-on. The following instructions will guide you in "
+                "configuring your web browser to send your Kerberos "
+                "credentials to the appropriate Key Distribution Center which "
+                "enables Single Sign-on.\n"
+                "</p>\n"
+                "\n"
+            ),
+            "chrome-certificate": _(
+                "<h3>Import CA Certificate</h3>\n"
+                "<ol>\n"
+                "<li>\n"
+                "                Download the <a href=\"ca.crt\">CA "
+                "certificate</a>. Alternatively, if the host is also an IdM "
+                "client, you can find the certificate in /etc/ipa/ca.crt.\n"
+                "</li>\n"
+                "<li>\n"
+                "                Click the menu button with the <em>Customize "
+                "and control Google Chrome</em> tooltip, which is by default "
+                "in the top right-hand corner of Chrome, and click <em>"
+                "Settings</em>.\n"
+                "</li>\n"
+                "<li>\n"
+                "                Click <em>Show advanced settings</em> to "
+                "display more options, and then click the <em>Manage "
+                "certificates</em> button located under the HTTPS/SSL heading."
+                "\n"
+                "</li>\n"
+                "<li>\n"
+                "                In the <em>Authorities</em> tab, click the "
+                "<em>Import</em> button at the bottom.\n"
+                "</li>\n"
+                "<li>Select the CA certificate file that you downloaded in the"
+                " first step.</li>\n"
+                "</ol>\n"
+                "\n"
+            ),
+            "chrome-spnego": _(
+                "<h3>\n"
+                "            Enable SPNEGO (Simple and Protected GSSAPI "
+                "Negotiation Mechanism) to Use Kerberos Authentication\n"
+                "            in Chrome\n"
+                "</h3>\n"
+                "<ol>\n"
+                "<li>\n"
+                "                Make sure you have the necessary directory "
+                "created by running:\n"
+                "<div><code>\n"
+                "                    [root@client]# mkdir -p /etc/opt/chrome/"
+                "policies/managed/\n"
+                "</code></div>\n"
+                "</li>\n"
+                "<li>\n"
+                "                Create a new <code>/etc/opt/chrome/policies/"
+                "managed/mydomain.json</code> file with write privileges "
+                "limited to the system administrator or root, and include the "
+                "following line:\n"
+                "<div><code>\n"
+                "                    { \"AuthServerWhitelist\": \"*<span "
+                "class=\"example-domain\">.example.com.</span>\" }\n"
+                "</code></div>\n"
+                "<div>\n"
+                "                    You can do this by running:\n"
+                "</div>\n"
+                "<div><code>\n"
+                "                    [root@server]# echo \'{ \""
+                "AuthServerWhitelist\": \"*<span class=\"example-domain\">"
+                ".example.com.</span>\" }' > /etc/opt/chrome/policies/managed/"
+                "mydomain.json\n"
+                "</code></div>\n"
+                "</li>\n"
+                "</ol>\n"
+                "<ol>\n"
+                "<p>\n"
+                "<strong>Note:</strong> If using Chromium, use <code>/etc/"
+                "chromium/policies/managed/</code> instead of <code>/etc/opt/"
+                "chrome/policies/managed/</code> for the two SPNEGO Chrome "
+                "configuration steps above.\n"
+                "</p>\n"
+                "</ol>\n"
+                "\n"
+            ),
+            "ie-header": _(
+                "<h2>Internet Explorer</h2>\n"
+                "<p><strong>WARNING:</strong> Internet Explorer is no longer a"
+                " supported browser.</p>\n"
+                "<p>\n"
+                "            Once you are able to log into the workstation "
+                "with your kerberos key you are now able to use that ticket in"
+                " Internet Explorer.\n"
+                "</p>\n"
+                "<p>\n"
+            ),
+            "ie-actions": _(
+                "<strong>Log into the Windows machine using an account of your"
+                " Kerberos realm (administrative domain)</strong>\n"
+                "</p>\n"
+                "<p>\n"
+                "<strong>In Internet Explorer, click Tools, and then click "
+                "Internet Options.</strong>\n"
+                "</p>\n"
+                "<div>\n"
+                "<ol>\n"
+                "<li>Click the Security tab</li>\n"
+                "<li>Click Local intranet</li>\n"
+                "<li>Click Sites </li>\n"
+                "<li>Click Advanced </li>\n"
+                "<li>Add your domain to the list</li>\n"
+                "</ol>\n"
+                "<ol>\n"
+                "<li>Click the Security tab</li>\n"
+                "<li>Click Local intranet</li>\n"
+                "<li>Click Custom Level</li>\n"
+                "<li>Select Automatic logon only in Intranet zone</li>\n"
+                "</ol>\n"
+                "\n"
+                "<ol>\n"
+                "<li> Visit a kerberized web site using IE (You must use the "
+                "fully-qualified Domain Name in the URL)</li>\n"
+                "<li><strong> You are all set.</strong></li>\n"
+                "</ol>\n"
+                "</div>\n"
+                "\n"
+            ),
+        },
         "status": {
             "disable": _("Disable"),
             "disabled": _("Disabled"),
@@ -978,6 +1863,23 @@ class i18n_messages(Command):
             "trust": _("Trusts"),
         },
         "true": _("True"),
+        "unauthorized-page": _(
+            "<h1>Unable to verify your Kerberos credentials</h1>\n"
+            "<p>\n"
+            "            Please make sure that you have valid Kerberos "
+            "tickets (obtainable via <strong>kinit</strong>), and that you"
+            " have configured your browser correctly.\n"
+            "</p>\n"
+            "\n"
+            "<h2>Browser configuration</h2>\n"
+            "\n"
+            "<div id=\"first-time\">\n"
+            "<p>\n"
+            "                If this is your first time, please <a href="
+            "\"ssbrowser.html\">configure your browser</a>.\n"
+            "</p>\n"
+            "</div>\n"
+        ),
         "widget": {
             "api_browser": _("API Browser"),
             "first": _("First"),

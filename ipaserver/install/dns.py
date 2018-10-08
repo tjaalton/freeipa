@@ -292,8 +292,8 @@ def install_check(standalone, api, replica, options, hostname):
 
     # test DNSSEC forwarders
     if options.forwarders:
-        if (not bindinstance.check_forwarders(options.forwarders)
-                and not options.no_dnssec_validation):
+        if not options.no_dnssec_validation \
+                and not bindinstance.check_forwarders(options.forwarders):
             options.no_dnssec_validation = True
             print("WARNING: DNSSEC validation will be disabled")
 
@@ -476,26 +476,29 @@ class DNSInstallInterface(hostname.HostNameInstallInterface):
     @zonemgr.validator
     def zonemgr(self, value):
         # validate the value first
-        try:
-            # IDNA support requires unicode
-            encoding = getattr(sys.stdin, 'encoding', None)
-            if encoding is None:
-                encoding = 'utf-8'
-
-            # value is string in py2 and py3
-            if not isinstance(value, unicode):
-                value = value.decode(encoding)
-
+        if six.PY3:
             bindinstance.validate_zonemgr_str(value)
-        except ValueError as e:
-            # FIXME we can do this in better way
-            # https://fedorahosted.org/freeipa/ticket/4804
-            # decode to proper stderr encoding
-            stderr_encoding = getattr(sys.stderr, 'encoding', None)
-            if stderr_encoding is None:
-                stderr_encoding = 'utf-8'
-            error = unicode(e).encode(stderr_encoding)
-            raise ValueError(error)
+        else:
+            try:
+                # IDNA support requires unicode
+                encoding = getattr(sys.stdin, 'encoding', None)
+                if encoding is None:
+                    encoding = 'utf-8'
+
+                # value is string in py2 and py3
+                if not isinstance(value, unicode):
+                    value = value.decode(encoding)
+
+                bindinstance.validate_zonemgr_str(value)
+            except ValueError as e:
+                # FIXME we can do this in better way
+                # https://fedorahosted.org/freeipa/ticket/4804
+                # decode to proper stderr encoding
+                stderr_encoding = getattr(sys.stderr, 'encoding', None)
+                if stderr_encoding is None:
+                    stderr_encoding = 'utf-8'
+                error = unicode(e).encode(stderr_encoding)
+                raise ValueError(error)
 
     forwarders = knob(
         # pylint: disable=invalid-sequence-index

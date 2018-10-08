@@ -117,25 +117,24 @@ class UI_driver(object):
     Base class for all UI integration tests
     """
 
+    request_timeout = 60
+
     @classmethod
     def setup_class(cls):
         if NO_SELENIUM:
             raise unittest.SkipTest('Selenium not installed')
+        cls.load_config()
 
-    def setup(self, driver=None, config=None):
-        self.request_timeout = 30
-        self.driver = driver
-        self.config = config
-        if not config:
-            self.load_config()
-        if not self.driver:
-            self.driver = self.get_driver()
+    def setup(self):
+        self.driver = self.get_driver()
         self.driver.maximize_window()
 
     def teardown(self):
+        self.driver.delete_all_cookies()
         self.driver.quit()
 
-    def load_config(self):
+    @classmethod
+    def load_config(cls):
         """
         Load configuration
 
@@ -148,7 +147,7 @@ class UI_driver(object):
         if not NO_YAML and os.path.isfile(path):
             try:
                 with open(path, 'r') as conf:
-                    self.config = yaml.load(conf)
+                    cls.config = yaml.load(conf)
             except yaml.YAMLError as e:
                 raise unittest.SkipTest("Invalid Web UI config.\n%s" % e)
             except IOError as e:
@@ -156,9 +155,9 @@ class UI_driver(object):
                     "Can't load Web UI test config: %s" % e
                 )
         else:
-            self.config = {}
+            cls.config = {}
 
-        c = self.config
+        c = cls.config
 
         # override with environmental variables
         for k, v in ENV_MAP.items():
@@ -174,13 +173,14 @@ class UI_driver(object):
         if 'type' not in c:
             c['type'] = DEFAULT_TYPE
 
-    def get_driver(self):
+    @classmethod
+    def get_driver(cls):
         """
         Get WebDriver according to configuration
         """
-        browser = self.config["browser"]
-        port = self.config["port"]
-        driver_type = self.config["type"]
+        browser = cls.config["browser"]
+        port = cls.config["port"]
+        driver_type = cls.config["type"]
 
         options = None
 
@@ -189,9 +189,9 @@ class UI_driver(object):
             options.binary_location = paths.CHROMIUM_BROWSER
 
         if driver_type == 'remote':
-            if 'host' not in self.config:
+            if 'host' not in cls.config:
                 raise unittest.SkipTest('Selenium server host not configured')
-            host = self.config["host"]
+            host = cls.config["host"]
 
             if browser == 'chrome':
                 capabilities = DesiredCapabilities.CHROME
@@ -221,9 +221,9 @@ class UI_driver(object):
                     driver = webdriver.Ie()
                 else:
                     fp = None
-                    if "ff_profile" in self.config:
-                        fp = webdriver.FirefoxProfile(self.config["ff_profile"])
-                    ff_log_path = self.config.get("geckodriver_log_path")
+                    if "ff_profile" in cls.config:
+                        fp = webdriver.FirefoxProfile(cls.config["ff_profile"])
+                    ff_log_path = cls.config.get("geckodriver_log_path")
                     driver = webdriver.Firefox(fp, log_path=ff_log_path)
             except URLError as e:
                 raise unittest.SkipTest(
@@ -354,22 +354,6 @@ class UI_driver(object):
         """
         Navigate to Web UI first page and wait for loading of all dependencies.
         """
-        # If the application is already loaded, there is no need to re-enter
-        # the URL on the address bar and reloading everything.
-        # This help us to create scenarios like login -> logout -> login
-
-        # if a page is already loaded we click in the IPA logo to go to the
-        # initial page
-        ipa_logo = self.find('.navbar-brand', By.CSS_SELECTOR)
-        if ipa_logo and ipa_logo.is_displayed():
-            self.move_to_element_in_page(ipa_logo)
-            ipa_logo.click()
-            return
-
-        # already on the first page
-        if self.login_screen_visible():
-            return
-
         # if is not any of above cases, we need to load the application for
         # its first time entering the URL in the address bar
         self.driver.get(self.get_base_url())
@@ -930,7 +914,7 @@ class UI_driver(object):
                 self.del_multivalued(name, value, parent)
 
     def check_option(self, name, value=None, parent=None):
-        """
+        r"""
         Find checkbox or radio with name which matches ^NAME\d$ and
         check it by clicking on a label.
         """
@@ -945,7 +929,7 @@ class UI_driver(object):
         # Select only the one which matches exactly the name
         for o in opts:
             n = o.get_attribute("name")
-            if n == name or re.match("^%s\d+$" % name, n):
+            if n == name or re.match(r"^%s\d+$" % name, n):
                 s = "label[for='%s']" % o.get_attribute("id")
                 label = self.find(s, By.CSS_SELECTOR, parent, strict=True)
                 checkbox = o
@@ -1918,7 +1902,8 @@ class UI_driver(object):
         """
         Check if el has CSS class
         """
-        return cls in el.get_attribute("class").split()
+        class_attr = el.get_attribute("class")
+        return bool(class_attr) and cls in class_attr.split()
 
     def skip(self, reason):
         """

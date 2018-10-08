@@ -63,7 +63,11 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.automountlocation.add',
         fields: [ 'cn' ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.automountlocation.remove'
     }
 };};
 
@@ -109,6 +113,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.automountmap.add',
         $factory: IPA.automountmap_adder_dialog,
         sections: [
             {
@@ -151,6 +156,9 @@ return {
                 ]
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.automountmap.remove'
     }
 };};
 
@@ -187,6 +195,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.automountkey.add',
         show_edit_page : function(entity, result){
             var key = result.automountkey[0];
             var info = result.automountinformation[0];
@@ -202,6 +211,9 @@ return {
             return false;
         },
         fields:['automountkey','automountinformation']
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.automountkey.remove'
     }
 };};
 

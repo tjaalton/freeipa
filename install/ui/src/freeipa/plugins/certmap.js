@@ -133,6 +133,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.certmap.add',
         fields: [
             'cn',
             {
@@ -165,6 +166,9 @@ return {
                 name: 'description'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.certmap.remove'
     }
 };};
 

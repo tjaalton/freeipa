@@ -21,6 +21,10 @@
 Host tests
 """
 
+import uuid
+from random import randint
+
+from ipatests.test_webui.crypto_utils import generate_csr
 from ipatests.test_webui.ui_driver import UI_driver
 from ipatests.test_webui.ui_driver import screenshot
 import ipatests.test_webui.data_hostgroup as hostgroup
@@ -52,7 +56,7 @@ class host_tasks(UI_driver):
         self.prep_data4()
 
     def prep_data(self):
-        host = 'itest'
+        host = self.rand_host()
         domain = self.config.get('ipa_domain')
         ip = self.get_ip()
         self.data = self.get_data(host, domain, ip)
@@ -60,21 +64,21 @@ class host_tasks(UI_driver):
         return self.data
 
     def prep_data2(self):
-        host = 'itest2'
+        host = self.rand_host()
         domain = self.config.get('ipa_domain')
         self.data2 = self.get_data(host, domain)
         self.pkey2 = self.data2['pkey']
         return self.data2
 
     def prep_data3(self):
-        host = 'itest3'
+        host = self.rand_host()
         domain = self.config.get('ipa_domain')
         self.data3 = self.get_data(host, domain)
         self.pkey3 = self.data3['pkey']
         return self.data3
 
     def prep_data4(self):
-        host = 'itest4'
+        host = self.rand_host()
         domain = self.config.get('ipa_domain')
         self.data4 = self.get_data(host, domain)
         self.pkey4 = self.data4['pkey']
@@ -117,10 +121,20 @@ class host_tasks(UI_driver):
         ip = self.config.get('ipa_ip')
         if not ip:
             self.skip('FreeIPA Server IP address not configured')
-        ip = ip.split('.')
-        last = int(ip.pop())
-        ip.append(str(last + 1))
-        return '.'.join(ip)
+
+        while True:
+            new_ip = '10.{}.{}.{}'.format(
+                randint(0, 255),
+                randint(0, 255),
+                randint(1, 254)
+            )
+            if new_ip != ip:
+                break
+        return new_ip
+
+    @staticmethod
+    def rand_host():
+        return 'host-{}'.format(uuid.uuid4().hex[:8])
 
     def load_file(self, path):
         """
@@ -147,27 +161,20 @@ class test_host(host_tasks):
     def test_certificates(self):
         """
         Test host certificate actions
-
-        Requires to have CA installed and 'host_csr_path' configuration option
-        set.
         """
 
         if not self.has_ca():
             self.skip('CA is not configured')
 
-        csr_path = self.config.get('host_csr_path')
-        if not csr_path:
-            self.skip('CSR file is not configured')
-
         self.init_app()
-        # ENHANCEMENT: generate csr dynamically
-        csr = self.load_file(csr_path)
+
         cert_widget_sel = "div.certificate-widget"
 
         self.add_record(ENTITY, self.data)
         self.navigate_to_record(self.pkey)
 
         # cert request
+        csr = generate_csr(self.pkey)
         self.action_list_action('request_cert', confirm=False)
         self.assert_dialog()
         self.fill_text("textarea[name='csr']", csr)
@@ -494,7 +501,7 @@ class test_host(host_tasks):
         self.wait()
         actions = ActionChains(self.driver)
         actions.send_keys(Keys.ENTER).perform()
-        self.wait(0.7)
+        self.wait(2)
         self.dialog_button_click('cancel')
         self.assert_no_dialog()
 

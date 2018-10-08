@@ -97,7 +97,11 @@ var spec = {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.sudorule.add',
         fields: [ 'cn' ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.sudorule.remove'
     }
 };
 
@@ -151,11 +155,14 @@ return {
                     name: 'description',
                     width: '100px'
                 }
-            ]
+            ],
+            add_title: '@i18n:objects.sudocmd.add_into_sudocmdgroups',
+            remove_title: '@i18n:objects.sudocmd.remove_from_sudocmdgroups'
         }
     ],
     standard_association_facets: true,
     adder_dialog: {
+        title: '@i18n:objects.sudocmd.add',
         fields: [
             'sudocmd',
             {
@@ -163,6 +170,9 @@ return {
                 name: 'description'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.sudocmd.remove'
     }
 };};
 
@@ -211,11 +221,14 @@ return {
                     name: 'description',
                     width: '100px'
                 }
-            ]
+            ],
+            add_title: '@i18n:objects.sudocmdgroup.add_sudocmds',
+            remove_title: '@i18n:objects.sudocmdgroup.remove_sudocmds'
         }
     ],
     standard_association_facets: true,
     adder_dialog: {
+        title: '@i18n:objects.sudocmdgroup.add',
         fields: [
             'cn',
             {
@@ -223,6 +236,9 @@ return {
                 name: 'description'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.sudocmdgroup.remove'
     }
 };};
 
@@ -347,8 +363,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             add_method: 'add_user',
                             remove_method: 'remove_user',
                             external: 'externaluser',
-                            add_title: '@i18n:association.add.member',
-                            remove_title: '@i18n:association.remove.member'
+                            add_title: '@i18n:objects.sudorule.add_users',
+                            remove_title: '@i18n:objects.sudorule.remove_users'
                         },
                         {
                             $type: 'rule_association_table',
@@ -356,8 +372,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             name: 'memberuser_group',
                             add_method: 'add_user',
                             remove_method: 'remove_user',
-                            add_title: '@i18n:association.add.member',
-                            remove_title: '@i18n:association.remove.member'
+                            add_title: '@i18n:objects.sudorule.add_groups',
+                            remove_title: '@i18n:objects.sudorule.remove_groups'
                         }
                     ]
                 }
@@ -422,8 +438,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             add_method: 'add_host',
                             remove_method: 'remove_host',
                             external: 'externalhost',
-                            add_title: '@i18n:association.add.member',
-                            remove_title: '@i18n:association.remove.member'
+                            add_title: '@i18n:objects.sudorule.add_hosts',
+                            remove_title: '@i18n:objects.sudorule.remove_hosts'
                         },
                         {
                             $type: 'rule_association_table',
@@ -431,8 +447,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             name: 'memberhost_hostgroup',
                             add_method: 'add_host',
                             remove_method: 'remove_host',
-                            add_title: '@i18n:association.add.member',
-                            remove_title: '@i18n:association.remove.member'
+                            add_title: '@i18n:objects.sudorule.add_hostgroups',
+                            remove_title: '@i18n:objects.sudorule.remove_hostgroups'
                         }
                     ]
                 }
@@ -515,8 +531,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             name: 'memberallowcmd_sudocmd',
                             add_method: 'add_allow_command',
                             remove_method: 'remove_allow_command',
-                            add_title: '@i18n:association.add.memberallowcmd',
-                            remove_title: '@i18n:association.remove.memberallowcmd'
+                            add_title: '@i18n:objects.sudorule.add_allow_cmds',
+                            remove_title: '@i18n:objects.sudorule.remove_allow_cmds'
                         },
                         {
                             $type: 'rule_association_table',
@@ -524,8 +540,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             name: 'memberallowcmd_sudocmdgroup',
                             add_method: 'add_allow_command',
                             remove_method: 'remove_allow_command',
-                            add_title: '@i18n:association.add.memberallowcmd',
-                            remove_title: '@i18n:association.remove.memberallowcmd'
+                            add_title: '@i18n:objects.sudorule.add_allow_cmdgroups',
+                            remove_title: '@i18n:objects.sudorule.remove_allow_cmdgroups'
                         },
                         {
                             $factory: IPA.header_widget,
@@ -539,8 +555,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             name: 'memberdenycmd_sudocmd',
                             add_method: 'add_deny_command',
                             remove_method: 'remove_deny_command',
-                            add_title: '@i18n:association.add.memberdenycmd',
-                            remove_title: '@i18n:association.remove.memberdenycmd'
+                            add_title: '@i18n:objects.sudorule.add_deny_cmds',
+                            remove_title: '@i18n:objects.sudorule.remove_deny_cmds'
                         },
                         {
                             $type: 'rule_association_table',
@@ -548,8 +564,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             name: 'memberdenycmd_sudocmdgroup',
                             add_method: 'add_deny_command',
                             remove_method: 'remove_deny_command',
-                            add_title: '@i18n:association.add.memberdenycmd',
-                            remove_title: '@i18n:association.remove.memberdenycmd'
+                            add_title: '@i18n:objects.sudorule.add_deny_cmdgroups',
+                            remove_title: '@i18n:objects.sudorule.remove_deny_cmdgroups'
                         }
                     ]
                 }
@@ -620,8 +636,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             external: 'ipasudorunasextuser',
                             add_method: 'add_runasuser',
                             remove_method: 'remove_runasuser',
-                            add_title: '@i18n:association.add.ipasudorunas',
-                            remove_title: '@i18n:association.remove.ipasudorunas'
+                            add_title: '@i18n:objects.sudorule.add_runas_users',
+                            remove_title: '@i18n:objects.sudorule.remove_runas_users'
                         },
                         {
                             $type: 'rule_association_table',
@@ -629,8 +645,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                             name: 'ipasudorunas_group',
                             add_method: 'add_runasuser',
                             remove_method: 'remove_runasuser',
-                            add_title: '@i18n:association.add.ipasudorunas',
-                            remove_title: '@i18n:association.remove.ipasudorunas'
+                            add_title: '@i18n:objects.sudorule.add_runas_usergroups',
+                            remove_title: '@i18n:objects.sudorule.remove_runas_usergroups'
                         }
                     ]
                 },
@@ -652,8 +668,8 @@ var add_sudorule_details_facet_widgets = function (spec) {
                         external: 'ipasudorunasextgroup',
                         add_method: 'add_runasgroup',
                         remove_method: 'remove_runasgroup',
-                        add_title: '@i18n:association.add.ipasudorunasgroup',
-                        remove_title: '@i18n:association.remove.ipasudorunasgroup'
+                        add_title: '@i18n:objects.sudorule.add_runas_groups',
+                        remove_title: '@i18n:objects.sudorule.remove_runas_groups'
                     }]
                 }
             ]
@@ -793,12 +809,9 @@ IPA.sudo.options_section = function(spec) {
 
         var label = IPA.get_command_option('sudorule_add_option', 'ipasudoopt').label;
 
-        var title = text.get('@i18n:dialogs.add_title');
-        title = title.replace('${entity}', label);
-
         var dialog = IPA.dialog({
             name: 'option-adder-dialog',
-            title: title,
+            title: text.get('@i18n:objects.sudorule.add_option'),
             sections: [
                 {
                     fields: [
@@ -855,7 +868,6 @@ IPA.sudo.options_section = function(spec) {
 
     that.show_remove_dialog = function() {
 
-        var label = IPA.get_command_option('sudorule_add_option', 'ipasudoopt').label;
         var values = that.table.get_selected_values();
 
         if (!values.length) {
@@ -866,8 +878,7 @@ IPA.sudo.options_section = function(spec) {
 
         var pkey = that.facet.get_pkey();
 
-        var title = text.get('@i18n:dialogs.remove_title');
-        title = title.replace('${entity}', label);
+        var title = text.get('@i18n:objects.sudooptions.remove');
 
         var dialog = IPA.deleter_dialog({
             title: title,

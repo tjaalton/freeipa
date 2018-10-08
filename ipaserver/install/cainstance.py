@@ -58,7 +58,6 @@ from ipaplatform.tasks import tasks
 from ipapython import directivesetter
 from ipapython import dogtag
 from ipapython import ipautil
-from ipapython import ipaldap
 from ipapython.certdb import get_ca_nickname
 from ipapython.dn import DN
 from ipapython.ipa_log_manager import standard_logging_setup
@@ -461,6 +460,11 @@ class CAInstance(DogtagInstance):
                 self.step("updating IPA configuration", update_ipa_conf)
                 self.step("enabling CA instance", self.__enable_instance)
                 if not promote:
+                    if self.clone:
+                        # DL0 workaround; see docstring of __expose_ca_in_ldap
+                        self.step("exposing CA instance on LDAP",
+                                  self.__expose_ca_in_ldap)
+
                     self.step("migrating certificate profiles to LDAP",
                               migrate_profiles_to_ldap)
                     self.step("importing IPA certificate profiles",
@@ -1277,8 +1281,30 @@ class CAInstance(DogtagInstance):
             config = []
         self.ldap_configure('CA', self.fqdn, None, basedn, config)
 
+    def __expose_ca_in_ldap(self):
+        """
+        In a case when replica is created on DL0 we need to make
+        sure that query for CA service record of this replica in
+        ldap will succeed in time of installation.
+        This method is needed for sucessfull replica installation
+        on DL0 and should be removed alongside with code for DL0.
+
+        To suppress deprecation warning message this method is
+        not invoking ldap_enable() but _ldap_enable() method.
+        """
+
+        basedn = ipautil.realm_to_suffix(self.realm)
+        if not self.clone:
+            config = ['caRenewalMaster']
+        else:
+            config = []
+        self._ldap_enable(u'enabledService', "CA", self.fqdn, basedn, config)
+
     def setup_lightweight_ca_key_retrieval(self):
-        if sysupgrade.get_upgrade_state('dogtag', 'setup_lwca_key_retrieval'):
+        # Important: there is a typo in the below string, which is known
+        # and should not be fixed as existing installations already use it
+        LWCA_KEY_RETRIEVAL = 'setup_lwca_key_retieval'
+        if sysupgrade.get_upgrade_state('dogtag', LWCA_KEY_RETRIEVAL):
             return
 
         logger.debug('Set up lightweight CA key retrieval')
@@ -1297,7 +1323,7 @@ class CAInstance(DogtagInstance):
             directivesetter.set_directive(
                 self.config, k, v, quotes=False, separator='=')
 
-        sysupgrade.set_upgrade_state('dogtag', 'setup_lwca_key_retieval', True)
+        sysupgrade.set_upgrade_state('dogtag', LWCA_KEY_RETRIEVAL, True)
 
     def __setup_lightweight_ca_key_retrieval_kerberos(self):
         pent = pwd.getpwnam(self.service_user)
@@ -1370,41 +1396,6 @@ class CAInstance(DogtagInstance):
         ld.update([os.path.join(paths.UPDATES_DIR,
                                 '50-dogtag10-migration.update')]
                   )
-
-
-def replica_ca_install_check(config, promote):
-    if promote:
-        return
-
-    # Check if the master has the necessary schema in its CA instance
-    ca_ldap_url = 'ldap://%s:%s' % (config.ca_host_name, config.ca_ds_port)
-    objectclass = 'ipaObject'
-    logger.debug('Checking if IPA schema is present in %s', ca_ldap_url)
-    try:
-        with ipaldap.LDAPClient(
-                ca_ldap_url,
-                start_tls=True,
-                cacert=config.dir + "/ca.crt",
-                force_schema_updates=False) as connection:
-            connection.simple_bind(bind_dn=ipaldap.DIRMAN_DN,
-                                   bind_password=config.dirman_password)
-            rschema = connection.schema
-            result = rschema.get_obj(ldap.schema.models.ObjectClass,
-                                     objectclass)
-    except Exception:
-        logger.critical(
-            'CA DS schema check failed. Make sure the PKI service on the '
-            'remote master is operational.')
-        raise
-    if result:
-        logger.debug('Check OK')
-    else:
-        logger.critical(
-            'The master CA directory server does not have necessary schema. '
-            'Please run copy-schema-to-ca.py on all CA masters.\n'
-            'If you are certain that this is a false positive, use '
-            '--skip-schema-check.')
-        sys.exit('IPA schema missing on master CA directory server')
 
 
 def __update_entry_from_cert(make_filter, make_entry, cert):

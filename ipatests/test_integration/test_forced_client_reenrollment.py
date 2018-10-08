@@ -26,7 +26,7 @@ from ipaplatform.paths import paths
 import pytest
 
 from ipatests.test_integration.base import IntegrationTest
-from ipatests.pytest_plugins.integration import tasks
+from ipatests.pytest_ipa.integration import tasks
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +159,19 @@ class TestForcedClientReenrollment(IntegrationTest):
         self.check_client_host_entry()
         self.clients[0].run_command(['touch', EMPTY_KEYTAB])
         self.reenroll_client(keytab=EMPTY_KEYTAB, expect_fail=True)
+
+    def test_try_to_reenroll_with_empty_keytab(self, client):
+        """
+        Client re-enrollment with invalid (empty) client keytab file
+        """
+        self.restore_client()
+        self.check_client_host_entry()
+        try:
+            os.remove(CLIENT_KEYTAB)
+        except OSError:
+            pass
+        self.clients[0].run_command(['touch', CLIENT_KEYTAB])
+        self.reenroll_client(force_join=True)
 
     def uninstall_client(self):
         self.clients[0].run_command(

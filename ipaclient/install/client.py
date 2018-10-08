@@ -673,7 +673,7 @@ def configure_krb5_conf(
         os.path.basename(paths.KRB5_FREEIPA) + ".template"
     )
     shutil.copy(template, paths.KRB5_FREEIPA)
-    os.chmod(paths.KRB5_FREEIPA, 0x644)
+    os.chmod(paths.KRB5_FREEIPA, 0o644)
 
     # Then, perform the rest of our configuration into krb5.conf itself.
     krbconf = IPAChangeConf("IPA Installer")
@@ -2126,6 +2126,16 @@ def install_check(options):
         logger.warning("Option 'force-join' has no additional effect "
                        "when used with together with option 'keytab'.")
 
+    # Remove invalid keytab file
+    try:
+        gssapi.Credentials(
+            store={'keytab': paths.KRB5_KEYTAB},
+            usage='accept',
+        )
+    except gssapi.exceptions.GSSError:
+        logger.debug("Deleting invalid keytab: '%s'.", paths.KRB5_KEYTAB)
+        remove_file(paths.KRB5_KEYTAB)
+
     # Check if old certificate exist and show warning
     if (
         not options.ca_cert_file and
@@ -2684,13 +2694,6 @@ def _install(options):
             else:
                 logger.info("Enrolled in IPA realm %s", cli_realm)
 
-            start = stderr.find('Certificate subject base is: ')
-            if start >= 0:
-                start = start + 29
-                subject_base = stderr[start:]
-                subject_base = subject_base.strip()
-                subject_base = DN(subject_base)
-
             if options.principal is not None:
                 run([paths.KDESTROY], raiseonerr=False, env=env)
 
@@ -2855,6 +2858,20 @@ def _install(options):
         ca_enabled = result['result']['enable_ra']
     if not ca_enabled:
         disable_ra()
+
+    try:
+        result = api.Backend.rpcclient.forward(
+            'config_show',
+            raw=True,  # so that servroles are not queried
+            version=u'2.0'
+        )
+    except Exception as e:
+        logger.debug("config_show failed %s", e, exc_info=True)
+        raise ScriptError(
+            "Failed to retrieve CA certificate subject base: {}".format(e),
+            rval=CLIENT_INSTALL_ERROR)
+    else:
+        subject_base = DN(result['result']['ipacertificatesubjectbase'][0])
 
     # Create IPA NSS database
     try:
@@ -3680,7 +3697,6 @@ class ClientInstall(ClientInstallInterface,
     Client installer
     """
 
-    replica_file = None
     dm_password = None
 
     ca_cert_files = extend_knob(

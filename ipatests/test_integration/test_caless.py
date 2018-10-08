@@ -36,9 +36,9 @@ from ipapython import ipautil
 from ipaplatform.paths import paths
 from ipapython.dn import DN
 from ipatests.test_integration.base import IntegrationTest
-from ipatests.pytest_plugins.integration import tasks
+from ipatests.pytest_ipa.integration import tasks
 from ipatests.create_external_ca import ExternalCA
-from ipatests.pytest_plugins.integration import create_caless_pki
+from ipatests.pytest_ipa.integration import create_caless_pki
 from ipalib.constants import DOMAIN_LEVEL_0
 
 if six.PY3:
@@ -265,6 +265,7 @@ class CALessBase(IntegrationTest):
 
         if domain_level is None:
             domain_level = tasks.domainlevel(master)
+        tasks.check_domain_level(domain_level)
         files_to_copy = ['root.pem']
         if http_pkcs12_exists:
             files_to_copy.append(http_pkcs12)
@@ -314,22 +315,12 @@ class CALessBase(IntegrationTest):
         if pkinit_pin is not None:
             extra_args.extend(['--pkinit-pin', dirsrv_pin])
 
-        if domain_level == DOMAIN_LEVEL_0:
-            result = tasks.replica_prepare(master, replica,
-                                           extra_args=extra_args,
-                                           raiseonerr=False,
-                                           stdin_text=stdin_text)
-        else:
-            result = tasks.install_replica(master, replica, setup_ca=False,
-                                           extra_args=extra_args,
-                                           unattended=unattended,
-                                           stdin_text=stdin_text,
-                                           raiseonerr=False)
+        result = tasks.install_replica(master, replica, setup_ca=False,
+                                       extra_args=extra_args,
+                                       unattended=unattended,
+                                       stdin_text=stdin_text,
+                                       raiseonerr=False)
         return result
-
-    def get_replica_filename(self, replica):
-        return os.path.join(replica.config.test_dir,
-                            'replica-info.gpg')
 
     @classmethod
     def create_pkcs12(cls, nickname, filename='server.p12', password=None):
@@ -1072,8 +1063,7 @@ class TestReplicaInstall(CALessBase):
         result = self.prepare_replica(http_pkcs12='server.p12',
                                       dirsrv_pkcs12='server.p12')
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_wildcard_http(self):
@@ -1085,8 +1075,7 @@ class TestReplicaInstall(CALessBase):
         result = self.prepare_replica(http_pkcs12='http.p12',
                                       dirsrv_pkcs12='dirsrv.p12')
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_wildcard_ds(self):
@@ -1098,8 +1087,7 @@ class TestReplicaInstall(CALessBase):
         result = self.prepare_replica(http_pkcs12='http.p12',
                                       dirsrv_pkcs12='dirsrv.p12')
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_http_san(self):
@@ -1111,8 +1099,7 @@ class TestReplicaInstall(CALessBase):
         result = self.prepare_replica(http_pkcs12='http.p12',
                                       dirsrv_pkcs12='dirsrv.p12')
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_ds_san(self):
@@ -1124,8 +1111,7 @@ class TestReplicaInstall(CALessBase):
         result = self.prepare_replica(http_pkcs12='http.p12',
                                       dirsrv_pkcs12='dirsrv.p12')
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_interactive_missing_http_pkcs_password(self):
@@ -1139,8 +1125,7 @@ class TestReplicaInstall(CALessBase):
         result = self.prepare_replica(http_pin=None, unattended=False,
                                       stdin_text=stdin_text)
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_interactive_missing_ds_pkcs_password(self):
@@ -1154,8 +1139,7 @@ class TestReplicaInstall(CALessBase):
         result = self.prepare_replica(dirsrv_pin=None, unattended=False,
                                       stdin_text=stdin_text)
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_no_http_password(self):
@@ -1168,8 +1152,7 @@ class TestReplicaInstall(CALessBase):
                                       dirsrv_pkcs12='dirsrv.p12',
                                       http_pin='')
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_no_ds_password(self):
@@ -1182,8 +1165,7 @@ class TestReplicaInstall(CALessBase):
                                       dirsrv_pkcs12='dirsrv.p12',
                                       dirsrv_pin='')
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_certs_with_no_password(self):
@@ -1198,8 +1180,7 @@ class TestReplicaInstall(CALessBase):
         self.prepare_replica(http_pkcs12='http.p12',
                              dirsrv_pkcs12='dirsrv.p12',
                              http_pin='', dirsrv_pin='')
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
     @replica_install_teardown
     def test_certs_with_no_password_interactive(self):
@@ -1217,8 +1198,7 @@ class TestReplicaInstall(CALessBase):
                                       http_pin=None, dirsrv_pin=None,
                                       unattended=False, stdin_text=stdin_text)
         assert result.returncode == 0
-        if self.domain_level > DOMAIN_LEVEL_0:
-            self.verify_installation()
+        self.verify_installation()
 
 
 class TestClientInstall(CALessBase):

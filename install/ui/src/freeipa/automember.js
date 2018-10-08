@@ -105,7 +105,7 @@ return {
     ],
     adder_dialog: {
         $factory: IPA.automember.rule_adder_dialog,
-        title: '@i18n:objects.automember.add_rule',
+        title: '@i18n:objects.automember.add',
         fields: [
             {
                 $type: 'entity_select',
@@ -117,6 +117,7 @@ return {
         height: '300'
     },
     deleter_dialog: {
+        title: '@i18n:objects.automember.remove',
         $factory: IPA.automember.rule_deleter_dialog
     }
 };};
@@ -280,7 +281,7 @@ IPA.automember.rule_details_facet = function(spec) {
                     add_command: 'add_condition',
                     remove_command: 'remove_condition',
                     adder_dialog: {
-                        title: '@i18n:objects.automember.add_condition',
+                        title: '@i18n:objects.automember.add_inc_condition',
                         fields: [
                             {
                                 name: 'key',
@@ -294,6 +295,9 @@ IPA.automember.rule_details_facet = function(spec) {
                                 required: true
                             }
                         ]
+                    },
+                    deleter_dialog: {
+                        title: '@i18n:objects.automember.remove_inc_conditions'
                     }
                 }
             ]
@@ -310,7 +314,7 @@ IPA.automember.rule_details_facet = function(spec) {
                     add_command: 'add_condition',
                     remove_command: 'remove_condition',
                     adder_dialog: {
-                        title: '@i18n:objects.automember.add_condition',
+                        title: '@i18n:objects.automember.add_exc_condition',
                         fields:  [
                             {
                                 name: 'key',
@@ -324,6 +328,9 @@ IPA.automember.rule_details_facet = function(spec) {
                                 required: true
                             }
                         ]
+                    },
+                    deleter_dialog: {
+                        title: '@i18n:objects.automember.remove_exc_conditions'
                     }
                 }
             ]

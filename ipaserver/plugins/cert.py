@@ -300,8 +300,11 @@ def ca_kdc_check(api_instance, hostname):
 
         ipaconfigstring = {val.lower() for val in kdc_entry['ipaConfigString']}
 
-        if 'enabledservice' not in ipaconfigstring:
-            raise errors.NotFound()
+        if 'enabledservice' not in ipaconfigstring \
+                and 'configuredservice' not in ipaconfigstring:
+            raise errors.NotFound(
+                reason=_("enabledService/configuredService not in "
+                         "ipaConfigString kdc entry"))
 
     except errors.NotFound:
         raise errors.ACIError(

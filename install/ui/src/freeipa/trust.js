@@ -68,6 +68,10 @@ return {
             label: '@mo:trustdomain.label',
             tab_label: '@mo:trustdomain.label',
             search_all_entries: true,
+            deleter_dialog: {
+                title: '@i18n:objects.trust.remove_domains',
+                $factory: IPA.search_deleter_dialog
+            },
             actions: [
                 {
                     $type: 'batch_disable'
@@ -174,6 +178,7 @@ return {
         }
     ],
     adder_dialog: {
+        title: '@i18n:objects.trust.add',
         $factory: IPA.trust.adder_dialog,
         fields: [
             {
@@ -331,6 +336,9 @@ return {
                 widget: 'method'
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.trust.remove'
     }
 };};
 

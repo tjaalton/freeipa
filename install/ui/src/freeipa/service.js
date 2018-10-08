@@ -204,8 +204,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_retrieve_keytab',
                             remove_method: 'disallow_retrieve_keytab',
-                            add_title: '@i18n:keytab.add_retrive',
-                            remove_title: '@i18n:keytab.remove_retrieve',
+                            add_title: '@i18n:keytab.add_users_retrieve',
+                            remove_title: '@i18n:keytab.remove_users_retrieve',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_read_keys_user',
@@ -221,8 +221,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_retrieve_keytab',
                             remove_method: 'disallow_retrieve_keytab',
-                            add_title: '@i18n:keytab.add_retrive',
-                            remove_title: '@i18n:keytab.remove_retrieve',
+                            add_title: '@i18n:keytab.add_groups_retrieve',
+                            remove_title: '@i18n:keytab.remove_groups_retrieve',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_read_keys_group',
@@ -238,8 +238,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_retrieve_keytab',
                             remove_method: 'disallow_retrieve_keytab',
-                            add_title: '@i18n:keytab.add_retrive',
-                            remove_title: '@i18n:keytab.remove_retrieve',
+                            add_title: '@i18n:keytab.add_hosts_retrieve',
+                            remove_title: '@i18n:keytab.remove_hosts_retrieve',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_read_keys_host',
@@ -255,8 +255,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_retrieve_keytab',
                             remove_method: 'disallow_retrieve_keytab',
-                            add_title: '@i18n:keytab.add_retrive',
-                            remove_title: '@i18n:keytab.remove_retrieve',
+                            add_title: '@i18n:keytab.add_hostgroups_retrieve',
+                            remove_title: '@i18n:keytab.remove_hostgroups_retrieve',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_read_keys_hostgroup',
@@ -279,8 +279,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_create_keytab',
                             remove_method: 'disallow_create_keytab',
-                            add_title: '@i18n:keytab.add_create',
-                            remove_title: '@i18n:keytab.remove_create',
+                            add_title: '@i18n:keytab.add_users_create',
+                            remove_title: '@i18n:keytab.remove_users_create',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_write_keys_user',
@@ -296,8 +296,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_create_keytab',
                             remove_method: 'disallow_create_keytab',
-                            add_title: '@i18n:keytab.add_create',
-                            remove_title: '@i18n:keytab.remove_create',
+                            add_title: '@i18n:keytab.add_groups_create',
+                            remove_title: '@i18n:keytab.remove_groups_create',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_write_keys_group',
@@ -313,8 +313,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_create_keytab',
                             remove_method: 'disallow_create_keytab',
-                            add_title: '@i18n:keytab.add_create',
-                            remove_title: '@i18n:keytab.remove_create',
+                            add_title: '@i18n:keytab.add_hosts_create',
+                            remove_title: '@i18n:keytab.remove_hosts_create',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_write_keys_host',
@@ -330,8 +330,8 @@ return {
                             flags: ['w_if_no_aci'],
                             add_method: 'allow_create_keytab',
                             remove_method: 'disallow_create_keytab',
-                            add_title: '@i18n:keytab.add_create',
-                            remove_title: '@i18n:keytab.remove_create',
+                            add_title: '@i18n:keytab.add_hostgroups_create',
+                            remove_title: '@i18n:keytab.remove_hostgroups_create',
                             columns: [
                                 {
                                     name: 'ipaallowedtoperform_write_keys_hostgroup',
@@ -345,7 +345,10 @@ return {
             ],
             actions: [
                 'service_unprovision',
-                'cert_request'
+                {
+                    $type: 'cert_request',
+                    title: '@i18n:objects.cert.issue_for_service'
+                }
             ],
             header_actions: [
                 'unprovision',
@@ -368,13 +371,22 @@ return {
         },
         {
             $type: 'association',
+            name: 'memberof_role',
+            add_title: '@i18n:objects.service.add_into_roles',
+            remove_title: '@i18n:objects.service.remove_from_roles'
+        },
+        {
+            $type: 'association',
             name: 'managedby_host',
             add_method: 'add_host',
-            remove_method: 'remove_host'
+            add_title: '@i18n:objects.service.add_hosts_managing',
+            remove_method: 'remove_host',
+            remove_title: '@i18n:objects.service.remove_hosts_managing'
         }
     ],
     standard_association_facets: true,
     adder_dialog: {
+        title: '@i18n:objects.service.add',
         $factory: IPA.service_adder_dialog,
         height: 350,
         sections: [
@@ -424,6 +436,9 @@ return {
                 ]
             }
         ]
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.service.remove'
     }
 };};
 
@@ -644,9 +659,6 @@ IPA.service.unprovision_dialog = function(spec) {
 
     var that = IPA.dialog(spec);
     that.facet = spec.facet;
-
-    var entity_singular = that.entity.metadata.label_singular;
-    that.title = that.title.replace('${entity}', entity_singular);
 
     that.create_content = function() {
         that.container.append(text.get('@i18n:objects.service.unprovision_confirmation'));

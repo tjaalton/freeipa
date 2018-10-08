@@ -184,7 +184,7 @@ IPA.attribute_adder_dialog = function(spec) {
             required: true
         }
     ];
-    spec.title = spec.title || text.get('@i18n:dialogs.add_title').replace('${entity}', metadata.label);
+    spec.title = spec.title || text.get('@i18n:dialogs.add_title_default');
     spec.subject = metadata.label;
 
     var that = IPA.entity_adder_dialog(spec);
@@ -453,8 +453,8 @@ IPA.association_table_widget = function (spec) {
     that.remove_method = spec.remove_method || 'remove_member';
 
     that.read_only = spec.read_only === undefined ? false : spec.read_only;
-    that.add_title = text.get(spec.add_title || '@i18n:association.add.member');
-    that.remove_title = text.get(spec.remove_title || '@i18n:association.remove.member');
+    that.add_title = text.get(spec.add_title);
+    that.remove_title = text.get(spec.remove_title);
 
     that.adder_columns = $.ordered_map();
 
@@ -638,14 +638,10 @@ IPA.association_table_widget = function (spec) {
 
     that.create_add_dialog = function() {
 
-        var entity_label = that.entity.metadata.label_singular;
         var pkey = that.facet.get_pkey();
-        var other_entity_label = that.other_entity.metadata.label;
 
         var title = that.add_title;
-        title = title.replace('${entity}', entity_label);
         title = title.replace('${primary_key}', pkey);
-        title = title.replace('${other_entity}', other_entity_label);
 
         return IPA.association_adder_dialog({
             title: title,
@@ -735,14 +731,10 @@ IPA.association_table_widget = function (spec) {
             return;
         }
 
-        var entity_label = that.entity.metadata.label_singular;
         var pkey = that.facet.get_pkey();
-        var other_entity_label = that.other_entity.metadata.label;
 
         var title = that.remove_title;
-        title = title.replace('${entity}', entity_label);
         title = title.replace('${primary_key}', pkey);
-        title = title.replace('${other_entity}', other_entity_label);
 
         var dialog = IPA.association_deleter_dialog({
             title: title,
@@ -930,8 +922,10 @@ exp.association_facet_pre_op = function(spec, context) {
         }
     }
 
-    spec.add_title = '@i18n:association.add.'+spec.attribute_member;
-    spec.remove_title = '@i18n:association.remove.'+spec.attribute_member;
+    spec.add_title = spec.add_title ||
+                         '@i18n:association.add_title_default';
+    spec.remove_title = spec.remove_title ||
+                            '@i18n:association.remove_title_default';
 
     spec.facet_group = spec.facet_group || spec.attribute_member;
 
@@ -1048,8 +1042,8 @@ exp.association_facet = IPA.association_facet = function (spec, no_init) {
     that.add_method = spec.add_method || 'add_member';
     that.remove_method = spec.remove_method || 'remove_member';
 
-    that.add_title = text.get(spec.add_title || '@i18n:association.add.member');
-    that.remove_title = text.get(spec.remove_title || '@i18n:association.remove.member');
+    that.add_title = text.get(spec.add_title);
+    that.remove_title = text.get(spec.remove_title);
 
     that.adder_columns = $.ordered_map();
 
@@ -1206,14 +1200,10 @@ exp.association_facet = IPA.association_facet = function (spec, no_init) {
 
     that.show_add_dialog = function() {
 
-        var entity_label = that.entity.metadata.label_singular;
         var pkey = that.get_pkey();
-        var other_entity_label = that.other_entity.metadata.label;
 
         var title = that.add_title;
-        title = title.replace('${entity}', entity_label);
         title = title.replace('${primary_key}', pkey);
-        title = title.replace('${other_entity}', other_entity_label);
 
         var pkeys = that.data.result.result[that.get_attribute_name()];
 
@@ -1272,14 +1262,10 @@ exp.association_facet = IPA.association_facet = function (spec, no_init) {
             return;
         }
 
-        var entity_label = that.entity.metadata.label_singular;
         var pkey = that.get_pkey();
-        var other_entity_label = that.other_entity.metadata.label;
 
         var title = that.remove_title;
-        title = title.replace('${entity}', entity_label);
         title = title.replace('${primary_key}', pkey);
-        title = title.replace('${other_entity}', other_entity_label);
 
         var dialog = IPA.association_deleter_dialog({
             title: title,

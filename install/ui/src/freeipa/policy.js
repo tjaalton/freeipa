@@ -79,6 +79,7 @@ return {
     ],
     standard_association_facets: true,
     adder_dialog: {
+        title: '@i18n:objects.pwpolicy.add',
         fields: [
             {
                 $type: 'entity_select',
@@ -93,6 +94,9 @@ return {
             }
         ],
         height: 300
+    },
+    deleter_dialog: {
+        title: '@i18n:objects.pwpolicy.remove'
     }
 };};
 

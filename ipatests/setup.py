@@ -33,8 +33,8 @@ if __name__ == '__main__':
         package_dir={'ipatests': ''},
         packages=[
             "ipatests",
-            "ipatests.pytest_plugins",
-            "ipatests.pytest_plugins.integration",
+            "ipatests.pytest_ipa",
+            "ipatests.pytest_ipa.integration",
             "ipatests.test_cmdline",
             "ipatests.test_install",
             "ipatests.test_integration",
@@ -50,6 +50,7 @@ if __name__ == '__main__':
         ],
         scripts=['ipa-run-tests', 'ipa-test-config', 'ipa-test-task'],
         package_data={
+            'ipatests': ['prci_definitions/*'],
             'ipatests.test_install': ['*.update'],
             'ipatests.test_integration': ['scripts/*'],
             'ipatests.test_ipaclient': ['data/*/*/*'],
