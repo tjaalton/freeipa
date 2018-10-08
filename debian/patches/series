@@ -1,7 +1,6 @@
 # upstreamed
 
 # not upstreamable
-fix-replicainstall.diff
 create-sysconfig-ods.diff
 hack-tomcat-race.diff
 

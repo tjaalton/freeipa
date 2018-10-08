@@ -6,5 +6,5 @@
  
 +HOSTNAME=`hostname -f`
  USAGE="./ipa-pwdreader host:port RSA|DSA|ECC|number"
- ERR_UNKNOWN_KEY="\
- ERROR: You seem to be running a non-standard IPA installation.
+ 
+ if [ "$#" -ne 2 ]; then
