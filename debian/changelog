@@ -4,6 +4,7 @@ freeipa (4.7.1-1) UNRELEASED; urgency=medium
     - fix-replicainstall.diff dropped, not applicable anymore
     - ipa-httpd-pwdreader-force-fqdn.diff dropped, obsolete
     - refresh patches
+    - server: drop ipa-replica-prepare
   * dont-migrate-to-authselect.diff We don't have authselect, so just
     return true when trying to migrate to it. (LP: #1793994)
   * control: Move client dependency on chrony to recommends. (Closes:

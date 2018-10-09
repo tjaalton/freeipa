@@ -51,7 +51,6 @@ usr/sbin/ipa-pkinit-manage
 usr/sbin/ipa-replica-conncheck
 usr/sbin/ipa-replica-install
 usr/sbin/ipa-replica-manage
-usr/sbin/ipa-replica-prepare
 usr/sbin/ipa-restore
 usr/sbin/ipa-server-certinstall
 usr/sbin/ipa-server-install
@@ -89,7 +88,6 @@ usr/share/man/man1/ipa-pkinit-manage.1*
 usr/share/man/man1/ipa-replica-conncheck.1*
 usr/share/man/man1/ipa-replica-install.1*
 usr/share/man/man1/ipa-replica-manage.1*
-usr/share/man/man1/ipa-replica-prepare.1*
 usr/share/man/man1/ipa-restore.1*
 usr/share/man/man1/ipa-server-certinstall.1*
 usr/share/man/man1/ipa-server-install.1*
