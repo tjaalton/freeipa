@@ -1,4 +1,4 @@
-freeipa (4.7.1-1) UNRELEASED; urgency=medium
+freeipa (4.7.1-1) unstable; urgency=medium
 
   * New upstream release.
     - fix-replicainstall.diff dropped, not applicable anymore
@@ -13,7 +13,7 @@ freeipa (4.7.1-1) UNRELEASED; urgency=medium
   * tests: Don't fail the tests, just dump the log if something goes
     wrong.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Mon, 01 Oct 2018 11:37:15 +0300
+ -- Timo Aaltonen <tjaalton@debian.org>  Tue, 09 Oct 2018 10:30:09 +0300
 
 freeipa (4.7.0-1) unstable; urgency=medium
 
