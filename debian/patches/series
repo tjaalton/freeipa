@@ -11,3 +11,4 @@ fix-krb5kdc-cert-path.diff
 fix-gzip-path.diff
 fix-py3-lesscpy-name.diff
 dont-migrate-to-authselect.diff
+fix-oddjobd-conf.diff
