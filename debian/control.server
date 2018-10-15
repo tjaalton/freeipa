@@ -157,7 +157,7 @@ Depends:
  libnss3-tools,
  python-coverage,
  python-ipalib (>= ${source:Version}),
- python-nose,
+ python-mock,
  python-paramiko,
  python-paste,
  python-polib,
