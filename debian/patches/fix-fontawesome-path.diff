@@ -39,3 +39,13 @@
              GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
              IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
              IPA_CCACHES=paths.IPA_CCACHES,
+--- a/ipaserver/install/server/upgrade.py
++++ b/ipaserver/install/server/upgrade.py
+@@ -1773,6 +1773,7 @@ def upgrade_configuration():
+         WSGI_PROCESSES=constants.WSGI_PROCESSES,
+         GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
+         FONTS_DIR=paths.FONTS_DIR,
++        FONT_AWESOME_DIR=paths.FONT_AWESOME_DIR,
+         IPA_CCACHES=paths.IPA_CCACHES,
+         IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET
+     )
