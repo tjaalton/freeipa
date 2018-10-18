@@ -24,7 +24,7 @@ if [ "$1" = configure ]; then
             . /usr/share/apache2/apache2-maintscript-helper
             apache2_invoke dismod nss || exit $?
             # and if that's not enough, just remove the links to be sure
-            rm /etc/apache2/mods-enabled/nss.load rm /etc/apache2/mods-enabled/nss.conf
+            rm /etc/apache2/mods-enabled/nss.load /etc/apache2/mods-enabled/nss.conf
         fi
 
         # this is new in tmpfiles.d/ipa.conf, need to create it here
