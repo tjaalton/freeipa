@@ -5,7 +5,13 @@
 
 DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
-ONLY_CLIENT=0
+# build server only where nodejs is available
+ifneq (,$(filter $(DEB_HOST_ARCH), amd64 arm64 armhf i386 mips mips64el mipsel ppc64 ppc64el s390x))
+  ONLY_CLIENT=0
+else
+  ONLY_CLIENT=1
+endif
+
 DESTDIR=$(CURDIR)/debian/tmp
 
 export PYTHON=python
