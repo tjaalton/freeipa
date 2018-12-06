@@ -108,6 +108,7 @@ Depends:
  python-six,
  python-usb (>= 1.0.0~b2),
  python-yubico,
+ systemd,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends},

@@ -5,6 +5,7 @@ freeipa (4.7.1-3) UNRELEASED; urgency=medium
   * rules: Don't run git on clean. (Closes: #912202)
   * control: Nodejs is not available on all archs, build server packages
     only where it is.
+  * control: Add systemd to python-ipalib depends. (Closes: #851158)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 06 Dec 2018 01:29:22 +0200
 
