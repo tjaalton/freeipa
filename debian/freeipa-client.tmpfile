@@ -1,1 +1,1 @@
-d /var/run/ipa 0711 root root
+d /run/ipa 0711 root root
