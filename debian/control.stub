@@ -29,7 +29,7 @@ Build-Depends:
  libverto-dev,
  libxmlrpc-core-c3-dev (>= 1.33.06),
  nodejs [amd64 arm64 armhf i386 mips mips64el mipsel ppc64 ppc64el s390x],
- node-uglify,
+ node-uglify [amd64 arm64 armhf i386 mips mips64el mipsel ppc64 ppc64el s390x],
  pki-base (>= 10.6.0~),
  python-all-dev,
  python-cryptography,
