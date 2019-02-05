@@ -36,6 +36,7 @@ from six.moves.urllib.parse import urlparse
 # pylint: enable=import-error
 
 from cryptography import x509 as crypto_x509
+from cryptography.hazmat.primitives import serialization
 
 import ldap
 import ldap.sasl
@@ -565,10 +566,13 @@ class LDAPEntry(MutableMapping):
                     raise errors.OnlyOneValueAllowed(attr=name)
                 modlist.append((ldap.MOD_REPLACE, name, adds))
             else:
-                if adds:
-                    modlist.append((ldap.MOD_ADD, name, adds))
+                # dels before adds, in case the same value occurs in
+                # both due to encoding differences
+                # (https://pagure.io/freeipa/issue/7750)
                 if dels:
                     modlist.append((ldap.MOD_DELETE, name, dels))
+                if adds:
+                    modlist.append((ldap.MOD_ADD, name, adds))
 
         # Usually the modlist order does not matter.
         # However, for schema updates, we want 'attributetypes' before
@@ -1290,6 +1294,8 @@ class LDAPClient(object):
             ]
             return cls.combine_filters(flts, rules)
         elif value is not None:
+            if isinstance(value, crypto_x509.Certificate):
+                value = value.public_bytes(serialization.Encoding.DER)
             if isinstance(value, bytes):
                 value = binascii.hexlify(value).decode('ascii')
                 # value[-2:0] is empty string for the initial '\\'

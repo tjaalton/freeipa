@@ -167,11 +167,13 @@ class DogtagInstance(service.Service):
 
     def clean_pkispawn_files(self):
         if self.tmp_agent_db is not None:
+            logger.debug("Removing %s", self.tmp_agent_db)
             shutil.rmtree(self.tmp_agent_db, ignore_errors=True)
 
-        shutil.rmtree('/root/.dogtag/pki-tomcat/{subsystem}/'
-                      .format(subsystem=self.subsystem.lower()),
-                      ignore_errors=True)
+        client_dir = os.path.join(
+            '/root/.dogtag/pki-tomcat/', self.subsystem.lower())
+        logger.debug("Removing %s", client_dir)
+        shutil.rmtree(client_dir, ignore_errors=True)
 
     def restart_instance(self):
         self.restart('pki-tomcat')
@@ -264,7 +266,7 @@ class DogtagInstance(service.Service):
         """
         cmonger = services.knownservices.certmonger
         cmonger.enable()
-        services.knownservices.messagebus.start()
+        services.knownservices.dbus.start()
         cmonger.start()
 
         bus = dbus.SystemBus()
@@ -336,7 +338,7 @@ class DogtagInstance(service.Service):
             "for %s", self.subsystem)
 
         cmonger = services.knownservices.certmonger
-        services.knownservices.messagebus.start()
+        services.knownservices.dbus.start()
         cmonger.start()
 
         nicknames = list(self.tracking_reqs)

@@ -69,11 +69,12 @@ def setup_server_logs_collecting(host):
 
     # IPA install logs
     host.collect_log(paths.IPASERVER_INSTALL_LOG)
+    host.collect_log(paths.IPASERVER_UNINSTALL_LOG)
     host.collect_log(paths.IPACLIENT_INSTALL_LOG)
+    host.collect_log(paths.IPACLIENT_UNINSTALL_LOG)
     host.collect_log(paths.IPAREPLICA_INSTALL_LOG)
     host.collect_log(paths.IPAREPLICA_CONNCHECK_LOG)
     host.collect_log(paths.IPAREPLICA_CA_INSTALL_LOG)
-    host.collect_log(paths.IPACLIENT_INSTALL_LOG)
     host.collect_log(paths.IPASERVER_KRA_INSTALL_LOG)
     host.collect_log(paths.IPA_CUSTODIA_AUDIT_LOG)
 
@@ -159,15 +160,46 @@ def prepare_host(host):
         host.put_file_contents(env_filename, env_to_script(host.to_env()))
 
 
-def allow_sync_ptr(host):
-    kinit_admin(host)
-    host.run_command(["ipa", "dnsconfig-mod", "--allow-sync-ptr=true"],
-                     raiseonerr=False)
+def rpcbind_kadmin_workaround(host):
+    """Restart rpcbind in case it blocks 749/TCP, 464/UDP, or 464/TCP
+
+    See https://pagure.io/freeipa/issue/7769
+    See https://bugzilla.redhat.com/show_bug.cgi?id=1592883
+    """
+    cmd = [
+        'ss',
+        '--all',  # listening and non-listening sockets
+        '--tcp', '--udp',  # only TCP and UDP sockets
+        '--numeric',  # don't resolve host and service names
+        '--processes',  # show processes
+    ]
+    # run once to list all ports for debugging
+    host.run_command(cmd)
+    # check for blocked kadmin port
+    cmd.extend((
+        '-o', 'state', 'all',  # ports in any state, not just listening
+        '( sport = :749 or dport = :749 or sport = :464 or dport = :464 )'
+    ))
+    for _i in range(5):
+        result = host.run_command(cmd)
+        if 'rpcbind' in result.stdout_text:
+            logger.error("rpcbind blocks 749, restarting")
+            host.run_command(['systemctl', 'restart', 'rpcbind.service'])
+            time.sleep(2)
+        else:
+            break
 
 
 def apply_common_fixes(host):
     prepare_host(host)
     fix_hostname(host)
+    rpcbind_kadmin_workaround(host)
+
+
+def allow_sync_ptr(host):
+    kinit_admin(host)
+    host.run_command(["ipa", "dnsconfig-mod", "--allow-sync-ptr=true"],
+                     raiseonerr=False)
 
 
 def backup_file(host, filename):
@@ -291,7 +323,7 @@ def set_default_ttl_for_ipa_dns_zone(host, raiseonerr=True):
 
 def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
                    extra_args=(), domain_level=None, unattended=True,
-                   stdin_text=None, raiseonerr=True):
+                   external_ca=False, stdin_text=None, raiseonerr=True):
     if domain_level is None:
         domain_level = host.config.domain_level
     check_domain_level(domain_level)
@@ -320,11 +352,14 @@ def install_master(host, setup_dns=True, setup_kra=False, setup_adtrust=False,
         args.append('--setup-kra')
     if setup_adtrust:
         args.append('--setup-adtrust')
+    if external_ca:
+        args.append('--external-ca')
 
     args.extend(extra_args)
     result = host.run_command(args, raiseonerr=raiseonerr,
                               stdin_text=stdin_text)
-    if result.returncode == 0:
+    if result.returncode == 0 and not external_ca:
+        # external CA step 1 doesn't have DS and KDC fully configured, yet
         enable_replication_debugging(host)
         setup_sssd_debugging(host)
         kinit_admin(host)
@@ -504,7 +539,6 @@ def configure_dns_for_trust(master, ad):
     configuration on IPA master according to the relationship of the IPA's
     and AD's domains.
     """
-    pass
 
 
 def establish_trust_with_ad(master, ad_domain, extra_args=()):
@@ -1100,19 +1134,26 @@ def _entries_to_ldif(entries):
     return io.getvalue()
 
 
-def wait_for_replication(ldap, timeout=30):
-    """Wait until updates on all replication agreements are done (or failed)
+def wait_for_replication(ldap, timeout=30,
+                         target_status_re=r'^0 |^Error \(0\) ',
+                         raise_on_timeout=False):
+    """Wait for all replication agreements to reach desired state
 
+    With defaults waits until updates on all replication agreements are
+    done (or failed) and exits without exception
     :param ldap: LDAP client
         autenticated with necessary rights to read the mapping tree
     :param timeout: Maximum time to wait, in seconds
+    :param target_status_re: Regexp of status to wait for
+    :param raise_on_timeout: if True, raises AssertionError if status not
+        reached in specified time
 
     Note that this waits for updates originating on this host, not those
     coming from other hosts.
     """
     logger.debug('Waiting for replication to finish')
-    for i in range(timeout):
-        time.sleep(1)
+    start = time.time()
+    while True:
         status_attr = 'nsds5replicaLastUpdateStatus'
         progress_attr = 'nsds5replicaUpdateInProgress'
         entries = ldap.get_entries(
@@ -1120,25 +1161,58 @@ def wait_for_replication(ldap, timeout=30):
             filter='(objectclass=nsds5replicationagreement)',
             attrs_list=[status_attr, progress_attr])
         logger.debug('Replication agreements: \n%s', _entries_to_ldif(entries))
-        if any(
-                not (
-                    # older DS format
-                    e.single_value[status_attr].startswith('0 ') or
-                    # newer DS format
-                    e.single_value[status_attr].startswith('Error (0) ')
-                )
-            for e in entries
-        ):
-            logger.error('Replication error')
-            continue
+        statuses = [entry.single_value[status_attr] for entry in entries]
+        wrong_statuses = [s for s in statuses
+                          if not re.match(target_status_re, s)]
         if any(e.single_value[progress_attr] == 'TRUE' for e in entries):
-            logger.debug('Replication in progress (waited %s/%ss)',
-                         i, timeout)
+            msg = 'Replication not finished'
+            logger.debug(msg)
+        elif wrong_statuses:
+            msg = 'Unexpected replication status: %s' % wrong_statuses[0]
+            logger.debug(msg)
         else:
             logger.debug('Replication finished')
+            return
+        if time.time() - start > timeout:
+            logger.error('Giving up wait for replication to finish')
+            if raise_on_timeout:
+                raise AssertionError(msg)
             break
+        time.sleep(1)
+
+
+def wait_for_cleanallruv_tasks(ldap, timeout=30):
+    """Wait until cleanallruv tasks are finished
+    """
+    logger.debug('Waiting for cleanallruv tasks to finish')
+    success_status = 'Successfully cleaned rid'
+    for i in range(timeout):
+        status_attr = 'nstaskstatus'
+        try:
+            entries = ldap.get_entries(
+                DN(('cn', 'cleanallruv'), ('cn', 'tasks'), ('cn', 'config')),
+                scope=ldap.SCOPE_ONELEVEL,
+                attrs_list=[status_attr])
+        except errors.EmptyResult:
+            logger.debug("No cleanallruv tasks")
+            break
+        # Check status
+        if all(
+            e.single_value[status_attr].startswith(success_status)
+            for e in entries
+        ):
+            logger.debug("All cleanallruv tasks finished successfully")
+            break
+        else:
+            logger.debug("cleanallruv task in progress, (waited %s/%ss)",
+                         i, timeout)
+        time.sleep(1)
     else:
-        logger.error('Giving up wait for replication to finish')
+        logger.error('Giving up waiting for cleanallruv to finish')
+        for e in entries:
+            stat_str = e.single_value[status_attr]
+            if not stat_str.startswith(success_status):
+                logger.debug('%s status: %s', e.dn, stat_str)
 
 
 def add_a_records_for_hosts_in_master_domain(master):
@@ -1373,12 +1447,10 @@ def run_repeatedly(host, command, assert_zero_rc=True, test=None,
 
 
 def get_host_ip_with_hostmask(host):
-    """
-    Detects the IP of the host including the hostmask.
+    """Detects the IP of the host including the hostmask
 
     Returns None if the IP could not be detected.
     """
-
     ip = host.ip
     result = host.run_command(['ip', 'addr'])
     full_ip_regex = r'(?P<full_ip>%s/\d{1,2}) ' % re.escape(ip)
@@ -1386,6 +1458,8 @@ def get_host_ip_with_hostmask(host):
 
     if match:
         return match.group('full_ip')
+    else:
+        return None
 
 
 def ldappasswd_user_change(user, oldpw, newpw, master):
@@ -1500,3 +1574,11 @@ def strip_cert_header(pem):
         return s.group(1)
     else:
         return pem
+
+
+def user_add(host, login):
+    host.run_command([
+        "ipa", "user-add", login,
+        "--first", "test",
+        "--last", "user"
+    ])

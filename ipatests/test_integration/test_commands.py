@@ -20,13 +20,17 @@ import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography import x509
 
+from ipalib.constants import IPAAPI_USER
+
 from ipaplatform.paths import paths
 
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.create_external_ca import ExternalCA
+from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
 
 logger = logging.getLogger(__name__)
+
 
 class TestIPACommand(IntegrationTest):
     """
@@ -429,3 +433,65 @@ class TestIPACommand(IntegrationTest):
             x509.load_pem_x509_certificate(data, backend=default_backend())
 
             self.master.run_command(['rm', '-f', filename])
+
+    def test_sssd_ifp_access_ipaapi(self):
+        # check that ipaapi is allowed to access sssd-ifp for smartcard auth
+        # https://pagure.io/freeipa/issue/7751
+        username = 'admin'
+        # get UID for user
+        result = self.master.run_command(['ipa', 'user-show', username])
+        mo = re.search(r'UID: (\d+)', result.stdout_text)
+        assert mo is not None, result.stdout_text
+        uid = mo.group(1)
+
+        cmd = [
+            'dbus-send',
+            '--print-reply', '--system',
+            '--dest=org.freedesktop.sssd.infopipe',
+            '/org/freedesktop/sssd/infopipe/Users',
+            'org.freedesktop.sssd.infopipe.Users.FindByName',
+            'string:{}'.format(username)
+        ]
+        # test IFP as root
+        result = self.master.run_command(cmd)
+        assert uid in result.stdout_text
+
+        # test IFP as ipaapi
+        result = self.master.run_command(
+            ['sudo', '-u', IPAAPI_USER, '--'] + cmd
+        )
+        assert uid in result.stdout_text
+
+    def test_ipa_cacert_manage_install(self):
+        # Re-install the IPA CA
+        self.master.run_command([
+            paths.IPA_CACERT_MANAGE,
+            'install',
+            paths.IPA_CA_CRT])
+
+        # Test a non-existent file
+        result = self.master.run_command([
+            paths.IPA_CACERT_MANAGE,
+            'install',
+            '/var/run/cert_not_found'], raiseonerr=False)
+        assert result.returncode == 1
+
+        cmd = self.master.run_command(['mktemp'])
+        filename = cmd.stdout_text.strip()
+
+        for contents in (good_pkcs7,):
+            self.master.put_file_contents(filename, contents)
+            result = self.master.run_command([
+                paths.IPA_CACERT_MANAGE,
+                'install',
+                filename])
+
+        for contents in (badcert,):
+            self.master.put_file_contents(filename, contents)
+            result = self.master.run_command([
+                paths.IPA_CACERT_MANAGE,
+                'install',
+                filename], raiseonerr=False)
+            assert result.returncode == 1
+
+        self.master.run_command(['rm', '-f', filename])

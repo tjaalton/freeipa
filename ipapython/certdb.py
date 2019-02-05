@@ -216,6 +216,21 @@ KEY_RE = re.compile(
 )
 
 
+class Pkcs12ImportIncorrectPasswordError(RuntimeError):
+    """ Raised when import_pkcs12 fails because of a wrong password.
+    """
+
+
+class Pkcs12ImportOpenError(RuntimeError):
+    """ Raised when import_pkcs12 fails trying to open the file.
+    """
+
+
+class Pkcs12ImportUnknownError(RuntimeError):
+    """ Raised when import_pkcs12 fails because of an unknown error.
+    """
+
+
 class NSSDatabase(object):
     """A general-purpose wrapper around a NSS cert database
 
@@ -573,13 +588,15 @@ class NSSDatabase(object):
         try:
             self.run_pk12util(args)
         except ipautil.CalledProcessError as e:
-            if e.returncode == 17:
-                raise RuntimeError("incorrect password for pkcs#12 file %s" %
-                    pkcs12_filename)
+            if e.returncode == 17 or e.returncode == 18:
+                raise Pkcs12ImportIncorrectPasswordError(
+                    "incorrect password for pkcs#12 file %s" % pkcs12_filename)
             elif e.returncode == 10:
-                raise RuntimeError("Failed to open %s" % pkcs12_filename)
+                raise Pkcs12ImportOpenError(
+                    "Failed to open %s" % pkcs12_filename)
             else:
-                raise RuntimeError("unknown error import pkcs#12 file %s" %
+                raise Pkcs12ImportUnknownError(
+                    "unknown error import pkcs#12 file %s" %
                     pkcs12_filename)
         finally:
             if pkcs12_password_file is not None:
@@ -717,8 +734,13 @@ class NSSDatabase(object):
             if import_keys:
                 try:
                     self.import_pkcs12(filename, key_password)
-                except RuntimeError:
+                except Pkcs12ImportUnknownError:
+                    # the file may not be a PKCS#12 file,
+                    # go to the generic error about unrecognized format
                     pass
+                except RuntimeError as e:
+                    raise RuntimeError("Failed to load %s: %s" %
+                                       (filename, str(e)))
                 else:
                     if key_file:
                         raise RuntimeError(
@@ -744,7 +766,9 @@ class NSSDatabase(object):
 
                     continue
 
-            raise RuntimeError("Failed to load %s" % filename)
+            # Supported formats were tried but none succeeded
+            raise RuntimeError("Failed to load %s: unrecognized format" %
+                               filename)
 
         if import_keys and not key_file:
             raise RuntimeError(
@@ -864,8 +888,15 @@ class NSSDatabase(object):
         cert = self.get_cert(nickname)
 
         try:
-            self.run_certutil(['-V', '-n', nickname, '-u', 'V'],
-                              capture_output=True)
+            self.run_certutil(
+                [
+                    '-V',  # check validity of cert and attrs
+                    '-n', nickname,
+                    '-u', 'V',  # usage; 'V' means "SSL server"
+                    '-e',  # check signature(s); this checks
+                    # key sizes, sig algorithm, etc.
+                ],
+                capture_output=True)
         except ipautil.CalledProcessError as e:
             # certutil output in case of error is
             # 'certutil: certificate is invalid: <ERROR_STRING>\n'
@@ -892,14 +923,24 @@ class NSSDatabase(object):
             raise ValueError("not a CA certificate")
 
         try:
-            cert.extensions.get_extension_for_class(
+            ski = cert.extensions.get_extension_for_class(
                     cryptography.x509.SubjectKeyIdentifier)
         except cryptography.x509.ExtensionNotFound:
             raise ValueError("missing subject key identifier extension")
+        else:
+            if len(ski.value.digest) == 0:
+                raise ValueError("subject key identifier must not be empty")
 
         try:
-            self.run_certutil(['-V', '-n', nickname, '-u', 'L'],
-                              capture_output=True)
+            self.run_certutil(
+                [
+                    '-V',       # check validity of cert and attrs
+                    '-n', nickname,
+                    '-u', 'L',  # usage; 'L' means "SSL CA"
+                    '-e',       # check signature(s); this checks
+                                # key sizes, sig algorithm, etc.
+                ],
+                capture_output=True)
         except ipautil.CalledProcessError as e:
             # certutil output in case of error is
             # 'certutil: certificate is invalid: <ERROR_STRING>\n'

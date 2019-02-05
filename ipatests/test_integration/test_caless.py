@@ -509,7 +509,6 @@ class TestServerInstall(CALessBase):
                      'ipa-server-install: error: You must specify '
                      '--dirsrv-pin with --dirsrv-cert-file')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @server_install_teardown
     def test_incorect_http_pin(self):
         "IPA server install with incorrect HTTP PKCS#12 password"
@@ -518,9 +517,9 @@ class TestServerInstall(CALessBase):
         self.prepare_cacert('ca1')
 
         result = self.install_server(http_pin='bad<pin>')
-        assert_error(result, 'incorrect password for pkcs#12 file server.p12')
+        assert_error(result, 'incorrect password for pkcs#12 file %s' %
+                     os.path.join(self.master.config.test_dir, 'server.p12'))
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @server_install_teardown
     def test_incorect_ds_pin(self):
         "IPA server install with incorrect DS PKCS#12 password"
@@ -529,7 +528,8 @@ class TestServerInstall(CALessBase):
         self.prepare_cacert('ca1')
 
         result = self.install_server(dirsrv_pin='bad<pin>')
-        assert_error(result, 'incorrect password for pkcs#12 file server.p12')
+        assert_error(result, 'incorrect password for pkcs#12 file %s' %
+                     os.path.join(self.master.config.test_dir, 'server.p12'))
 
     @server_install_teardown
     def test_invalid_http_cn(self):
@@ -863,7 +863,6 @@ class TestReplicaInstall(CALessBase):
         assert_error(result, 'Failed to open %s/does_not_exist' %
                      self.master.config.test_dir)
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @replica_install_teardown
     def test_incorect_http_pin(self):
         "IPA replica install with incorrect HTTP PKCS#12 password"
@@ -872,9 +871,10 @@ class TestReplicaInstall(CALessBase):
 
         result = self.prepare_replica(http_pin='bad<pin>')
         assert result.returncode > 0
-        assert_error(result, 'incorrect password for pkcs#12 file replica.p12')
+        assert_error(result, 'incorrect password for pkcs#12 file %s' %
+                     os.path.join(self.replicas[0].config.test_dir,
+                                  'replica.p12'))
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     @replica_install_teardown
     def test_incorect_ds_pin(self):
         "IPA replica install with incorrect DS PKCS#12 password"
@@ -882,7 +882,9 @@ class TestReplicaInstall(CALessBase):
         self.create_pkcs12('ca1/replica', filename='replica.p12')
 
         result = self.prepare_replica(dirsrv_pin='bad<pin>')
-        assert_error(result, 'incorrect password for pkcs#12 file replica.p12')
+        assert_error(result, 'incorrect password for pkcs#12 file %s' %
+                     os.path.join(self.replicas[0].config.test_dir,
+                                  'replica.p12'))
 
     @replica_install_teardown
     def test_http_unknown_ca(self):
@@ -1359,7 +1361,6 @@ class TestCertInstall(CALessBase):
                                   cert_exists=False)
         assert_error(result, 'Failed to open does_not_exist')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     def test_incorect_http_pin(self):
         "Install new HTTP certificate with incorrect PKCS#12 password"
 
@@ -1367,7 +1368,6 @@ class TestCertInstall(CALessBase):
         assert_error(result,
                      'incorrect password for pkcs#12 file server.p12')
 
-    @pytest.mark.xfail(reason='freeipa ticket 5378', strict=True)
     def test_incorect_dirsrv_pin(self):
         "Install new DS certificate with incorrect PKCS#12 password"
 

@@ -176,7 +176,11 @@ static bool has_krbprincipalkey(Slapi_Entry *entry) {
 
             if (rc || (num_keys <= 0)) {
                 /* this one is not valid, ignore it */
-                if (keys) ipa_krb5_free_key_data(keys, num_keys);
+                if (keys) {
+                    ipa_krb5_free_key_data(keys, num_keys);
+                    keys = NULL;
+                    num_keys = 0;
+                }
             } else {
                 /* It exists at least this one that is valid, no need to continue */
                 if (keys) ipa_krb5_free_key_data(keys, num_keys);
@@ -762,7 +766,7 @@ static int ipapwd_pre_mod(Slapi_PBlock *pb)
     /* Check this is a clear text password, or refuse operation (only if we need
      * to comput other hashes */
     if (! unhashedpw && (gen_krb_keys || is_smb || is_ipant)) {
-        if ('{' == userpw[0]) {
+        if ((userpw != NULL) && ('{' == userpw[0])) {
             if (0 == strncasecmp(userpw, "{CLEAR}", strlen("{CLEAR}"))) {
                 unhashedpw = slapi_ch_strdup(&userpw[strlen("{CLEAR}")]);
                 if (NULL == unhashedpw) {

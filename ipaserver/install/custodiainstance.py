@@ -77,7 +77,7 @@ def get_custodia_instance(config, mode):
     elif mode == CustodiaModes.FIRST_MASTER:
         custodia_peer = None
     else:
-        raise RuntimeError("Unknown custodia mode %s", mode)
+        raise RuntimeError("Unknown custodia mode %s" % mode)
 
     if custodia_peer is None:
         # use ldapi with local dirsrv instance
@@ -213,8 +213,8 @@ class CustodiaInstance(SimpleServiceInstance):
     def _wait_keys(self):
         timeout = api.env.replication_wait_timeout
         deadline = int(time.time()) + timeout
-        logger.info("Waiting up to %s seconds to see our keys "
-                    "appear on host %s", timeout, self.ldap_uri)
+        logger.debug("Waiting up to %s seconds to see our keys "
+                     "appear on host %s", timeout, self.ldap_uri)
 
         konn = KEMLdap(self.ldap_uri)
         saved_e = None

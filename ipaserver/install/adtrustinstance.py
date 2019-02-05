@@ -72,6 +72,15 @@ def check_inst():
                   "start the installation again")
             return False
 
+    # Check that ipa-server-trust-ad package is installed,
+    # by looking for the file /usr/share/ipa/smb.conf.empty
+    if not os.path.exists(os.path.join(paths.USR_SHARE_IPA_DIR,
+                                       "smb.conf.empty")):
+        print("AD Trust requires the '%s' package" %
+              constants.IPA_ADTRUST_PACKAGE_NAME)
+        print("Please install the package and start the installation again")
+        return False
+
     #TODO: Add check for needed samba4 libraries
 
     return True
@@ -114,8 +123,8 @@ def make_netbios_name(s):
 
 def map_Guests_to_nobody():
     env = {'LC_ALL': 'C'}
-    args = [paths.NET, 'groupmap', 'add', 'sid=S-1-5-32-546',
-            'unixgroup=nobody', 'type=builtin']
+    args = [paths.NET, '-s', '/dev/null', 'groupmap', 'add',
+            'sid=S-1-5-32-546', 'unixgroup=nobody', 'type=builtin']
 
     logger.debug("Map BUILTIN\\Guests to a group 'nobody'")
     ipautil.run(args, env=env, raiseonerr=False, capture_error=True)
@@ -554,7 +563,6 @@ class ADTRUSTInstance(service.Service):
         """
         Do not re-set ownership of samba keytab
         """
-        pass
 
     def clean_samba_keytab(self):
         if os.path.exists(self.keytab):
@@ -837,8 +845,6 @@ class ADTRUSTInstance(service.Service):
                   self.__create_samba_domain_object)
         self.step("creating samba config registry", self.__write_smb_registry)
         self.step("writing samba config file", self.__write_smb_conf)
-        self.step("map BUILTIN\\Guests to nobody group",
-                  self.__map_Guests_to_nobody)
         self.step("adding cifs Kerberos principal",
                   self.request_service_keytab)
         self.step("adding cifs and host Kerberos principals to the adtrust agents group", \
@@ -850,6 +856,8 @@ class ADTRUSTInstance(service.Service):
         self.step("updating Kerberos config", self.__update_krb5_conf)
         self.step("activating CLDAP plugin", self.__add_cldap_module)
         self.step("activating sidgen task", self.__add_sidgen_task)
+        self.step("map BUILTIN\\Guests to nobody group",
+                  self.__map_Guests_to_nobody)
         self.step("configuring smbd to start on boot", self.__enable)
         self.step("adding special DNS service records", \
                   self.__add_dns_service_records)

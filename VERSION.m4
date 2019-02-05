@@ -21,7 +21,7 @@
 ########################################################
 define(IPA_VERSION_MAJOR, 4)
 define(IPA_VERSION_MINOR, 7)
-define(IPA_VERSION_RELEASE, 1)
+define(IPA_VERSION_RELEASE, 2)
 
 ########################################################
 # For 'pre' releases the version will be               #
@@ -55,8 +55,8 @@ define(IPA_VERSION_IS_GIT_SNAPSHOT, no)
 # - ipa-X-X: define(IPA_GIT_BRANCH,                    #
 #       ipa-IPA_VERSION_MAJOR-IPA_VERSION_MINOR)       #
 ########################################################
-define(IPA_GIT_BRANCH, master)
-dnl define(IPA_GIT_BRANCH, ipa-IPA_VERSION_MAJOR-IPA_VERSION_MINOR)
+dnl define(IPA_GIT_BRANCH, master)
+define(IPA_GIT_BRANCH, ipa-IPA_VERSION_MAJOR-IPA_VERSION_MINOR)
 
 ########################################################
 # The version of IPA data. This is used to identify    #
@@ -83,8 +83,8 @@ define(IPA_DATA_VERSION, 20100614120000)
 #                                                      #
 ########################################################
 define(IPA_API_VERSION_MAJOR, 2)
-define(IPA_API_VERSION_MINOR, 229)
-# Last change: Added the Certificate parameter
+define(IPA_API_VERSION_MINOR, 230)
+# Last change: Added `automember-find-orphans' command
 
 
 ########################################################

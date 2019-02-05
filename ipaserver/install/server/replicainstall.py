@@ -181,7 +181,7 @@ def install_dns_records(config, options, remote_api, fstore=None):
             reverse_zone = bindinstance.find_reverse_zone(ip, remote_api)
 
             bind.add_master_dns_records(config.host_name,
-                                        str(ip),
+                                        [str(ip)],
                                         config.realm_name,
                                         config.domain_name,
                                         reverse_zone)
@@ -361,11 +361,11 @@ def check_dns_resolution(host_name, dns_servers):
 
 
 def configure_certmonger():
-    messagebus = services.knownservices.messagebus
+    dbus = services.knownservices.dbus
     try:
-        messagebus.start()
+        dbus.start()
     except Exception as e:
-        raise ScriptError("Messagebus service unavailable: %s" % str(e),
+        raise ScriptError("dbus service unavailable: %s" % str(e),
                           rval=3)
 
     # Ensure that certmonger has been started at least once to generate the
@@ -717,6 +717,11 @@ def ensure_enrolled(installer):
         for ip in installer.ip_addresses:
             # installer.ip_addresses is of type [CheckedIPAddress]
             args.extend(("--ip-address", str(ip)))
+    if installer.ntp_servers:
+        for server in installer.ntp_servers:
+            args.extend(("--ntp-server", server))
+    if installer.ntp_pool:
+        args.extend(("--ntp-pool", installer.ntp_pool))
 
     try:
         # Call client install script
@@ -766,6 +771,10 @@ def promote_check(installer):
 
     client_fstore = sysrestore.FileStore(paths.IPA_CLIENT_SYSRESTORE)
     if not client_fstore.has_files():
+        # One-step replica installation
+        if options.password and options.admin_password:
+            raise ScriptError("--password and --admin-password options are "
+                              "mutually exclusive")
         ensure_enrolled(installer)
     else:
         if (options.domain_name or options.server or options.realm_name or
@@ -773,6 +782,11 @@ def promote_check(installer):
             print("IPA client is already configured on this system, ignoring "
                   "the --domain, --server, --realm, --hostname, --password "
                   "and --keytab options.")
+
+        # The NTP configuration can not be touched on pre-installed client:
+        if options.no_ntp or options.ntp_servers or options.ntp_pool:
+                raise ScriptError(
+                    "NTP configuration cannot be updated during promotion")
 
     sstore = sysrestore.StateFile(paths.SYSRESTORE)
 
