@@ -1,5 +1,6 @@
-freeipa (4.7.1-4) UNRELEASED; urgency=medium
+freeipa (4.7.2-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * client.tmpfile: Use /run instead of /var/run.
   * control.common: Use same arch set on node-uglify build-dep as for
     nodejs. (Closes: #918579)
