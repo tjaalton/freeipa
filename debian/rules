@@ -12,9 +12,6 @@ else
   ONLY_CLIENT=1
 endif
 
-# build client only until dogtag works
-ONLY_CLIENT=1
-
 DESTDIR=$(CURDIR)/debian/tmp
 
 export PYTHON=python
