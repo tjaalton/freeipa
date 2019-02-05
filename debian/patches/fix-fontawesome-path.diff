@@ -1,6 +1,6 @@
 --- a/install/share/ipa.conf.template
 +++ b/install/share/ipa.conf.template
-@@ -186,7 +186,7 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
+@@ -183,7 +183,7 @@ Alias /ipa/crl "$CRL_PUBLISH_PATH"
  
  #  List explicitly only the fonts we want to serve
  Alias /ipa/ui/fonts/open-sans "${FONTS_DIR}/open-sans"
@@ -41,11 +41,11 @@
              IPA_CCACHES=paths.IPA_CCACHES,
 --- a/ipaserver/install/server/upgrade.py
 +++ b/ipaserver/install/server/upgrade.py
-@@ -1773,6 +1773,7 @@ def upgrade_configuration():
+@@ -1789,6 +1789,7 @@ def upgrade_configuration():
          WSGI_PROCESSES=constants.WSGI_PROCESSES,
          GSSAPI_SESSION_KEY=paths.GSSAPI_SESSION_KEY,
          FONTS_DIR=paths.FONTS_DIR,
 +        FONT_AWESOME_DIR=paths.FONT_AWESOME_DIR,
          IPA_CCACHES=paths.IPA_CCACHES,
-         IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET
-     )
+         IPA_CUSTODIA_SOCKET=paths.IPA_CUSTODIA_SOCKET,
+         KDCPROXY_CONFIG=paths.KDCPROXY_CONFIG,

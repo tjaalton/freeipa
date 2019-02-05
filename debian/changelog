@@ -4,6 +4,7 @@ freeipa (4.7.2-1) UNRELEASED; urgency=medium
   * client.tmpfile: Use /run instead of /var/run.
   * control.common: Use same arch set on node-uglify build-dep as for
     nodejs. (Closes: #918579)
+  * fix-fontawesome-path.diff: Refreshed.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 07 Jan 2019 17:45:11 +0200
 
