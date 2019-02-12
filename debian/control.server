@@ -1,3 +1,4 @@
+
 Package: freeipa-server
 Architecture: amd64 arm64 armhf i386 mips mips64el mipsel ppc64 ppc64el s390x
 Breaks: freeipa-server-trust-ad (<< 4.3.0-1)

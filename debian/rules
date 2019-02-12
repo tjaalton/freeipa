@@ -49,6 +49,7 @@ ifeq ($(ONLY_CLIENT), 1)
 	> debian/control
 else
 	cat debian/control.stub \
+	debian/control.server-bdeps \
 	debian/control.common \
 	debian/control.server \
 	> debian/control
