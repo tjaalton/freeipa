@@ -1,9 +1,0 @@
---- a/install/ui/util/make-css.sh
-+++ b/install/ui/util/make-css.sh
-@@ -22,5 +22,5 @@ set -o errexit
- 
- DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
- 
--py3-lesscpy -x $DIR/../less/ipa.less > $DIR/../css/ipa.css
-+python3-lesscpy -x $DIR/../less/ipa.less > $DIR/../css/ipa.css
- exit $?

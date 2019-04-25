@@ -1,9 +1,0 @@
---- a/ipaplatform/debian/paths.py
-+++ b/ipaplatform/debian/paths.py
-@@ -105,5 +105,6 @@ class DebianPathNamespace(BasePathNamesp
-     IPA_CUSTODIA_SOCKET = "/run/apache2/ipa-custodia.sock"
-     IPA_CUSTODIA_AUDIT_LOG = '/var/log/ipa-custodia.audit.log'
-     WSGI_PREFIX_DIR = "/run/apache2/wsgi"
-+    GZIP = "/bin/gzip"
- 
- paths = DebianPathNamespace()
