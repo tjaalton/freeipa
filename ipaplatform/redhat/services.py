@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 redhat_system_units = dict((x, "%s.service" % x)
                            for x in base_services.wellknownservices)
 
-redhat_system_units['rpcgssd'] = 'nfs-secure.service'
-redhat_system_units['rpcidmapd'] = 'nfs-idmap.service'
+redhat_system_units['rpcgssd'] = 'rpc-gssd.service'
+redhat_system_units['rpcidmapd'] = 'nfs-idmapd.service'
 redhat_system_units['domainname'] = 'nis-domainname.service'
 
 # Rewrite dirsrv and pki-tomcatd services as they support instances via separate
@@ -185,18 +185,6 @@ class RedHatCAService(RedHatService):
             time.sleep(1)
         else:
             raise RuntimeError('CA did not start in %ss' % timeout)
-
-    def start(self, instance_name="", capture_output=True, wait=True):
-        super(RedHatCAService, self).start(
-            instance_name, capture_output=capture_output, wait=wait)
-        if wait:
-            self.wait_until_running()
-
-    def restart(self, instance_name="", capture_output=True, wait=True):
-        super(RedHatCAService, self).restart(
-            instance_name, capture_output=capture_output, wait=wait)
-        if wait:
-            self.wait_until_running()
 
     def is_running(self, instance_name="", wait=True):
         if instance_name:

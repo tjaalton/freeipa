@@ -26,7 +26,6 @@ import tempfile
 import shutil
 import glob
 import contextlib
-import unittest
 
 import pytest
 import six
@@ -446,7 +445,6 @@ class TestServerInstall(CALessBase):
                      'The full certificate chain is not present in '
                      '%s/server.p12' % self.master.config.test_dir)
 
-    @pytest.mark.xfail(reason='Ticket N 6289', strict=True)
     @server_install_teardown
     def test_ca_2_certs(self):
         "IPA server install with CA PEM file with 2 certificates"
@@ -459,7 +457,13 @@ class TestServerInstall(CALessBase):
                 ca1.write(ca2.read())
 
         result = self.install_server()
-        assert_error(result, 'root.pem contains more than one certificate')
+        assert result.returncode == 0
+        # Check that ca2 has not been added to /etc/ipa/ca.crt
+        # because it is not needed in the cert chain
+        with open(os.path.join(self.cert_dir, self.ca2_crt), 'r') as ca2:
+            ca2_body = ca2.read()
+        result = self.master.run_command(['cat', '/etc/ipa/ca.crt'])
+        assert ca2_body not in result.stdout_text
 
     @server_install_teardown
     def test_nonexistent_http_pkcs12_file(self):
@@ -620,42 +624,6 @@ class TestServerInstall(CALessBase):
                      'The server certificate in {dir}/dirsrv.p12 is not '
                      'valid: {err}'.format(dir=self.master.config.test_dir,
                                            err=BAD_USAGE_MSG))
-
-    @server_install_teardown
-    def test_revoked_http(self):
-        "IPA server install with revoked HTTP certificate"
-
-        self.create_pkcs12('ca1/server-revoked', filename='http.p12')
-        self.create_pkcs12('ca1/server', filename='dirsrv.p12')
-        self.prepare_cacert('ca1')
-
-        result = self.install_server(http_pkcs12='http.p12',
-                                     dirsrv_pkcs12='dirsrv.p12')
-
-        if result.returncode == 0:
-            raise unittest.SkipTest(
-                "Known CA-less installation defect, see "
-                "https://fedorahosted.org/freeipa/ticket/4270")
-
-        assert result.returncode > 0
-
-    @server_install_teardown
-    def test_revoked_ds(self):
-        "IPA server install with revoked DS certificate"
-
-        self.create_pkcs12('ca1/server', filename='http.p12')
-        self.create_pkcs12('ca1/server-revoked', filename='dirsrv.p12')
-        self.prepare_cacert('ca1')
-
-        result = self.install_server(http_pkcs12='http.p12',
-                                     dirsrv_pkcs12='dirsrv.p12')
-
-        if result.returncode == 0:
-            raise unittest.SkipTest(
-                "Known CA-less installation defect, see "
-                "https://fedorahosted.org/freeipa/ticket/4270")
-
-        assert result.returncode > 0
 
     @server_install_teardown
     def test_http_intermediate_ca(self):
@@ -995,40 +963,6 @@ class TestReplicaInstall(CALessBase):
                      'The server certificate in {dir}/dirsrv.p12 is not '
                      'valid: {err}'.format(dir=self.master.config.test_dir,
                                            err=BAD_USAGE_MSG))
-
-    @replica_install_teardown
-    def test_revoked_http(self):
-        "IPA replica install with revoked HTTP certificate"
-
-        self.create_pkcs12('ca1/replica-revoked', filename='http.p12')
-        self.create_pkcs12('ca1/replica', filename='dirsrv.p12')
-
-        result = self.prepare_replica(http_pkcs12='http.p12',
-                                      dirsrv_pkcs12='dirsrv.p12')
-
-        if result.returncode == 0:
-            raise unittest.SkipTest(
-                "Known CA-less installation defect, see "
-                "https://fedorahosted.org/freeipa/ticket/4270")
-
-        assert result.returncode > 0
-
-    @replica_install_teardown
-    def test_revoked_ds(self):
-        "IPA replica install with revoked DS certificate"
-
-        self.create_pkcs12('ca1/replica', filename='http.p12')
-        self.create_pkcs12('ca1/replica-revoked', filename='dirsrv.p12')
-
-        result = self.prepare_replica(http_pkcs12='http.p12',
-                                      dirsrv_pkcs12='dirsrv.p12')
-
-        if result.returncode == 0:
-            raise unittest.SkipTest(
-                "Known CA-less installation defect, see "
-                "https://fedorahosted.org/freeipa/ticket/4270")
-
-        assert result.returncode > 0
 
     @replica_install_teardown
     def test_http_intermediate_ca(self):
@@ -1422,30 +1356,6 @@ class TestCertInstall(CALessBase):
         assert_error(result,
                      'The server certificate in server.p12 is not valid: {err}'
                      .format(err=BAD_USAGE_MSG))
-
-    def test_revoked_http(self):
-        "Install new revoked HTTP certificate"
-
-        result = self.certinstall('w', 'ca1/server-revoked')
-
-        if result.returncode == 0:
-            raise unittest.SkipTest(
-                "Known CA-less installation defect, see "
-                "https://fedorahosted.org/freeipa/ticket/4270")
-
-        assert result.returncode > 0
-
-    def test_revoked_ds(self):
-        "Install new revoked DS certificate"
-
-        result = self.certinstall('d', 'ca1/server-revoked')
-
-        if result.returncode == 0:
-            raise unittest.SkipTest(
-                "Known CA-less installation defect, see "
-                "https://fedorahosted.org/freeipa/ticket/4270")
-
-        assert result.returncode > 0
 
     def test_http_intermediate_ca(self):
         "Install new HTTP certificate issued by intermediate CA"

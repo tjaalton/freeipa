@@ -1,6 +1,7 @@
 #
 # Copyright (C) 2014  FreeIPA Contributors see COPYING for license
 #
+from __future__ import absolute_import
 
 import logging
 
@@ -11,6 +12,7 @@ except ImportError:
     from xml.etree import ElementTree as etree
 
 from ipapython import ipa_log_manager, ipautil
+from ipaplatform.tasks import tasks
 
 logger = logging.getLogger(__name__)
 
@@ -130,12 +132,11 @@ class ODSMgr(object):
         self.zl_ldap = LDAPZoneListReader()
 
     def ksmutil(self, params):
-        """Call ods-ksmutil with given parameters and return stdout.
+        """Call ods-ksmutil / ods-enforcer with parameters and return stdout.
 
         Raises CalledProcessError if returncode != 0.
         """
-        cmd = ['ods-ksmutil'] + params
-        result = ipautil.run(cmd, capture_output=True)
+        result = tasks.run_ods_manager(params, capture_output=True)
         return result.output
 
     def get_ods_zonelist(self):

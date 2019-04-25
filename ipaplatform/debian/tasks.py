@@ -57,6 +57,10 @@ class DebianTaskNamespace(RedHatTaskNamespace):
         # Debian doesn't use authconfig, nothing to restore
         return True
 
+    def migrate_auth_configuration(self, statestore):
+        # Debian doesn't have authselect
+        return True
+
     @staticmethod
     def parse_ipa_version(version):
         return BaseTaskNamespace.parse_ipa_version(version)
@@ -69,5 +73,11 @@ class DebianTaskNamespace(RedHatTaskNamespace):
         # Debian handles httpd logging differently
         pass
 
+    def configure_pkcs11_modules(self, fstore):
+        # Debian doesn't use p11-kit
+        pass
+
+    def restore_pkcs11_modules(self, fstore):
+        pass
 
 tasks = DebianTaskNamespace()

@@ -19,14 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import absolute_import
+
 import base64
 import collections
 import datetime
+import itertools
 import logging
 from operator import attrgetter
 
 import cryptography.x509
 from cryptography.hazmat.primitives import hashes, serialization
+from dns import resolver, reversename
 import six
 
 from ipalib import Command, Str, Int, Flag
@@ -48,9 +52,12 @@ from .certprofile import validate_profile_id
 from ipalib.text import _
 from ipalib.request import context
 from ipalib import output
-from ipapython import kerberos
+from ipapython import dnsutil, kerberos
 from ipapython.dn import DN
 from ipaserver.plugins.service import normalize_principal, validate_realm
+from ipaserver.masters import (
+    ENABLED_SERVICE, CONFIGURED_SERVICE, is_service_enabled
+)
 
 try:
     import pyhbac
@@ -293,19 +300,14 @@ def caacl_check(principal, ca, profile_id):
 def ca_kdc_check(api_instance, hostname):
     master_dn = api_instance.Object.server.get_dn(unicode(hostname))
     kdc_dn = DN(('cn', 'KDC'), master_dn)
-
+    wanted = {ENABLED_SERVICE, CONFIGURED_SERVICE}
     try:
         kdc_entry = api_instance.Backend.ldap2.get_entry(
             kdc_dn, ['ipaConfigString'])
-
-        ipaconfigstring = {val.lower() for val in kdc_entry['ipaConfigString']}
-
-        if 'enabledservice' not in ipaconfigstring \
-                and 'configuredservice' not in ipaconfigstring:
+        if not wanted.intersection(kdc_entry['ipaConfigString']):
             raise errors.NotFound(
                 reason=_("enabledService/configuredService not in "
                          "ipaConfigString kdc entry"))
-
     except errors.NotFound:
         raise errors.ACIError(
             info=_("Host '%(hostname)s' is not an active KDC")
@@ -775,10 +777,18 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
                     info=_("Insufficient 'write' privilege to the "
                            "'userCertificate' attribute of entry '%s'.") % dn)
 
+        # During SAN validation, we collect IPAddressName values,
+        # and *qualified* DNS names, and then ensure that all
+        # IPAddressName values correspond to one of the DNS names.
+        #
+        san_ipaddrs = set()
+        san_dnsnames = set()
+
         # Validate the subject alt name, if any
-        generalnames = []
         if ext_san is not None:
             generalnames = x509.process_othernames(ext_san.value)
+        else:
+            generalnames = []
         for gn in generalnames:
             if isinstance(gn, cryptography.x509.general_name.DNSName):
                 if principal.is_user:
@@ -792,6 +802,7 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
                 name = gn.value
 
                 if _dns_name_matches_principal(name, principal, principal_obj):
+                    san_dnsnames.add(name)
                     continue  # nothing more to check for this alt name
 
                 # no match yet; check for an alternative principal with
@@ -819,8 +830,29 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
                         'exist') % name)
 
                 if alt_principal_obj is not None:
-                    # we found an alternative principal;
-                    # now check write access and caacl
+                    # We found an alternative principal.
+
+                    # First check that the DNS name does in fact match this
+                    # principal.  Because we used the DNSName value as the
+                    # basis for the search, this may seem redundant.  Actually,
+                    # we only perform this check to distinguish between
+                    # qualified and unqualified DNS names.
+                    #
+                    # We collect only fully qualified names for the purposes of
+                    # IPAddressName validation, because it is undecidable
+                    # whether 'ninja' refers to 'ninja.my.domain.' or 'ninja.'.
+                    # Remember that even a TLD can have an A record!
+                    #
+                    if _dns_name_matches_principal(
+                            name, alt_principal, alt_principal_obj):
+                        san_dnsnames.add(name)
+                    else:
+                        # Unqualified SAN DNS names are a valid use case.
+                        # We don't add them to san_dnsnames for IPAddress
+                        # validation, but we don't reject the request either.
+                        pass
+
+                    # Now check write access and caacl
                     altdn = alt_principal_obj['result']['dn']
                     if not ldap.can_write(altdn, "usercertificate"):
                         raise errors.ACIError(info=_(
@@ -861,10 +893,25 @@ class cert_request(Create, BaseCertMethod, VirtualCommand):
                             "subject alt name type %s is forbidden "
                             "for non-user principals") % "RFC822Name"
                     )
+            elif isinstance(gn, cryptography.x509.general_name.IPAddress):
+                if principal.is_user:
+                    raise errors.ValidationError(
+                        name='csr',
+                        error=_(
+                            "subject alt name type %s is forbidden "
+                            "for user principals") % "IPAddress"
+                    )
+
+                # collect the value; we will validate it after we
+                # finish iterating all the SAN values
+                san_ipaddrs.add(gn.value)
             else:
                 raise errors.ACIError(
                     info=_("Subject alt name type %s is forbidden")
                     % type(gn).__name__)
+
+        if san_ipaddrs:
+            _validate_san_ips(san_ipaddrs, san_dnsnames)
 
         # Request the certificate
         try:
@@ -1047,6 +1094,134 @@ def _principal_name_matches_principal(name, principal_obj):
         return False
 
     return principal in principal_obj.get('krbprincipalname', [])
+
+
+def _validate_san_ips(san_ipaddrs, san_dnsnames):
+    """
+    Check the IP addresses in a CSR subjectAltName.
+
+    Raise a ValidationError if the subjectAltName in a CSR includes
+    any IP addresses that do not match a DNS name in the SAN.  Matching means
+    the following:
+
+    * One of the DNS names in the SAN resolves (possibly via a single CNAME -
+      no CNAME chains allowed) to an A or AAAA record containing that
+      IP address.
+    * The IP address has a reverse DNS record pointing to that A or AAAA
+      record.
+    * All of the DNS records (A, AAAA, CNAME, and PTR) are managed by this IPA
+      instance.
+
+    :param san_ipaddrs: The IP addresses in the subjectAltName
+    :param san_dnsnames: The DNS names in the subjectAltName
+
+    :raises: errors.ValidationError if the SAN containes a non-matching IP
+        address.
+
+    """
+    san_ip_set = frozenset(unicode(ip) for ip in san_ipaddrs)
+
+    # Build a dict of IPs that are reachable from the SAN dNSNames
+    reachable = {}
+    for name in san_dnsnames:
+        _san_ip_update_reachable(reachable, name, cname_depth=1)
+
+    # Each iPAddressName must be reachable from a dNSName
+    unreachable_ips = san_ip_set - six.viewkeys(reachable)
+    if len(unreachable_ips) > 0:
+        raise errors.ValidationError(
+            name='csr',
+            error=_(
+                "IP address in subjectAltName (%s) unreachable from DNS names"
+            ) % ', '.join(unreachable_ips)
+        )
+
+    # Collect PTR records for each IP address
+    ptrs_by_ip = {}
+    for ip in san_ipaddrs:
+        ptrs = _ip_ptr_records(unicode(ip))
+        if len(ptrs) > 0:
+            ptrs_by_ip[unicode(ip)] = set(s.rstrip('.') for s in ptrs)
+
+    # Each iPAddressName must have a corresponding PTR record.
+    missing_ptrs = san_ip_set - six.viewkeys(ptrs_by_ip)
+    if len(missing_ptrs) > 0:
+        raise errors.ValidationError(
+            name='csr',
+            error=_(
+                "IP address in subjectAltName (%s) does not have PTR record"
+            ) % ', '.join(missing_ptrs)
+        )
+
+    # PTRs and forward records must form a loop
+    for ip, ptrs in ptrs_by_ip.items():
+        # PTR value must appear in the set of names that resolve to
+        # this IP address (via A/AAAA records)
+        if len(ptrs - reachable.get(ip, set())) > 0:
+            raise errors.ValidationError(
+                name='csr',
+                error=_(
+                    "PTR record for SAN IP (%s) does not match A/AAAA records"
+                ) % ip
+            )
+
+
+def _san_ip_update_reachable(reachable, dnsname, cname_depth):
+    """
+    Update dict of reachable IPs and the names that reach them.
+
+    :param reachable: the dict to update. Keys are IP addresses,
+                      values are sets of DNS names.
+    :param dnsname: the DNS name to resolve
+    :param cname_depth: How many levels of CNAME indirection are permitted.
+
+    """
+    fqdn = dnsutil.DNSName(dnsname).make_absolute()
+    try:
+        zone = dnsutil.DNSName(resolver.zone_for_name(fqdn))
+    except resolver.NoNameservers:
+        return  # if there's no zone, there are no records
+    name = fqdn.relativize(zone)
+
+    try:
+        result = api.Command['dnsrecord_show'](zone, name)['result']
+    except errors.NotFound as nf:
+        logger.debug("Skipping IPs for %s: %s", dnsname, nf)
+        return  # nothing to do
+
+    for ip in itertools.chain(result.get('arecord', ()),
+                              result.get('aaaarecord', ())):
+        # add this forward relationship to the 'reachable' dict
+        names = reachable.get(ip, set())
+        names.add(dnsname.rstrip('.'))
+        reachable[ip] = names
+
+    if cname_depth > 0:
+        for cname in result.get('cnamerecord', []):
+            if not cname.endswith('.'):
+                cname = u'%s.%s' % (cname, zone)
+            _san_ip_update_reachable(reachable, cname, cname_depth - 1)
+
+
+def _ip_ptr_records(ip):
+    """
+    Look up PTR record(s) for IP address.
+
+    :return: a ``set`` of IP addresses, possibly empty.
+
+    """
+    rname = dnsutil.DNSName(reversename.from_address(ip))
+    try:
+        zone = dnsutil.DNSName(resolver.zone_for_name(rname))
+        name = rname.relativize(zone)
+        result = api.Command['dnsrecord_show'](zone, name)['result']
+    except resolver.NoNameservers:
+        ptrs = set()  # if there's no zone, there are no records
+    except errors.NotFound:
+        ptrs = set()
+    else:
+        ptrs = set(result.get('ptrrecord', []))
+    return ptrs
 
 
 @register()
@@ -1470,6 +1645,27 @@ class cert_find(Search, CertMethod):
         result = collections.OrderedDict()
         complete = bool(ra_options)
 
+        # workaround for RHBZ#1669012 and RHBZ#1695685
+        # Improve performance for service, host and user case by also
+        # searching for subject. This limits the amount of certificate
+        # retrieved from Dogtag. The special case is only used, when
+        # no ra_options are set and exactly one service, host, or user is
+        # supplied.
+        # IPA enforces that subject CN is either a hostname or a username.
+        # The complete flag is left to False to catch overrides.
+        if not ra_options:
+            services = options.get('service', ())
+            hosts = options.get('host', ())
+            users = options.get('user', ())
+            if len(services) == 1 and not hosts and not users:
+                principal = kerberos.Principal(services[0])
+                if principal.is_service:
+                    ra_options['subject'] = principal.hostname
+            elif len(hosts) == 1 and not services and not users:
+                ra_options['subject'] = hosts[0]
+            elif len(users) == 1 and not services and not hosts:
+                ra_options['subject'] = users[0]
+
         try:
             ca_enabled_check(self.api)
         except errors.NotFound:
@@ -1717,14 +1913,5 @@ class ca_is_enabled(Command):
     has_output = output.standard_value
 
     def execute(self, *args, **options):
-        base_dn = DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'),
-                     self.api.env.basedn)
-        filter = '(&(objectClass=ipaConfigObject)(cn=CA))'
-        try:
-            self.api.Backend.ldap2.find_entries(
-                base_dn=base_dn, filter=filter, attrs_list=[])
-        except errors.NotFound:
-            result = False
-        else:
-            result = True
+        result = is_service_enabled('CA', conn=self.api.Backend.ldap2)
         return dict(result=result, value=pkey_to_value(None, options))

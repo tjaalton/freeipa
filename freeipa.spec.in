@@ -77,7 +77,8 @@
 # Fedora
 %global package_name freeipa
 %global alt_name ipa
-%global krb5_version 1.16.1
+# Fix for CVE-2018-20217
+%global krb5_version 1.16.1-24
 %global krb5_kdb_version 7.0
 # 0.7.16: https://github.com/drkjam/netaddr/issues/71
 %global python_netaddr_version 0.7.16
@@ -89,23 +90,37 @@
 
 # fix for segfault in python3-ldap, https://pagure.io/freeipa/issue/7324
 %global python_ldap_version 3.1.0-1
+# Fix for create suffix
+# https://pagure.io/389-ds-base/issue/49984
+%if 0%{?fedora} >= 30
+%global ds_version 1.4.1.1
+%else
+%global ds_version 1.4.0.21
+%endif
 
-# Fix for "Crash when failing to read from SASL connection"
-# https://pagure.io/389-ds-base/issue/49639
-# Fix for "Installation fails: Replica Busy"
-# https://pagure.io/389-ds-base/issue/49818
-%global ds_version 1.4.0.16-1
+# Don't use Fedora's Python dependency generator on Fedora 30/rawhide yet.
+# Some packages don't provide new dist aliases.
+# https://docs.fedoraproject.org/en-US/packaging-guidelines/Python/
+%{?python_disable_dependency_generator}
 
 %endif  # Fedora
 
-# Require Dogtag PKI 10.6.7-3 which fixes UpdateNumberRange clone
-# installation issue; https://pagure.io/freeipa/issue/7654
+# Require Dogtag PKI 10.6.8-3 (10.6.7 was never pushed to stable)
+# 10.6.7 fixes UpdateNumberRange clone installation issue
+# https://pagure.io/freeipa/issue/7654 and empty token issue
 # and https://pagure.io/dogtagpki/issue/3073
-%global pki_version 10.6.7-3
+%global pki_version 10.6.8-3
 
-# NSS release with fix for CKA_LABEL import bug in shared SQL database.
-# https://bugzilla.redhat.com/show_bug.cgi?id=1568271
-%global nss_version 3.36.1-1.1
+# https://pagure.io/certmonger/issue/90
+%global certmonger_version 0.79.7-1
+
+# NSS release with fix for p11-kit-proxy issue, affects F28
+# https://pagure.io/freeipa/issue/7810
+%if 0%{?fedora} == 28
+%global nss_version 3.41.0-3
+%else
+%global nss_version 3.41.0-1
+%endif
 
 # One-Way Trust authenticated by trust secret
 # https://bugzilla.redhat.com/show_bug.cgi?id=1345975#c20
@@ -218,7 +233,11 @@ BuildRequires:  python2-six
 BuildRequires:  dbus-glib-devel
 BuildRequires:  libffi-devel
 BuildRequires:  python3-tox
+%if 0%{?fedora} <= 28
 BuildRequires:  python3-twine
+%else
+BuildRequires:  twine
+%endif
 BuildRequires:  python3-wheel
 %endif # with_wheels
 
@@ -381,17 +400,13 @@ Requires(post): systemd-units
 Requires: selinux-policy >= %{selinux_policy_version}
 Requires(post): selinux-policy-base >= %{selinux_policy_version}
 Requires: slapi-nis >= %{slapi_nis_version}
-# jss is an indirect dependency. 4.4.5 fixes sub CA replication bug,
-# see https://pagure.io/freeipa/issue/7536
-# see https://pagure.io/freeipa/issue/7590
-Requires: jss >= 4.4.5-1
 Requires: pki-ca >= %{pki_version}
 Requires: pki-kra >= %{pki_version}
 Requires(preun): systemd-units
 Requires(postun): systemd-units
 Requires: policycoreutils >= 2.1.12-5
 Requires: tar
-Requires(pre): certmonger >= 0.79.5-1
+Requires(pre): certmonger >= %{certmonger_version}
 Requires(pre): 389-ds-base >= %{ds_version}
 Requires: fontawesome-fonts
 Requires: open-sans-fonts
@@ -617,7 +632,7 @@ Requires: initscripts
 Requires: libcurl >= 7.21.7-2
 Requires: xmlrpc-c >= 1.27.4
 Requires: sssd-ipa >= %{sssd_version}
-Requires: certmonger >= 0.79.5-1
+Requires: certmonger >= %{certmonger_version}
 Requires: nss-tools >= %{nss_version}
 Requires: bind-utils
 Requires: oddjob-mkhomedir
@@ -1329,6 +1344,7 @@ fi
 %{_sbindir}/ipa-cacert-manage
 %{_sbindir}/ipa-winsync-migrate
 %{_sbindir}/ipa-pkinit-manage
+%{_sbindir}/ipa-crlgen-manage
 %{_libexecdir}/certmonger/dogtag-ipa-ca-renew-agent-submit
 %{_libexecdir}/certmonger/ipa-server-guard
 %dir %{_libexecdir}/ipa
@@ -1337,6 +1353,7 @@ fi
 %{_libexecdir}/ipa/ipa-httpd-kdcproxy
 %{_libexecdir}/ipa/ipa-httpd-pwdreader
 %{_libexecdir}/ipa/ipa-pki-retrieve-key
+%{_libexecdir}/ipa/ipa-pki-wait-running
 %{_libexecdir}/ipa/ipa-otpd
 %dir %{_libexecdir}/ipa/oddjob
 %attr(0755,root,root) %{_libexecdir}/ipa/oddjob/org.freeipa.server.conncheck
@@ -1387,6 +1404,7 @@ fi
 %{_mandir}/man1/ipa-cacert-manage.1*
 %{_mandir}/man1/ipa-winsync-migrate.1*
 %{_mandir}/man1/ipa-pkinit-manage.1*
+%{_mandir}/man1/ipa-crlgen-manage.1*
 
 %if 0%{?with_python2} && 0%{?fedora} < 29
 # Fedora 29 workaround: don't build python2-ipaserver, python2-pki is n/a

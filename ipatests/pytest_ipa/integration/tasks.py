@@ -305,7 +305,7 @@ def enable_replication_debugging(host, log_level=0):
     host.run_command(['ldapmodify', '-x',
                       '-D', str(host.config.dirman_dn),
                       '-w', host.config.dirman_password,
-                      '-h', host.hostname],
+                      ],
                      stdin_text=logging_ldif)
 
 
@@ -411,7 +411,7 @@ def master_authoritative_for_client_domain(master, client):
     return result.returncode == 0
 
 
-def _config_replica_resolvconf_with_master_data(master, replica):
+def config_replica_resolvconf_with_master_data(master, replica):
     """
     Configure replica /etc/resolv.conf to use master as DNS server
     """
@@ -423,7 +423,11 @@ def _config_replica_resolvconf_with_master_data(master, replica):
 def install_replica(master, replica, setup_ca=True, setup_dns=False,
                     setup_kra=False, setup_adtrust=False, extra_args=(),
                     domain_level=None, unattended=True, stdin_text=None,
-                    raiseonerr=True):
+                    raiseonerr=True, promote=True):
+    """
+    This task installs client and then promote it to the replica
+    """
+    replica_args = list(extra_args)  # needed for client's ntp options
     if domain_level is None:
         domain_level = domainlevel(master)
     check_domain_level(domain_level)
@@ -433,8 +437,25 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     # Otherwise ipa-client-install would not create a PTR
     # and replica installation would fail
     args = ['ipa-replica-install',
-            '-p', replica.config.dirman_password,
-            '-w', replica.config.admin_password]
+            '--admin-password', replica.config.admin_password]
+
+    if promote:  # while promoting we use directory manager password
+        args.extend(['--password', replica.config.dirman_password])
+        # install client on a replica machine and then promote it to replica
+        # to configure ntp options we have to pass them to client installation
+        # because promotion does not support NTP options
+        ntp_args = [arg for arg in replica_args if "-ntp" in arg]
+
+        for ntp_arg in ntp_args:
+            replica_args.remove(ntp_arg)
+
+        install_client(master, replica, extra_args=ntp_args)
+    else:
+        # for one step installation of replica we need authorized user
+        # to enroll a replica and master server to contact
+        args.extend(['--principal', replica.config.admin_name,
+                     '--server', master.hostname])
+
     if unattended:
         args.append('-U')
     if setup_ca:
@@ -452,12 +473,11 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     if master_authoritative_for_client_domain(master, replica):
         args.extend(['--ip-address', replica.ip])
 
-    args.extend(extra_args)
+    args.extend(replica_args)  # append extra arguments to installation
 
-    # install client on a replica machine and then promote it to replica
-    install_client(master, replica)
     fix_apache_semaphores(replica)
-    args.extend(['-r', replica.domain.realm])
+    args.extend(['--realm', replica.domain.realm,
+                 '--domain', replica.domain.name])
 
     result = replica.run_command(args, raiseonerr=raiseonerr,
                                  stdin_text=stdin_text)
@@ -486,16 +506,19 @@ def install_client(master, client, extra_args=(),
     if password is None:
         password = client.config.admin_password
 
-    client.run_command(['ipa-client-install', '-U',
-                        '--domain', client.domain.name,
-                        '--realm', client.domain.realm,
-                        '-p', user,
-                        '-w', password,
-                        '--server', master.hostname]
-                       + list(extra_args))
+    result = client.run_command([
+        'ipa-client-install', '-U',
+        '--domain', client.domain.name,
+        '--realm', client.domain.realm,
+        '-p', user,
+        '-w', password,
+        '--server', master.hostname] + list(extra_args)
+    )
 
     setup_sssd_debugging(client)
     kinit_admin(client)
+
+    return result
 
 
 def install_adtrust(host):
@@ -533,12 +556,81 @@ def install_adtrust(host):
     run_repeatedly(host, dig_command, test=dig_test)
 
 
+def disable_dnssec_validation(host):
+    backup_file(host, paths.NAMED_CONF)
+    named_conf = host.get_file_contents(paths.NAMED_CONF)
+    named_conf = re.sub(br'dnssec-validation\s*yes;', b'dnssec-validation no;',
+                        named_conf)
+    host.put_file_contents(paths.NAMED_CONF, named_conf)
+    restart_named(host)
+
+
+def restore_dnssec_validation(host):
+    restore_files(host)
+    restart_named(host)
+
+
+def is_subdomain(subdomain, domain):
+    subdomain_unpacked = subdomain.split('.')
+    domain_unpacked = domain.split('.')
+
+    subdomain_unpacked.reverse()
+    domain_unpacked.reverse()
+
+    subdomain = False
+
+    if len(subdomain_unpacked) > len(domain_unpacked):
+        subdomain = True
+
+        for subdomain_segment, domain_segment in zip(subdomain_unpacked,
+                                                     domain_unpacked):
+            subdomain = subdomain and subdomain_segment == domain_segment
+
+    return subdomain
+
 def configure_dns_for_trust(master, ad):
     """
-    This method is intentionally left empty. Originally it served for DNS
-    configuration on IPA master according to the relationship of the IPA's
-    and AD's domains.
+    This configures DNS on IPA master according to the relationship of the
+    IPA's and AD's domains.
     """
+
+    kinit_admin(master)
+
+    if is_subdomain(ad.domain.name, master.domain.name):
+        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                            '%s.%s' % (ad.shortname, ad.netbios),
+                            '--a-ip-address', ad.ip])
+
+        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                            ad.netbios,
+                            '--ns-hostname',
+                            '%s.%s' % (ad.shortname, ad.netbios)])
+
+        master.run_command(['ipa', 'dnszone-mod', master.domain.name,
+                            '--allow-transfer', ad.ip])
+    else:
+        disable_dnssec_validation(master)
+        master.run_command(['ipa', 'dnsforwardzone-add', ad.domain.name,
+                            '--forwarder', ad.ip,
+                            '--forward-policy', 'only',
+                            ])
+
+
+def unconfigure_dns_for_trust(master, ad):
+    """
+    This undoes changes made by configure_dns_for_trust
+    """
+    kinit_admin(master)
+    if is_subdomain(ad.domain.name, master.domain.name):
+        master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
+                            '%s.%s' % (ad.shortname, ad.netbios),
+                            '--a-rec', ad.ip])
+        master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
+                            ad.netbios,
+                            '--ns-rec', '%s.%s' % (ad.shortname, ad.netbios)])
+    else:
+        master.run_command(['ipa', 'dnsforwardzone-del', ad.domain.name])
+        restore_dnssec_validation(master)
 
 
 def establish_trust_with_ad(master, ad_domain, extra_args=()):
@@ -721,34 +813,46 @@ def sync_time(host, server):
 
     host.run_command(['systemctl', 'stop', 'chronyd'])
     host.run_command(['chronyd', '-q',
-                      "server {srv} iburst".format(srv=server.hostname),
-                      'pidfile /tmp/chronyd.pid', 'bindcmdaddress /'])
+                      "server {srv} iburst maxdelay 1000".format(
+                          srv=server.hostname),
+                      'pidfile /tmp/chronyd.pid', 'bindcmdaddress /',
+                      'maxdistance 1000', 'maxjitter 1000'])
 
 
-def connect_replica(master, replica, domain_level=None):
+def connect_replica(master, replica, domain_level=None,
+                    database=DOMAIN_SUFFIX_NAME):
     if domain_level is None:
         domain_level = master.config.domain_level
     check_domain_level(domain_level)
     if domain_level == DOMAIN_LEVEL_0:
-        replica.run_command(['ipa-replica-manage', 'connect', master.hostname])
+        if database == DOMAIN_SUFFIX_NAME:
+            cmd = 'ipa-replica-manage'
+        else:
+            cmd = 'ipa-csreplica-manage'
+        replica.run_command([cmd, 'connect', master.hostname])
     else:
         kinit_admin(master)
-        master.run_command(["ipa", "topologysegment-add", DOMAIN_SUFFIX_NAME,
+        master.run_command(["ipa", "topologysegment-add", database,
                             "%s-to-%s" % (master.hostname, replica.hostname),
                             "--leftnode=%s" % master.hostname,
                             "--rightnode=%s" % replica.hostname
                             ])
 
 
-def disconnect_replica(master, replica, domain_level=None):
+def disconnect_replica(master, replica, domain_level=None,
+                       database=DOMAIN_SUFFIX_NAME):
     if domain_level is None:
         domain_level = master.config.domain_level
     check_domain_level(domain_level)
     if domain_level == DOMAIN_LEVEL_0:
-        replica.run_command(['ipa-replica-manage', 'disconnect', master.hostname])
+        if database == DOMAIN_SUFFIX_NAME:
+            cmd = 'ipa-replica-manage'
+        else:
+            cmd = 'ipa-csreplica-manage'
+        replica.run_command([cmd, 'disconnect', master.hostname])
     else:
         kinit_admin(master)
-        master.run_command(["ipa", "topologysegment-del", DOMAIN_SUFFIX_NAME,
+        master.run_command(["ipa", "topologysegment-del", database,
                             "%s-to-%s" % (master.hostname, replica.hostname),
                             "--continue"
                             ])
@@ -1467,7 +1571,7 @@ def ldappasswd_user_change(user, oldpw, newpw, master):
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_user, basedn)
-    master_ldap_uri = "ldap://{}".format(master.external_hostname)
+    master_ldap_uri = "ldap://{}".format(master.hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
             '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
@@ -1479,7 +1583,7 @@ def ldappasswd_sysaccount_change(user, oldpw, newpw, master):
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_sysaccounts, basedn)
-    master_ldap_uri = "ldap://{}".format(master.external_hostname)
+    master_ldap_uri = "ldap://{}".format(master.hostname)
 
     args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
             '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
@@ -1512,7 +1616,8 @@ def add_dns_zone(master, zone, skip_overlap_check=False,
         logger.debug('Zone %s already added.', zone)
 
 
-def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name):
+def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name,
+                          root_ca_path_length=None, ipa_ca_path_length=1):
     """
     Sign ipa csr and save signed CA together with root CA back to the host.
     Returns root CA and IPA CA paths on the host.
@@ -1525,9 +1630,9 @@ def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name):
 
     external_ca = ExternalCA()
     # Create root CA
-    root_ca = external_ca.create_ca()
+    root_ca = external_ca.create_ca(path_length=root_ca_path_length)
     # Sign CSR
-    ipa_ca = external_ca.sign_csr(ipa_csr)
+    ipa_ca = external_ca.sign_csr(ipa_csr, path_length=ipa_ca_path_length)
 
     root_ca_fname = os.path.join(test_dir, root_ca_name)
     ipa_ca_fname = os.path.join(test_dir, ipa_ca_name)
@@ -1536,7 +1641,7 @@ def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name):
     host.put_file_contents(root_ca_fname, root_ca)
     host.put_file_contents(ipa_ca_fname, ipa_ca)
 
-    return (root_ca_fname, ipa_ca_fname)
+    return root_ca_fname, ipa_ca_fname
 
 
 def generate_ssh_keypair():
@@ -1576,9 +1681,19 @@ def strip_cert_header(pem):
         return pem
 
 
-def user_add(host, login):
-    host.run_command([
+def user_add(host, login, first='test', last='user', extra_args=()):
+    cmd = [
         "ipa", "user-add", login,
-        "--first", "test",
-        "--last", "user"
-    ])
+        "--first", first,
+        "--last", last
+    ]
+    cmd.extend(extra_args)
+    return host.run_command(cmd)
+
+
+def group_add(host, groupname, extra_args=()):
+    cmd = [
+        "ipa", "group-add", groupname,
+    ]
+    cmd.extend(extra_args)
+    return host.run_command(cmd)

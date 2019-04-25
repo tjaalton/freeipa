@@ -35,6 +35,7 @@ import six
 
 from ipapython import ipautil
 from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks
 
 # pylint: disable=no-name-in-module, import-error
 if six.PY3:
@@ -53,7 +54,8 @@ wellknownservices = ['certmonger', 'dirsrv', 'httpd', 'ipa', 'krb5kdc',
                      'dbus', 'nslcd', 'nscd', 'ntpd', 'portmap',
                      'rpcbind', 'kadmin', 'sshd', 'autofs', 'rpcgssd',
                      'rpcidmapd', 'pki_tomcatd', 'chronyd', 'domainname',
-                     'named', 'ods_enforcerd', 'ods_signerd', 'gssproxy']
+                     'named', 'ods_enforcerd', 'ods_signerd', 'gssproxy',
+                     'nfs-utils', 'sssd', 'NetworkManager']
 
 # The common ports for these services. This is used to wait for the
 # service to become available.
@@ -451,7 +453,7 @@ class SystemdService(PlatformService):
                         # Link exists and it is broken, make new one
                         os.unlink(srv_lnk)
                         os.symlink(self.lib_path, srv_lnk)
-                ipautil.run([paths.SYSTEMCTL, "--system", "daemon-reload"])
+                tasks.systemd_daemon_reload()
             except Exception:
                 pass
         else:
@@ -474,7 +476,7 @@ class SystemdService(PlatformService):
                 if os.path.isdir(srv_tgt):
                     if os.path.islink(srv_lnk):
                         os.unlink(srv_lnk)
-                ipautil.run([paths.SYSTEMCTL, "--system", "daemon-reload"])
+                tasks.systemd_daemon_reload()
             except Exception:
                 pass
         else:

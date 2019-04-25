@@ -34,7 +34,6 @@ import socket
 import re
 import datetime
 import netaddr
-import netifaces
 import time
 import pwd
 import grp
@@ -48,6 +47,11 @@ from dns.exception import DNSException
 import six
 from six.moves import input
 from six.moves import urllib
+
+try:
+    import netifaces
+except ImportError:
+    netifaces = None
 
 from ipapython.dn import DN
 
@@ -197,6 +201,8 @@ class CheckedIPAddress(UnsafeIPAddress):
         :return: InterfaceDetails named tuple or None if no interface has
         this address
         """
+        if netifaces is None:
+            raise ImportError("netifaces")
         logger.debug("Searching for an interface of IP address: %s", self)
         if self.version == 4:
             family = netifaces.AF_INET
@@ -1104,13 +1110,16 @@ def reverse_record_exists(ip_address):
     return True
 
 
-def config_replace_variables(filepath, replacevars=dict(), appendvars=dict()):
+def config_replace_variables(filepath, replacevars=dict(), appendvars=dict(),
+                             removevars=None):
     """
     Take a key=value based configuration file, and write new version
-    with certain values replaced or appended
+    with certain values replaced, appended, or removed.
 
     All (key,value) pairs from replacevars and appendvars that were not found
     in the configuration file, will be added there.
+
+    All entries in set removevars are removed.
 
     It is responsibility of a caller to ensure that replacevars and
     appendvars do not overlap.
@@ -1153,7 +1162,11 @@ $)''', re.VERBOSE)
                             elif value.find(appendvars[option]) == -1:
                                 new_line = u"%s=%s %s\n" % (option, value, appendvars[option])
                             old_values[option] = value
-                new_config.write(new_line)
+                        if removevars and option in removevars:
+                            old_values[option] = value
+                            new_line = None
+                if new_line is not None:
+                    new_config.write(new_line)
         # Now add all options from replacevars and appendvars that were not found in the file
         new_vars = replacevars.copy()
         new_vars.update(appendvars)

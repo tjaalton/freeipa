@@ -10,6 +10,8 @@ installed.
 from __future__ import absolute_import
 
 import os
+from datetime import datetime, timedelta
+import time
 import pytest
 from ipalib.constants import DOMAIN_LEVEL_0
 from ipaplatform.constants import constants
@@ -18,6 +20,7 @@ from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
+from ipalib import x509
 
 config = get_global_config()
 
@@ -26,7 +29,7 @@ def create_broken_resolv_conf(master):
     # Force a broken resolv.conf to simulate a bad response to
     # reverse zone lookups
     master.run_command([
-        '/usr/bin/mv',
+        '/bin/mv',
         paths.RESOLV_CONF,
         '%s.sav' % paths.RESOLV_CONF
     ])
@@ -38,7 +41,7 @@ def create_broken_resolv_conf(master):
 def restore_resolv_conf(master):
     if os.path.exists('%s.sav' % paths.RESOLV_CONF):
         master.run_command([
-            '/usr/bin/mv',
+            '/bin/mv',
             '%s.sav' % paths.RESOLV_CONF,
             paths.RESOLV_CONF
         ])
@@ -104,10 +107,6 @@ class InstallTestBase2(IntegrationTest):
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=False)
 
-    def test_replica0_with_ca_kra_dns_install(self):
-        tasks.install_replica(self.master, self.replicas[0], setup_ca=True,
-                              setup_kra=True, setup_dns=True)
-
     def test_replica1_with_ca_dns_install(self):
         tasks.install_replica(self.master, self.replicas[1], setup_ca=True,
                               setup_dns=True)
@@ -164,13 +163,11 @@ class TestInstallWithCA1(InstallTestBase1):
     def test_replica1_ipa_kra_install(self):
         super(TestInstallWithCA1, self).test_replica1_ipa_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_with_ca_kra_install(self):
         super(TestInstallWithCA1, self).test_replica2_with_ca_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_ipa_dns_install(self):
@@ -209,12 +206,6 @@ class TestInstallWithCA2(InstallTestBase2):
     @classmethod
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=False)
-
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
-    @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
-                        reason='does not work on DOMAIN_LEVEL_0 by design')
-    def test_replica0_with_ca_kra_dns_install(self):
-        super(TestInstallWithCA2, self).test_replica0_with_ca_kra_dns_install()
 
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
@@ -255,13 +246,11 @@ class TestInstallWithCA_DNS1(InstallTestBase1):
     def test_replica1_ipa_kra_install(self):
         super(TestInstallWithCA_DNS1, self).test_replica1_ipa_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_with_ca_kra_install(self):
         super(TestInstallWithCA_DNS1, self).test_replica2_with_ca_kra_install()
 
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_ipa_dns_install(self):
@@ -273,14 +262,6 @@ class TestInstallWithCA_DNS2(InstallTestBase2):
     @classmethod
     def install(cls, mh):
         tasks.install_master(cls.master, setup_dns=True)
-
-    @pytest.mark.xfail(reason="FreeIPA ticket 7008", strict=True)
-    @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
-                        reason='does not work on DOMAIN_LEVEL_0 by design')
-    def test_replica0_with_ca_kra_dns_install(self):
-        super(
-            TestInstallWithCA_DNS2, self
-        ).test_replica0_with_ca_kra_dns_install()
 
     @pytest.mark.skipif(config.domain_level == DOMAIN_LEVEL_0,
                         reason='does not work on DOMAIN_LEVEL_0 by design')
@@ -429,6 +410,32 @@ class TestInstallMaster(IntegrationTest):
         wsgi_count = cmd.stdout_text.count('wsgi:ipa')
         assert constants.WSGI_PROCESSES == wsgi_count
 
+    def test_error_for_yubikey(self):
+        """ Test error when yubikey hardware not present
+
+        In order to work with IPA and Yubikey, libyubikey is required.
+        Before the fix, if yubikey added without having packages, it used to
+        result in traceback. Now it the exception is handeled properly.
+        It needs Yubikey hardware to make command successfull. This test
+        just check of proper error thrown when hardware is not attached.
+
+        related ticket : https://pagure.io/freeipa/issue/6979
+        """
+        # try to add yubikey to the user
+        args = ['ipa', 'otptoken-add-yubikey', '--owner=admin']
+        cmd = self.master.run_command(args, raiseonerr=False)
+        assert cmd.returncode != 0
+        exp_str = ("ipa: ERROR: No YubiKey found")
+        assert exp_str in cmd.stderr_text
+
+    def test_p11_kit_softhsm2(self):
+        # check that p11-kit-proxy does not inject SoftHSM2
+        result = self.master.run_command([
+            "modutil", "-dbdir", paths.PKI_TOMCAT_ALIAS_DIR, "-list"
+        ])
+        assert "softhsm" not in result.stdout_text.lower()
+        assert "opendnssec" not in result.stdout_text.lower()
+
 
 class TestInstallMasterKRA(IntegrationTest):
 
@@ -508,3 +515,109 @@ class TestInstallMasterReservedIPasForwarder(IntegrationTest):
         exp_str = ("Invalid IP Address 0.0.0.0: cannot use IANA reserved "
                    "IP address 0.0.0.0")
         assert exp_str in cmd.stdout_text
+
+
+class TestKRAinstallAfterCertRenew(IntegrationTest):
+    """ Test KRA installtion after ca agent cert renewal
+
+    KRA installation was failing after ca-agent cert gets renewed.
+    This test checks if the symptoms no longer exist.
+
+    related ticket: https://pagure.io/freeipa/issue/7288
+    """
+
+    def test_KRA_install_after_cert_renew(self):
+
+        tasks.install_master(self.master)
+
+        # get ca-agent cert and load as pem
+        dm_pass = self.master.config.dirman_password
+        admin_pass = self.master.config.admin_password
+        args = [paths.OPENSSL, "pkcs12", "-in",
+                paths.DOGTAG_ADMIN_P12, "-nodes",
+                "-passin", "pass:{}".format(dm_pass)]
+        cmd = self.master.run_command(args)
+
+        certs = x509.load_certificate_list(cmd.stdout_text.encode('utf-8'))
+
+        # get expiry date of agent cert
+        cert_expiry = certs[0].not_valid_after
+
+        # move date to grace period so that certs get renewed
+        self.master.run_command(['systemctl', 'stop', 'chronyd'])
+        grace_date = cert_expiry - timedelta(days=10)
+        grace_date = datetime.strftime(grace_date, "%Y-%m-%d %H:%M:%S")
+        self.master.run_command(['date', '-s', grace_date])
+
+        # get the count of certs track by certmonger
+        cmd = self.master.run_command(['getcert', 'list'])
+        cert_count = cmd.stdout_text.count('Request ID')
+        timeout = 600
+        count = 0
+        start = time.time()
+        # wait sometime for cert renewal
+        while time.time() - start < timeout:
+            cmd = self.master.run_command(['getcert', 'list'])
+            count = cmd.stdout_text.count('status: MONITORING')
+            if count == cert_count:
+                break
+            time.sleep(100)
+        else:
+            # timeout
+            raise AssertionError('TimeOut: Failed to renew all the certs')
+
+        # move date after 3 days of actual expiry
+        cert_expiry = cert_expiry + timedelta(days=3)
+        cert_expiry = datetime.strftime(cert_expiry, "%Y-%m-%d %H:%M:%S")
+        self.master.run_command(['date', '-s', cert_expiry])
+
+        passwd = "{passwd}\n{passwd}\n{passwd}".format(passwd=admin_pass)
+        self.master.run_command(['kinit', 'admin'], stdin_text=passwd)
+        cmd = self.master.run_command(['ipa-kra-install', '-p', dm_pass, '-U'])
+        self.master.run_command(['systemctl', 'start', 'chronyd'])
+
+
+class TestMaskInstall(IntegrationTest):
+    """ Test master and replica installation with wrong mask
+
+    This test checks that master/replica installation fails (expectedly) if
+    mask > 022.
+
+    related ticket: https://pagure.io/freeipa/issue/7193
+    """
+
+    num_replicas = 0
+
+    @classmethod
+    def install(cls, mh):
+        super(TestMaskInstall, cls).install(mh)
+        cls.bashrc_file = cls.master.get_file_contents('/root/.bashrc')
+
+    def test_install_master(self):
+        self.master.run_command('echo "umask 0027" >> /root/.bashrc')
+        result = self.master.run_command(['umask'])
+        assert '0027' in result.stdout_text
+
+        cmd = tasks.install_master(
+            self.master, setup_dns=False, raiseonerr=False
+        )
+        exp_str = ("Unexpected system mask")
+        assert (exp_str in cmd.stderr_text and cmd.returncode != 0)
+
+    def test_install_replica(self):
+        result = self.master.run_command(['umask'])
+        assert '0027' in result.stdout_text
+
+        cmd = self.master.run_command([
+            'ipa-replica-install', '-w', self.master.config.admin_password,
+            '-n', self.master.domain.name, '-r', self.master.domain.realm,
+            '--server', 'dummy_master.%s' % self.master.domain.name,
+            '-U'], raiseonerr=False
+        )
+        exp_str = ("Unexpected system mask")
+        assert (exp_str in cmd.stderr_text and cmd.returncode != 0)
+
+    def test_files_ownership_and_permission_teardown(self):
+        """ Method to restore the default bashrc contents"""
+        if self.bashrc_file is not None:
+            self.master.put_file_contents('/root/.bashrc', self.bashrc_file)

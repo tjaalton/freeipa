@@ -276,9 +276,13 @@ def set_certificate_attrs(entry_attrs):
 
 def check_required_principal(ldap, principal):
     """
-    Raise an error if the host of this prinicipal is an IPA master and one
+    Raise an error if the host of this principal is an IPA master and one
     of the principals required for proper execution.
     """
+    if not principal.is_service:
+        # bypass check if principal is not a service principal,
+        # see https://pagure.io/freeipa/issue/7793
+        return
     try:
         host_is_master(ldap, principal.hostname)
     except errors.ValidationError:
@@ -709,7 +713,8 @@ class service_mod(LDAPUpdate):
             removed_certs = set(old_certs) - set(certs)
             for cert in removed_certs:
                 rm_certs = api.Command.cert_find(
-                    certificate=cert.public_bytes(x509.Encoding.DER))['result']
+                    certificate=cert.public_bytes(x509.Encoding.DER),
+                    service=keys)['result']
                 revoke_certs(rm_certs)
 
         if certs:
@@ -989,7 +994,9 @@ class service_remove_cert(LDAPRemoveAttributeViaOption):
         assert isinstance(dn, DN)
 
         for cert in options.get('usercertificate', []):
-            revoke_certs(api.Command.cert_find(certificate=cert)['result'])
+            revoke_certs(api.Command.cert_find(
+                certificate=cert,
+                service=keys)['result'])
 
         return dn
 

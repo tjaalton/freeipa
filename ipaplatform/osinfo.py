@@ -172,10 +172,13 @@ class OSInfo(Mapping):
         return self._info.get('VERSION')
 
     @property
-    def version_id(self):
-        """Version identifier
+    def version_number(self):
+        """Version number tuple based on version_id
         """
-        return self._info.get('VERSION_ID')
+        version_id = self._info.get('VERSION_ID')
+        if not version_id:
+            return ()
+        return tuple(int(p) for p in version_id.split('.'))
 
     @property
     def platform_ids(self):

@@ -190,6 +190,7 @@ class Backup(admintool.AdminTool):
         paths.IPA_CUSTODIA_CONF,
         paths.GSSPROXY_CONF,
         paths.HOSTS,
+        paths.SYSTEMD_PKI_TOMCAT_IPA_CONF,
     ) + tuple(
         os.path.join(paths.IPA_NSSDB_DIR, file)
         for file in (certdb.NSS_DBM_FILES + certdb.NSS_SQL_FILES)
@@ -375,6 +376,7 @@ class Backup(admintool.AdminTool):
         for file in (
             paths.SYSCONFIG_DIRSRV_INSTANCE % serverid,
             paths.ETC_TMPFILESD_DIRSRV % serverid,
+            paths.SLAPD_INSTANCE_SYSTEMD_IPA_ENV_TEMPLATE % serverid,
         ):
             if os.path.exists(file):
                 self.files.append(file)
@@ -584,7 +586,8 @@ class Backup(admintool.AdminTool):
         config.set('ipa', 'ipa_version', str(version.VERSION))
         config.set('ipa', 'version', '1')
 
-        dn = DN(('cn', api.env.host), ('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
+        dn = DN(('cn', api.env.host), api.env.container_masters,
+                api.env.basedn)
         services_cns = []
         try:
             conn = self.get_connection()

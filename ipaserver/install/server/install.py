@@ -41,7 +41,7 @@ from ipaserver.install import (
 from ipaserver.install.installutils import (
     IPA_MODULES, BadHostError, get_fqdn, get_server_ip_address,
     is_ipa_configured, load_pkcs12, read_password, verify_fqdn,
-    update_hosts_file)
+    update_hosts_file, validate_mask)
 
 if six.PY3:
     unicode = str
@@ -314,6 +314,16 @@ def install_check(installer):
     tasks.check_ipv6_stack_enabled()
     tasks.check_selinux_status()
     check_ldap_conf()
+
+    mask_str = validate_mask()
+    if mask_str:
+        print("Unexpected system mask: %s, expected 0022" % mask_str)
+        if installer.interactive:
+            if not user_input("Do you want to continue anyway?", True):
+                raise ScriptError(
+                    "Unexpected system mask: %s" % mask_str)
+        else:
+            raise ScriptError("Unexpected system mask: %s" % mask_str)
 
     if options.master_password:
         msg = ("WARNING:\noption '-P/--master-password' is deprecated. "
@@ -762,6 +772,9 @@ def install(installer):
     if installer._update_hosts_file:
         update_hosts_file(ip_addresses, host_name, fstore)
 
+    if tasks.configure_pkcs11_modules(fstore):
+        print("Disabled p11-kit-proxy")
+
     # Create a directory server instance
     if not options.external_cert_files:
         # We have to sync time before certificate handling on master.
@@ -1046,6 +1059,8 @@ def uninstall_check(installer):
     else:
         dns.uninstall_check(options)
 
+        ca.uninstall_check(options)
+
         if domain_level == DOMAIN_LEVEL_0:
             rm = replication.ReplicationManager(
                 realm=api.env.realm,
@@ -1139,6 +1154,8 @@ def uninstall(installer):
 
     # remove upgrade state file
     sysupgrade.remove_upgrade_file()
+
+    tasks.restore_pkcs11_modules(fstore)
 
     if fstore.has_files():
         logger.error('Some files have not been restored, see '

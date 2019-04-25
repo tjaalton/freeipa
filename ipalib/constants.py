@@ -145,8 +145,10 @@ DEFAULT_CONFIG = (
     ('tls_version_min', 'tls1.0'),
     ('tls_version_max', 'tls1.2'),
 
-    # Time to wait for a service to start, in seconds
-    ('startup_timeout', 300),
+    # Time to wait for a service to start, in seconds.
+    # Note that systemd has a DefaultTimeoutStartSec of 90 seconds. Higher
+    # values are not effective unless systemd is reconfigured, too.
+    ('startup_timeout', 120),
     # How long http connection should wait for reply [seconds].
     ('http_timeout', 30),
     # How long to wait for an entry to appear on a replica
@@ -225,7 +227,7 @@ DEFAULT_CONFIG = (
     ('site_packages', object),  # The directory contaning ipalib
     ('script', object),  # sys.argv[0]
     ('bin', object),  # The directory containing the script
-    ('home', object),  # $HOME
+    ('home', object),  # os.path.expanduser('~')
 
     # Vars set in Env._bootstrap():
     ('in_tree', object),  # Whether or not running in-tree (bool)
@@ -313,13 +315,7 @@ TLS_VERSION_MINIMAL = "tls1.0"
 # Use cache path
 USER_CACHE_PATH = (
     os.environ.get('XDG_CACHE_HOME') or
-    os.path.join(
-        os.environ.get(
-            'HOME',
-            os.path.expanduser('~')
-        ),
-        '.cache'
-    )
+    os.path.expanduser('~/.cache')
 )
 
 SOFTHSM_DNSSEC_TOKEN_LABEL = u'ipaDNSSEC'

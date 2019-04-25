@@ -47,6 +47,7 @@ from ipalib.util import (
     verify_host_resolvable,
 )
 from ipaplatform import services
+from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks
 from ipapython import certdb, kernel_keyring, ipaldap, ipautil
@@ -1038,8 +1039,13 @@ def sssd_enable_service(sssdconfig, name):
     return sssdconfig.get_service(name)
 
 
-def sssd_enable_ifp(sssdconfig):
+def sssd_enable_ifp(sssdconfig, allow_httpd=False):
     """Enable and configure libsss_simpleifp plugin
+
+    Allow the ``ipaapi`` user to access IFP. In case allow_httpd is true,
+    the Apache HTTPd user is also allowed to access IFP. For smart card
+    authentication, mod_lookup_identity must be allowed to access user
+    information.
     """
     service = sssd_enable_service(sssdconfig, 'ifp')
     if service is None:
@@ -1058,6 +1064,8 @@ def sssd_enable_ifp(sssdconfig):
         uids.add('root')
     # allow IPA API to access IFP
     uids.add(IPAAPI_USER)
+    if allow_httpd:
+        uids.add(constants.HTTPD_USER)
     service.set_option('allowed_uids', ', '.join(sorted(uids)))
     sssdconfig.save_service(service)
 
@@ -2464,18 +2472,21 @@ def sync_time(options, fstore, statestore):
     # disable other time&date services first
     timeconf.force_chrony(statestore)
 
-    logger.info('Synchronizing time')
-
-    if not options.ntp_servers:
+    if not options.ntp_servers and not options.ntp_pool:
         ds = ipadiscovery.IPADiscovery()
         ntp_servers = ds.ipadns_search_srv(cli_domain, '_ntp._udp',
                                            None, break_on_first=False)
-    else:
-        ntp_servers = options.ntp_servers
+        if not ntp_servers and not options.unattended:
+            options.ntp_servers, options.ntp_pool = timeconf.get_time_source()
+        else:
+            options.ntp_servers = ntp_servers
+
+    logger.info('Synchronizing time')
 
     configured = False
-    if ntp_servers or options.ntp_pool:
-        configured = timeconf.configure_chrony(ntp_servers, options.ntp_pool,
+    if options.ntp_servers or options.ntp_pool:
+        configured = timeconf.configure_chrony(options.ntp_servers,
+                                               options.ntp_pool,
                                                fstore, statestore)
     else:
         logger.warning("No SRV records of NTP servers found and no NTP server "
@@ -3682,6 +3693,7 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
 
     request_cert = knob(
         None,
+        deprecated=True,
         description="request certificate for the machine",
     )
     request_cert = prepare_only(request_cert)
@@ -3694,7 +3706,10 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
                 "--server cannot be used without providing --domain")
 
         if self.force_ntpd:
-            logger.warning("Option --force-ntpd has been deprecated")
+            logger.warning(
+                "Option --force-ntpd has been deprecated and will be "
+                "removed in a future release."
+            )
 
         if self.ntp_servers and self.no_ntp:
             raise RuntimeError(
@@ -3703,6 +3718,12 @@ class ClientInstallInterface(hostname_.HostNameInstallInterface,
         if self.ntp_pool and self.no_ntp:
             raise RuntimeError(
                 "--ntp-pool cannot be used together with --no-ntp")
+
+        if self.request_cert:
+            logger.warning(
+                "Option --request-cert has been deprecated and will be "
+                "removed in a future release."
+            )
 
         if self.no_nisdomain and self.nisdomain:
             raise RuntimeError(

@@ -22,12 +22,16 @@ import re
 import time
 import tempfile
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+
 from ipatests.pytest_ipa.integration import tasks
 from ipatests.test_integration.base import IntegrationTest
 from ipaplatform.paths import paths
 
 from itertools import chain, repeat
 from ipatests.create_external_ca import ExternalCA, ISSUER_CN
+from ipaserver.install.cainstance import MSCSTemplateV1
 
 IPA_CA = 'ipa_ca.crt'
 ROOT_CA = 'root_ca.crt'
@@ -69,12 +73,15 @@ def match_in_journal(host, string, since='today', services=('certmonger',)):
     return match
 
 
-def install_server_external_ca_step1(host):
+def install_server_external_ca_step1(host, extra_args=()):
     """Step 1 to install the ipa server with external ca"""
-    return tasks.install_master(host, external_ca=True)
+    return tasks.install_master(
+        host, external_ca=True, extra_args=extra_args
+    )
 
 
-def install_server_external_ca_step2(host, ipa_ca_cert, root_ca_cert):
+def install_server_external_ca_step2(host, ipa_ca_cert, root_ca_cert,
+                                     raiseonerr=True):
     """Step 2 to install the ipa server with external ca"""
     args = ['ipa-server-install',
             '-a', host.config.admin_password,
@@ -82,7 +89,7 @@ def install_server_external_ca_step2(host, ipa_ca_cert, root_ca_cert):
             '--external-cert-file', ipa_ca_cert,
             '--external-cert-file', root_ca_cert]
 
-    cmd = host.run_command(args)
+    cmd = host.run_command(args, raiseonerr=raiseonerr)
     return cmd
 
 
@@ -95,6 +102,21 @@ def service_control_dirsrv(host, function):
     assert cmd.returncode == 0
 
 
+def check_ipaca_issuerDN(host, expected_dn):
+    result = host.run_command(['ipa', 'ca-show', 'ipa'])
+    assert "Issuer DN: {}".format(expected_dn) in result.stdout_text
+
+
+def check_mscs_extension(ipa_csr, template):
+    csr = x509.load_pem_x509_csr(ipa_csr, default_backend())
+    extensions = [
+        ext for ext in csr.extensions
+        if ext.oid.dotted_string == template.ext_oid
+    ]
+    assert extensions
+    assert extensions[0].value.value == template.get_ext_data()
+
+
 class TestExternalCA(IntegrationTest):
     """
     Test of FreeIPA server installation with external CA
@@ -104,8 +126,14 @@ class TestExternalCA(IntegrationTest):
 
     def test_external_ca(self):
         # Step 1 of ipa-server-install.
-        result = install_server_external_ca_step1(self.master)
+        result = install_server_external_ca_step1(
+            self.master, extra_args=['--external-ca-type=ms-cs']
+        )
         assert result.returncode == 0
+
+        # check CSR for extension
+        ipa_csr = self.master.get_file_contents(paths.ROOT_IPA_CSR)
+        check_mscs_extension(ipa_csr, MSCSTemplateV1(u'SubCA'))
 
         # Sign CA, transport it to the host and get ipa a root ca paths.
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
@@ -207,8 +235,7 @@ class TestSelfExternalSelf(IntegrationTest):
         This test checks if issuer DN is updated properly after CA is
         renewed from self-signed to external-ca
         """
-        result = self.master.run_command(['ipa', 'ca-show', 'ipa'])
-        assert "Issuer DN: CN={}".format(ISSUER_CN) in result.stdout_text
+        check_ipaca_issuerDN(self.master, "CN={}".format(ISSUER_CN))
 
     def test_switch_back_to_self_signed(self):
 
@@ -233,6 +260,16 @@ class TestSelfExternalSelf(IntegrationTest):
 
         result = self.master.run_command([paths.IPA_CERTUPDATE])
         assert result.returncode == 0
+
+    def test_issuerDN_after_renew_to_self_signed(self):
+        """ Check if issuer DN is updated after external-ca > self-signed
+
+        This test checks if issuer DN is updated properly after CA is
+        renewed back from external-ca to self-signed
+        """
+        issuer_dn = 'CN=Certificate Authority,O={}'.format(
+            self.master.domain.realm)
+        check_ipaca_issuerDN(self.master, issuer_dn)
 
 
 class TestExternalCAdirsrvStop(IntegrationTest):
@@ -301,6 +338,22 @@ class TestExternalCAInvalidCert(IntegrationTest):
                invalid_cert, '--external-cert-file', root_ca_fname]
         result = self.master.run_command(cmd, raiseonerr=False)
         assert result.returncode == 1
+
+
+class TestExternalCAInvalidIntermediate(IntegrationTest):
+    """Test case for https://pagure.io/freeipa/issue/7877"""
+
+    def test_invalid_intermediate(self):
+        install_server_external_ca_step1(self.master)
+        root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
+            self.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA,
+            root_ca_path_length=0
+        )
+        result = install_server_external_ca_step2(
+            self.master, ipa_ca_fname, root_ca_fname, raiseonerr=False
+        )
+        assert result.returncode > 0
+        assert "basic contraint pathlen" in result.stderr_text
 
 
 class TestExternalCAInstall(IntegrationTest):

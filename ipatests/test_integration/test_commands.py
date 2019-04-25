@@ -315,7 +315,8 @@ class TestIPACommand(IntegrationTest):
         """
 
         test_user = 'test-ssh'
-        master = self.master.hostname
+        external_master_hostname = \
+            self.master.external_hostname  # pylint: disable=no-member
 
         pub_keys = []
 
@@ -345,13 +346,13 @@ class TestIPACommand(IntegrationTest):
         # first connection attempt is a workaround for
         # https://pagure.io/SSSD/sssd/issue/3669
         try:
-            sshcon.connect(master, username=test_user,
+            sshcon.connect(external_master_hostname, username=test_user,
                            key_filename=first_priv_key_path, timeout=1)
         except (paramiko.AuthenticationException, paramiko.SSHException):
             pass
 
         try:
-            sshcon.connect(master, username=test_user,
+            sshcon.connect(external_master_hostname, username=test_user,
                            key_filename=first_priv_key_path, timeout=1)
         except (paramiko.AuthenticationException,
                 paramiko.SSHException) as e:
@@ -495,3 +496,68 @@ class TestIPACommand(IntegrationTest):
             assert result.returncode == 1
 
         self.master.run_command(['rm', '-f', filename])
+
+    def test_hbac_systemd_user(self):
+        # https://pagure.io/freeipa/issue/7831
+        tasks.kinit_admin(self.master)
+        # check for presence
+        self.master.run_command(
+            ['ipa', 'hbacsvc-show', 'systemd-user']
+        )
+        result = self.master.run_command(
+            ['ipa', 'hbacrule-show', 'allow_systemd-user', '--all']
+        )
+        lines = set(l.strip() for l in result.stdout_text.split('\n'))
+        assert 'User category: all' in lines
+        assert 'Host category: all' in lines
+        assert 'Enabled: TRUE' in lines
+        assert 'Services: systemd-user' in lines
+        assert 'accessruletype: allow' in lines
+
+        # delete both
+        self.master.run_command(
+            ['ipa', 'hbacrule-del', 'allow_systemd-user']
+        )
+        self.master.run_command(
+            ['ipa', 'hbacsvc-del', 'systemd-user']
+        )
+
+        # run upgrade
+        result = self.master.run_command(['ipa-server-upgrade'])
+        assert 'Created hbacsvc systemd-user' in result.stderr_text
+        assert 'Created hbac rule allow_systemd-user' in result.stderr_text
+
+        # check for presence
+        result = self.master.run_command(
+            ['ipa', 'hbacrule-show', 'allow_systemd-user', '--all']
+        )
+        lines = set(l.strip() for l in result.stdout_text.split('\n'))
+        assert 'User category: all' in lines
+        assert 'Host category: all' in lines
+        assert 'Enabled: TRUE' in lines
+        assert 'Services: systemd-user' in lines
+        assert 'accessruletype: allow' in lines
+
+        self.master.run_command(
+            ['ipa', 'hbacsvc-show', 'systemd-user']
+        )
+
+        # only delete rule
+        self.master.run_command(
+            ['ipa', 'hbacrule-del', 'allow_systemd-user']
+        )
+
+        # run upgrade
+        result = self.master.run_command(['ipa-server-upgrade'])
+        assert (
+            'hbac service systemd-user already exists' in result.stderr_text
+        )
+        assert (
+            'Created hbac rule allow_systemd-user' not in result.stderr_text
+        )
+        result = self.master.run_command(
+            ['ipa', 'hbacrule-show', 'allow_systemd-user'],
+            raiseonerr=False
+        )
+        assert result.returncode != 0
+        assert 'HBAC rule not found' in result.stderr_text

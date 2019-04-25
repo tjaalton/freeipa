@@ -255,6 +255,7 @@ from ipalib import Backend, api
 from ipapython.dn import DN
 import ipapython.cookie
 from ipapython import dogtag, ipautil, certdb
+from ipaserver.masters import find_providing_server
 
 if api.env.in_server:
     import pki
@@ -1147,55 +1148,65 @@ def parse_unrevoke_cert_xml(doc):
     return response
 
 
-def host_has_service(host, ldap2, service='CA'):
-    """
-    :param host: A host which might be a master for a service.
-    :param ldap2: connection to the local database
-    :param service: The service for which the host might be a master.
-    :return:   (true, false)
+def parse_updateCRL_xml(doc):
+    '''
+    :param doc: The root node of the xml document to parse
+    :returns:   result dict
+    :except ValueError:
 
-    Check if a specified host is a master for a specified service.
-    """
-    base_dn = DN(('cn', host), ('cn', 'masters'), ('cn', 'ipa'),
-                 ('cn', 'etc'), api.env.basedn)
-    filter_attrs = {
-        'objectClass': 'ipaConfigObject',
-        'cn': service,
-        'ipaConfigString': 'enabledService',
-        }
-    query_filter = ldap2.make_filter(filter_attrs, rules='&')
-    try:
-        ent, _trunc = ldap2.find_entries(filter=query_filter, base_dn=base_dn)
-        if len(ent):
-            return True
-    except Exception:
-        pass
-    return False
+    After parsing the results are returned in a result dict. The following
+    table illustrates the mapping from the CMS data item to what may be found
+    in the result dict. If a CMS data item is absent it will also be absent in
+    the result dict.
 
+    If the requestStatus is not SUCCESS then the response dict will have the
+    contents described in `parse_error_template_xml`.
 
-def select_any_master(ldap2, service='CA'):
-    """
-    :param ldap2: connection to the local database
-    :param service: The service for which we're looking for a master.
-    :return:   host as str
+    +-----------------+-------------+-----------------------+---------------+
+    |cms name         |cms type     |result name            |result type    |
+    +=================+=============+=======================+===============+
+    |crlIssuingPoint  |string       |crl_issuing_point      |unicode        |
+    +-----------------+-------------+-----------------------+---------------+
+    |crlUpdate        |string       |crl_update [1]         |unicode        |
+    +-----------------+-------------+-----------------------+---------------+
 
-    Select any host which is a master for a specified service.
-    """
-    base_dn = DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'),
-                  api.env.basedn)
-    filter_attrs = {
-         'objectClass': 'ipaConfigObject',
-         'cn': service,
-         'ipaConfigString': 'enabledService',}
-    query_filter = ldap2.make_filter(filter_attrs, rules='&')
-    try:
-        ent, _trunc = ldap2.find_entries(filter=query_filter, base_dn=base_dn)
-        if len(ent):
-            entry = random.choice(ent)
-            return entry.dn[1].value
-    except Exception:
-        pass
-    return None
+    .. [1] crlUpdate may be one of:
+
+           - "Success"
+           - "Failure"
+           - "missingParameters"
+           - "testingNotEnabled"
+           - "testingInProgress"
+           - "Scheduled"
+           - "inProgress"
+           - "disabled"
+           - "notInitialized"
+
+    '''
+
+    request_status = get_request_status_xml(doc)
+
+    if request_status != CMS_STATUS_SUCCESS:
+        response = parse_error_template_xml(doc)
+        return response
+
+    response = {}
+    response['request_status'] = request_status
+
+    crl_issuing_point = doc.xpath('//xml/header/crlIssuingPoint[1]')
+    if len(crl_issuing_point) == 1:
+        crl_issuing_point = etree.tostring(
+            crl_issuing_point[0], method='text',
+            encoding=unicode).strip()
+        response['crl_issuing_point'] = crl_issuing_point
+
+    crl_update = doc.xpath('//xml/header/crlUpdate[1]')
+    if len(crl_update) == 1:
+        crl_update = etree.tostring(crl_update[0], method='text',
+                                    encoding=unicode).strip()
+        response['crl_update'] = crl_update
+
+    return response
 
 #-------------------------------------------------------------------------------
 
@@ -1204,7 +1215,6 @@ if api.env.ra_plugin != 'dogtag':
     # In this case, abort loading this plugin module...
     raise SkipPluginModule(reason='dogtag not selected as RA plugin')
 import os
-import random
 from ipaserver.plugins import rabase
 from ipalib.constants import TYPE_ERROR
 from ipalib import _
@@ -1269,17 +1279,19 @@ class RestClient(Backend):
         if self._ca_host is not None:
             return self._ca_host
 
-        ldap2 = self.api.Backend.ldap2
-        if host_has_service(api.env.ca_host, ldap2, "CA"):
-            object.__setattr__(self, '_ca_host', api.env.ca_host)
-        elif api.env.host != api.env.ca_host:
-            if host_has_service(api.env.host, ldap2, "CA"):
-                object.__setattr__(self, '_ca_host', api.env.host)
-        else:
-            object.__setattr__(self, '_ca_host', select_any_master(ldap2))
-        if self._ca_host is None:
-            object.__setattr__(self, '_ca_host', api.env.ca_host)
-        return self._ca_host
+        preferred = [api.env.ca_host]
+        if api.env.host != api.env.ca_host:
+            preferred.append(api.env.host)
+        ca_host = find_providing_server(
+            'CA', conn=self.api.Backend.ldap2, preferred_hosts=preferred,
+            api=self.api
+        )
+        if ca_host is None:
+            # TODO: need during installation, CA is not yet set as enabled
+            ca_host = api.env.ca_host
+        # object is locked, need to use __setattr__()
+        object.__setattr__(self, '_ca_host', ca_host)
+        return ca_host
 
     def __enter__(self):
         """Log into the REST API"""
@@ -1971,6 +1983,47 @@ class ra(rabase.rabase, RestClient):
 
         return results
 
+    def updateCRL(self, wait='false'):
+        """
+        Force update of the CRL
+
+        :param wait: if true, the call will be synchronous and return only
+                     when the CRL has been generated
+        """
+        logger.debug('%s.updateCRL()', type(self).__name__)
+        # Call CMS
+        http_status, _http_headers, http_body = (
+            self._sslget('/ca/agent/ca/updateCRL',
+                         self.override_port or self.env.ca_agent_port,
+                         crlIssuingPoint='MasterCRL',
+                         waitForUpdate=wait,
+                         xml='true')
+        )
+
+        # Parse and handle errors
+        if http_status != 200:
+            self.raise_certificate_operation_error('updateCRL',
+                                                   detail=http_status)
+
+        parse_result = self.get_parse_result_xml(http_body,
+                                                 parse_updateCRL_xml)
+        request_status = parse_result['request_status']
+        if request_status != CMS_STATUS_SUCCESS:
+            self.raise_certificate_operation_error(
+                'updateCRL',
+                cms_request_status_to_string(request_status),
+                parse_result.get('error_string'))
+
+        # Return command result
+        cmd_result = {}
+
+        if 'crl_issuing_point' in parse_result:
+            cmd_result['crlIssuingPoint'] = parse_result['crl_issuing_point']
+        if 'crl_update' in parse_result:
+            cmd_result['crlUpdate'] = parse_result['crl_update']
+
+        return cmd_result
+
 
 # ----------------------------------------------------------------------------
 @register()
@@ -1980,9 +2033,7 @@ class kra(Backend):
     """
 
     def __init__(self, api, kra_port=443):
-
         self.kra_port = kra_port
-
         super(kra, self).__init__(api)
 
     @property
@@ -1993,17 +2044,18 @@ class kra(Backend):
 
         Select our KRA host.
         """
-        ldap2 = self.api.Backend.ldap2
-        if host_has_service(api.env.ca_host, ldap2, "KRA"):
-            return api.env.ca_host
+        preferred = [api.env.ca_host]
         if api.env.host != api.env.ca_host:
-            if host_has_service(api.env.host, ldap2, "KRA"):
-                return api.env.host
-        host = select_any_master(ldap2, "KRA")
-        if host:
-            return host
-        else:
-            return api.env.ca_host
+            preferred.append(api.env.host)
+
+        kra_host = find_providing_server(
+            'KRA', self.api.Backend.ldap2, preferred_hosts=preferred,
+            api=self.api
+        )
+        if kra_host is None:
+            # TODO: need during installation, KRA is not yet set as enabled
+            kra_host = api.env.ca_host
+        return kra_host
 
     @contextlib.contextmanager
     def get_client(self):

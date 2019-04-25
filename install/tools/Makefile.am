@@ -28,10 +28,12 @@ dist_noinst_DATA =		\
 	ipa-cacert-manage.in	\
 	ipa-winsync-migrate.in	\
 	ipa-pkinit-manage.in	\
+	ipa-crlgen-manage.in	\
 	ipa-custodia.in		\
 	ipa-custodia-check.in	\
 	ipa-httpd-kdcproxy.in	\
 	ipa-pki-retrieve-key.in	\
+	ipa-pki-wait-running.in	\
 	$(NULL)
 
 nodist_sbin_SCRIPTS =		\
@@ -58,6 +60,7 @@ nodist_sbin_SCRIPTS =		\
 	ipa-cacert-manage	\
 	ipa-winsync-migrate	\
 	ipa-pkinit-manage	\
+	ipa-crlgen-manage	\
 	$(NULL)
 
 appdir = $(libexecdir)/ipa/
@@ -66,6 +69,7 @@ nodist_app_SCRIPTS =		\
 	ipa-custodia-check	\
 	ipa-httpd-kdcproxy	\
 	ipa-pki-retrieve-key	\
+	ipa-pki-wait-running	\
 	$(NULL)
 
 dist_app_SCRIPTS =		\

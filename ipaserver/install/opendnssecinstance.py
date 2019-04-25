@@ -14,12 +14,14 @@ from subprocess import CalledProcessError
 
 from ipalib.install import sysrestore
 from ipaserver.install import service
+from ipaserver.masters import ENABLED_SERVICE
 from ipapython.dn import DN
 from ipapython import directivesetter
 from ipapython import ipautil
 from ipaplatform import services
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks
 from ipalib import errors, api
 from ipaserver import p11helper
 from ipalib.constants import SOFTHSM_DNSSEC_TOKEN_LABEL
@@ -45,7 +47,7 @@ def get_dnssec_key_masters(conn):
     filter_attrs = {
         u'cn': u'DNSSEC',
         u'objectclass': u'ipaConfigObject',
-        u'ipaConfigString': [KEYMASTER, u'enabledService'],
+        u'ipaConfigString': [KEYMASTER, ENABLED_SERVICE],
     }
     only_masters_f = conn.make_filter(filter_attrs, rules=conn.MATCH_ALL)
 
@@ -199,6 +201,11 @@ class OpenDNSSECInstance(service.Service):
         if not self.fstore.has_file(paths.SYSCONFIG_ODS):
             self.fstore.backup_file(paths.SYSCONFIG_ODS)
 
+        if not os.path.isfile(paths.SYSCONFIG_ODS):
+            # create file, it's not shipped on Debian
+            with open(paths.SYSCONFIG_ODS, 'a') as f:
+                os.fchmod(f.fileno(), 0o644)
+
         directivesetter.set_directive(paths.SYSCONFIG_ODS,
                                       'SOFTHSM2_CONF',
                                       paths.DNSSEC_SOFTHSM2_CONF,
@@ -281,24 +288,16 @@ class OpenDNSSECInstance(service.Service):
             os.chmod(paths.OPENDNSSEC_KASP_DB, 0o660)
 
             # regenerate zonelist.xml
-            cmd = [paths.ODS_KSMUTIL, 'zonelist', 'export']
-            result = ipautil.run(cmd,
-                                 runas=constants.ODS_USER,
-                                 capture_output=True)
-            with open(paths.OPENDNSSEC_ZONELIST_FILE, 'w') as zonelistf:
-                zonelistf.write(result.output)
-                os.chown(paths.OPENDNSSEC_ZONELIST_FILE,
-                         self.ods_uid, self.ods_gid)
-                os.chmod(paths.OPENDNSSEC_ZONELIST_FILE, 0o660)
-
+            result = tasks.run_ods_manager(
+                ['zonelist', 'export'], capture_output=True
+            )
+            with open(paths.OPENDNSSEC_ZONELIST_FILE, 'w') as f:
+                f.write(result.output)
+                os.fchown(f.fileno(), self.ods_uid, self.ods_gid)
+                os.fchmod(f.fileno(), 0o660)
         else:
             # initialize new kasp.db
-            command = [
-                paths.ODS_KSMUTIL,
-                'setup'
-            ]
-
-            ipautil.run(command, stdin="y", runas=constants.ODS_USER)
+            tasks.run_ods_setup()
 
     def __setup_dnskeysyncd(self):
         # set up dnskeysyncd this is DNSSEC master

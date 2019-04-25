@@ -43,6 +43,7 @@ from ipaserver.install.replication import (wait_for_task, ReplicationManager,
                                            get_cs_replication_manager)
 from ipaserver.install import installutils
 from ipaserver.install import dsinstance, httpinstance, cainstance, krbinstance
+from ipaserver.masters import get_masters
 from ipapython import ipaldap
 import ipapython.errors
 from ipaplatform.constants import constants
@@ -144,8 +145,12 @@ class Restore(admintool.AdminTool):
         paths.DNSSEC_TOKENS_DIR,
     ]
 
-    FILES_TO_BE_REMOVED = [
-        paths.HTTPD_NSS_CONF,
+    FILES_TO_BE_REMOVED = []
+
+    # files listed here cannot be removed and these files will be
+    # replaced with zero-length files
+    FILES_TO_BE_CLEARED = [
+        paths.HTTPD_NSS_CONF
     ]
 
     def __init__(self, options, args):
@@ -404,6 +409,7 @@ class Restore(admintool.AdminTool):
             # We do either a full file restore or we restore data.
             if restore_type == 'FULL':
                 self.remove_old_files()
+                self.clear_old_files()
                 self.cert_restore_prepare()
                 self.file_restore(options.no_logs)
                 self.cert_restore()
@@ -445,7 +451,7 @@ class Restore(admintool.AdminTool):
                 oddjobd.start()
                 http.remove_httpd_ccaches()
                 # have the daemons pick up their restored configs
-                run([paths.SYSTEMCTL, "--system", "daemon-reload"])
+                tasks.systemd_daemon_reload()
         finally:
             try:
                 os.chdir(cwd)
@@ -493,16 +499,7 @@ class Restore(admintool.AdminTool):
             logger.error('Unable to get connection, skipping disabling '
                          'agreements: %s', e)
             return
-        masters = []
-        dn = DN(('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
-        try:
-            entries = conn.get_entries(dn, conn.SCOPE_ONELEVEL)
-        except Exception as e:
-            raise admintool.ScriptError(
-                "Failed to read master data: %s" % e)
-        else:
-            masters = [ent.single_value['cn'] for ent in entries]
-
+        masters = get_masters(conn)
         for master in masters:
             if master == api.env.host:
                 continue
@@ -515,7 +512,8 @@ class Restore(admintool.AdminTool):
                                 master, e)
                 continue
 
-            master_dn = DN(('cn', master), ('cn', 'masters'), ('cn', 'ipa'), ('cn', 'etc'), api.env.basedn)
+            master_dn = DN(('cn', master), api.env.container_masters,
+                           api.env.basedn)
             try:
                 services = repl.conn.get_entries(master_dn,
                                                  repl.conn.SCOPE_ONELEVEL)
@@ -720,6 +718,17 @@ class Restore(admintool.AdminTool):
             except OSError as e:
                 if e.errno != 2:  # 2: file does not exist
                     logger.warning("Could not remove file: %s (%s)", f, e)
+
+    def clear_old_files(self):
+        """
+        Replace exist files that cannot be removed with zero-length files
+        before backup
+        """
+        for f in self.FILES_TO_BE_CLEARED:
+            if os.access(f, os.W_OK):
+                open(f, 'w').close()
+            else:
+                logger.warning('Could not open file for writing: %s', f)
 
     def file_restore(self, nologs=False):
         '''

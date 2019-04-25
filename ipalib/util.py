@@ -75,6 +75,39 @@ else:
 if six.PY3:
     unicode = str
 
+    from shutil import which  # pylint: disable=no-name-in-module
+else:
+    def which(cmd):
+        """ Port of `which` function to python 2, it is a simplifed version
+        of `shutil.which` from python 3.3+
+
+        :param cmd: shell command
+        :type cmd: str
+        :return: path to the executable if it exists otherwise None
+        :rtype: str or None
+        """
+        def _check_path(fpath):
+            return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+        # if cmd is actually a path to the executable, check it
+        if os.path.dirname(cmd):
+            if _check_path(cmd):
+                return cmd
+            return None
+
+        path = os.environ.get('PATH', os.defpath)
+        path = path.split(os.pathsep)
+
+        seen = set()
+        for _dir in path:
+            if _dir not in seen:
+                seen.add(_dir)
+                fpath = os.path.join(_dir, cmd)
+                if _check_path(fpath):
+                    return fpath
+
+        return None
+
 _IPA_CLIENT_SYSRESTORE = "/var/lib/ipa-client/sysrestore"
 _IPA_DEFAULT_CONF = "/etc/ipa/default.conf"
 
@@ -1122,15 +1155,16 @@ def ensure_krbcanonicalname_set(ldap, entry_attrs):
     entry_attrs.update(old_entry)
 
 
-def check_client_configuration():
+def check_client_configuration(env=None):
     """
     Check if IPA client is configured on the system.
 
     Hardcode return code to avoid recursive imports
     """
-    if (not os.path.isfile(paths.IPA_DEFAULT_CONF) or
+    if ((env is not None and not os.path.isfile(env.conf_default)) or
+       (not os.path.isfile(paths.IPA_DEFAULT_CONF) or
             not os.path.isdir(paths.IPA_CLIENT_SYSRESTORE) or
-            not os.listdir(paths.IPA_CLIENT_SYSRESTORE)):
+            not os.listdir(paths.IPA_CLIENT_SYSRESTORE))):
         raise ScriptError('IPA client is not configured on this system',
                           2)  # CLIENT_NOT_CONFIGURED
 
@@ -1203,17 +1237,27 @@ def get_terminal_height(fd=1):
         return os.environ.get("LINES", 25)
 
 
-def open_in_pager(data):
+def get_pager():
+    """ Get path to a pager
+
+    :return: path to the file if it exists otherwise None
+    :rtype: str or None
+    """
+    pager = os.environ.get('PAGER', 'less')
+    return which(pager)
+
+
+def open_in_pager(data, pager):
     """
     Open text data in pager
 
     Args:
         data (bytes): data to view in pager
+        pager (str): path to the pager
 
     Returns:
         None
     """
-    pager = os.environ.get("PAGER", "less")
     pager_process = subprocess.Popen([pager], stdin=subprocess.PIPE)
 
     try:

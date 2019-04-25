@@ -24,10 +24,12 @@ This module contains default platform-specific implementations of system tasks.
 
 from __future__ import absolute_import
 
+import os
 import logging
 
 from pkg_resources import parse_version
 
+from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipapython import ipautil
 
@@ -105,6 +107,14 @@ class BaseTaskNamespace(object):
         """Check whether IPv6 kernel module is loaded"""
 
         raise NotImplementedError()
+
+    def detect_container(self):
+        """Check if running inside a container
+
+        :returns: container runtime or None
+        :rtype: str, None
+        """
+        raise NotImplementedError
 
     def restore_hostname(self, fstore, statestore):
         """
@@ -242,6 +252,78 @@ class BaseTaskNamespace(object):
 
     def setup_httpd_logging(self):
         raise NotImplementedError()
+
+    def systemd_daemon_reload(self):
+        """Tell systemd to reload config files"""
+        raise NotImplementedError
+
+    def configure_dns_resolver(self, nameservers, searchdomains, fstore=None):
+        """Configure global DNS resolver (e.g. /etc/resolv.conf)
+
+        :param nameservers: list of IP addresses
+        :param searchdomains: list of search domaons
+        :param fstore: optional file store for backup
+        """
+        raise NotImplementedError
+
+    def unconfigure_dns_resolver(self, fstore=None):
+        """Unconfigure global DNS resolver (e.g. /etc/resolv.conf)
+
+        :param fstore: optional file store for restore
+        """
+        if fstore is not None and fstore.has_file(paths.RESOLV_CONF):
+            fstore.restore_file(paths.RESOLV_CONF)
+
+    def run_ods_setup(self):
+        """Initialize a new kasp.db
+        """
+        if paths.ODS_KSMUTIL is not None:
+            cmd = [paths.ODS_KSMUTIL, 'setup']
+        else:
+            cmd = [paths.ODS_ENFORCER_DB_SETUP]
+        return ipautil.run(cmd, stdin="y", runas=constants.ODS_USER)
+
+    def run_ods_manager(self, params, **kwargs):
+        """Run OpenDNSSEC manager command (ksmutil, enforcer)
+
+        :param params: parameter for ODS command
+        :param kwargs: additional arguments for ipautil.run()
+        :return: result from ipautil.run()
+        """
+        assert params[0] != 'setup'
+
+        if paths.ODS_KSMUTIL is not None:
+            # OpenDNSSEC 1.4
+            cmd = [paths.ODS_KSMUTIL]
+        else:
+            # OpenDNSSEC 2.x
+            cmd = [paths.ODS_ENFORCER]
+        cmd.extend(params)
+
+        # run commands as ODS user
+        if os.geteuid() == 0:
+            kwargs['runas'] = constants.ODS_USER
+
+        return ipautil.run(cmd, **kwargs)
+
+    def configure_pkcs11_modules(self, fstore):
+        """Disable p11-kit modules
+
+        The p11-kit configuration injects p11-kit-proxy into all NSS
+        databases. Amongst other p11-kit loads SoftHSM2 PKCS#11 provider.
+        This interferes with 389-DS, certmonger, Dogtag and other services.
+        For example certmonger tries to open OpenDNSSEC's SoftHSM2 token,
+        although it doesn't use it at all. It also breaks Dogtag HSM support
+        testing with SoftHSM2.
+
+        IPA server does neither need nor use SoftHSM2 proxied by p11-kit.
+        """
+        raise NotImplementedError
+
+    def restore_pkcs11_modules(self, fstore):
+        """Restore global p11-kit modules for NSS
+        """
+        raise NotImplementedError
 
 
 tasks = BaseTaskNamespace()

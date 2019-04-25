@@ -133,6 +133,8 @@ daemons/dnssec/ipa-ods-exporter
 install/certmonger/dogtag-ipa-ca-renew-agent-submit
 install/certmonger/ipa-server-guard
 install/oddjob/com.redhat.idm.trust-fetch-domains
+install/oddjob/etc/oddjobd.conf.d/ipa-server.conf
+install/oddjob/etc/oddjobd.conf.d/oddjobd-ipa-trust.conf
 install/restart_scripts/renew_ca_cert
 install/restart_scripts/renew_kdc_cert
 install/restart_scripts/renew_ra_cert
@@ -148,6 +150,7 @@ install/tools/ipa-ca-install
 install/tools/ipa-compat-manage
 install/tools/ipa-csreplica-manage
 install/tools/ipactl
+install/tools/ipa-crlgen-manage
 install/tools/ipa-custodia
 install/tools/ipa-custodia-check
 install/tools/ipa-dns-install
@@ -159,6 +162,7 @@ install/tools/ipa-nis-manage
 install/tools/ipa-otptoken-import
 install/tools/ipa-pkinit-manage
 install/tools/ipa-pki-retrieve-key
+install/tools/ipa-pki-wait-running
 install/tools/ipa-replica-conncheck
 install/tools/ipa-replica-install
 install/tools/ipa-replica-manage
