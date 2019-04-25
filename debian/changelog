@@ -1,3 +1,9 @@
+freeipa (4.7.2+git20190424-1) UNRELEASED; urgency=medium
+
+  * Sync with upstream ipa-4-7 -branch.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Fri, 26 Apr 2019 00:12:20 +0300
+
 freeipa (4.7.2-2+exp1) experimental; urgency=medium
 
   * rules: Build the server for experimental.
