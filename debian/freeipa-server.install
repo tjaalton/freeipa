@@ -34,6 +34,7 @@ usr/lib/ipa/ipa-httpd-pwdreader
 usr/lib/ipa/ipa-ods-exporter
 usr/lib/ipa/ipa-otpd
 usr/lib/ipa/ipa-pki-retrieve-key
+usr/lib/ipa/ipa-pki-wait-running
 usr/lib/ipa/oddjob/org.freeipa.server.conncheck
 usr/lib/tmpfiles.d/ipa.conf
 usr/sbin/ipa-advise
@@ -41,6 +42,7 @@ usr/sbin/ipa-backup
 usr/sbin/ipa-ca-install
 usr/sbin/ipa-cacert-manage
 usr/sbin/ipa-compat-manage
+usr/sbin/ipa-crlgen-manage
 usr/sbin/ipa-csreplica-manage
 usr/sbin/ipa-kra-install
 usr/sbin/ipa-ldap-updater
@@ -78,6 +80,7 @@ usr/share/man/man1/ipa-backup.1*
 usr/share/man/man1/ipa-ca-install.1*
 usr/share/man/man1/ipa-cacert-manage.1*
 usr/share/man/man1/ipa-compat-manage.1*
+usr/share/man/man1/ipa-crlgen-manage.1*
 usr/share/man/man1/ipa-csreplica-manage.1*
 usr/share/man/man1/ipa-kra-install.1*
 usr/share/man/man1/ipa-ldap-updater.1*

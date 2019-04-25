@@ -36,6 +36,7 @@ usr/lib/python*/dist-packages/ipaserver/install/server/*
 usr/lib/python*/dist-packages/ipaserver/install/service.py
 usr/lib/python*/dist-packages/ipaserver/install/sysupgrade.py
 usr/lib/python*/dist-packages/ipaserver/install/upgradeinstance.py
+usr/lib/python*/dist-packages/ipaserver/masters.py
 usr/lib/python*/dist-packages/ipaserver/p11helper.py
 usr/lib/python*/dist-packages/ipaserver/plugins/*
 usr/lib/python*/dist-packages/ipaserver/rpcserver*
