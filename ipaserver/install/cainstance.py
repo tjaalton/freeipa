@@ -717,6 +717,7 @@ class CAInstance(DogtagInstance):
         if not os.path.isdir(directory):
             os.mkdir(directory)
         with open(conf, 'w') as f:
+            os.fchmod(f.fileno(), 0o644)
             f.write('[Service]\n')
             f.write('ExecStartPost={}\n'.format(paths.IPA_PKI_WAIT_RUNNING))
         tasks.systemd_daemon_reload()
@@ -1084,7 +1085,9 @@ class CAInstance(DogtagInstance):
         # cause files to have a new owner.
         self.restore_state("user_exists")
 
-        services.knownservices.dbus.start()
+        if not services.knownservices.dbus.is_running():
+            # some platforms protect dbus with RefuseManualStart=True
+            services.knownservices.dbus.start()
         cmonger = services.knownservices.certmonger
         cmonger.start()
 
