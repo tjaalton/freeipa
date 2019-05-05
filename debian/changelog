@@ -1,4 +1,4 @@
-freeipa (4.7.2+git20190424-1) UNRELEASED; urgency=medium
+freeipa (4.7.2+git20190502-1) UNRELEASED; urgency=medium
 
   * Sync with upstream ipa-4-7 -branch.
   * Drop upstreamed patches.
