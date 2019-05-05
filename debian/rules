@@ -3,6 +3,7 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+include /usr/share/dpkg/pkg-info.mk
 DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
 # build server only where nodejs is available
@@ -32,12 +33,10 @@ confflags += --enable-server \
 endif
 
 # For maintainer use only, generate a tarball:
-SOURCE = freeipa
-gentarball: UV=$(shell dpkg-parsechangelog|awk '/^Version:/ {print $$2}'|sed 's/-.*$$//')
 gentarball:
-	git archive --format=tar upstream-next --prefix=$(SOURCE)-$(UV)/ | \
-		xz --best \
-		> ../$(SOURCE)_$(UV).orig.tar.xz
+	tar --transform 's,^,$(DEB_SOURCE)-$(DEB_VERSION_UPSTREAM)/,' \
+		--exclude './debian' --exclude-vcs \
+		-cJf ../$(DEB_SOURCE)_$(DEB_VERSION_UPSTREAM).orig.tar.xz .
 
 gencontrol:
 ifeq ($(ONLY_CLIENT), 1)

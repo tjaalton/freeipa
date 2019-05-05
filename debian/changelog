@@ -4,6 +4,7 @@ freeipa (4.7.2+git20190502-1) UNRELEASED; urgency=medium
   * Drop upstreamed patches.
   * install: Updated.
   * fix-ods-conf-template.diff: Drop an obsolete conf option.
+  * rules: Rework gentarball target.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 26 Apr 2019 00:12:20 +0300
 
