@@ -1,3 +1,9 @@
+freeipa (4.7.2-3) UNRELEASED; urgency=medium
+
+  * control: Move python-jwcrypto to python-ipaserver depends.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Mon, 06 May 2019 08:43:19 +0300
+
 freeipa (4.7.2-2) unstable; urgency=medium
 
   * tests: Disabled, they are for the server.
