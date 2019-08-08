@@ -12,3 +12,9 @@ extend-diff-ignore = .freeipa-pr-ci.yaml|.test_runner_config*|.travis*
 extend-diff-ignore = .tox-install.sh|pypi/test_placeholder.py|tox.ini
 # docs
 extend-diff-ignore = CODE_OF_CONDUCT.md|freeipa.doap.rdf
+# azure stuff
+extend-diff-ignore = ipatests/azure
+# LGTM
+extend-diff-ignore = .lgtm.yml
+# probably a mistake
+extend-diff-ignore = install/updates/30-ipservices.update|install/updates/75-user-trust-attributes.update

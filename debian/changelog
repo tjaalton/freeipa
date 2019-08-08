@@ -8,6 +8,7 @@ freeipa (4.8.0-1) UNRELEASED; urgency=medium
   * control: Bump policy to 4.4.0.
   * Bump debhelper compat to 12.
   * Migrate to python3.
+  * d/s/local-options: Updated.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 26 Apr 2019 00:12:20 +0300
 
