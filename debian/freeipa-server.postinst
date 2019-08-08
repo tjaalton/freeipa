@@ -1,0 +1,118 @@
+#!/bin/sh
+set -e
+
+OUT=/dev/null
+
+if [ "$1" = configure ]; then
+    if ! getent passwd kdcproxy  > $OUT; then
+        adduser --quiet --system --home / \
+            --shell /usr/sbin/nologin --group \
+            --no-create-home --gecos "IPA KDC Proxy User" \
+            kdcproxy > $OUT
+    fi
+    if ! getent passwd ipaapi  > $OUT; then
+        adduser --quiet --system --home / \
+            --shell /usr/sbin/nologin --group \
+            --no-create-home --gecos "IPA Framework User" \
+            ipaapi > $OUT
+    fi
+
+    # fix upgrade
+    if dpkg --compare-versions "$2" lt "4.7.0~pre2-1"; then
+        # mod_nss needs to be disabled before mod_ssl is enabled
+        if [ -e /etc/apache2/mods-enabled/nss.load ]; then
+            . /usr/share/apache2/apache2-maintscript-helper
+            apache2_invoke dismod nss || exit $?
+            # and if that's not enough, just remove the links to be sure
+            rm /etc/apache2/mods-enabled/nss.load /etc/apache2/mods-enabled/nss.conf
+        fi
+
+        # this is new in tmpfiles.d/ipa.conf, need to create it here
+        # for the upgrader
+        if [ ! -e /var/run/ipa/ccaches ]; then
+            mkdir /var/run/ipa/ccaches
+            chown ipaapi:ipaapi /var/run/ipa/ccaches
+            chmod 770 /var/run/ipa/ccaches
+        fi
+    fi
+
+    chmod 711 /var/lib/ipa/sysrestore > $OUT || true
+    chmod 700 /var/lib/ipa/passwds > $OUT || true
+    chmod 700 /var/lib/ipa/private > $OUT || true
+
+    # add www-data to ipaapi group
+    if ! id -Gn www-data | grep '\bipaapi\b' >/dev/null; then
+        usermod www-data -a -G ipaapi
+    fi
+
+    if [ -e /usr/share/apache2/apache2-maintscript-helper ]; then
+        . /usr/share/apache2/apache2-maintscript-helper
+	if [ ! -e /etc/apache2/mods-enabled/auth_gssapi.load ]; then
+            apache2_invoke enmod auth_gssapi || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/authz_user.load ]; then
+            apache2_invoke enmod authz_user || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/deflate.load ]; then
+            apache2_invoke enmod deflate || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/expires.load ]; then
+            apache2_invoke enmod expires || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/headers.load ]; then
+            apache2_invoke enmod headers || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/lookup_identity.load ]; then
+            apache2_invoke enmod lookup_identity || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy.load ]; then
+            apache2_invoke enmod proxy || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy_ajp.load ]; then
+            apache2_invoke enmod proxy_ajp || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/proxy_http.load ]; then
+            apache2_invoke enmod proxy_http || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/rewrite.load ]; then
+            apache2_invoke enmod rewrite || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/session.load ]; then
+            apache2_invoke enmod session || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/session_cookie.load ]; then
+            apache2_invoke enmod session_cookie || exit $?
+        fi
+	if [ ! -e /etc/apache2/mods-enabled/ssl.load ]; then
+            apache2_invoke enmod ssl || exit $?
+        fi
+
+	# Enable default SSL site
+	if [ ! -e /etc/apache2/sites-enabled/default-ssl.conf ]; then
+            apache2_invoke ensite default-ssl || exit $?
+        fi
+    fi
+
+    # check if IPA is set up
+    is_configured=`python2 -c 'from ipaserver.install import installutils; print "yes" if installutils.is_ipa_configured() else "no";'`
+    if [ $is_configured = yes ]; then
+        echo "Running ipa-server-upgrade..."
+        ipa-server-upgrade --quiet >/dev/null
+    fi
+fi
+
+if [ ! -e /run/apache2/ipa ]; then
+    mkdir -m 0700 /run/apache2/ipa
+    chown www-data:www-data /run/apache2/ipa
+
+    if [ ! -e /run/apache2/ipa/clientcaches ]; then
+        mkdir -m 0700 /run/apache2/ipa/clientcaches
+        chown www-data:www-data /run/apache2/ipa/clientcaches
+    fi
+    if [ ! -e /run/apache2/ipa/krbcache ]; then
+        mkdir -m 0700 /run/apache2/ipa/krbcache
+        chown www-data:www-data /run/apache2/ipa/krbcache
+    fi
+fi
+
+#DEBHELPER#

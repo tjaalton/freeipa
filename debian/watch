@@ -1,0 +1,3 @@
+version=3
+#options=dversionmangle=s/\+dfsg$//,uversionmangle=s/$/+dfsg1/,compression=xz \
+https://releases.pagure.org/freeipa/freeipa-(.+).tar.gz

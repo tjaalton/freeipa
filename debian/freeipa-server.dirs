@@ -1,0 +1,6 @@
+etc/ipa/custodia
+etc/ipa/dnssec
+var/lib/ipa/backup
+var/lib/ipa/certs
+var/lib/ipa/passwds
+var/lib/ipa/private

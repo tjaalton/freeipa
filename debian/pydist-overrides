@@ -1,0 +1,3 @@
+dbus_python python-dbus
+dogtag_pki pki-server
+jwcrpyto python-jwcrypto
