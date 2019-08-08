@@ -93,6 +93,10 @@ endif
 	find $(CURDIR)/debian/tmp -name "*.mo" -type f -exec chmod -x "{}" \;
 	# remove files which are useful only for make uninstall
 	find $(CURDIR)/debian/tmp -wholename '*/dist-packages/*/install_files.txt' -exec rm '{}' \;
+	# fix the interpreter
+	find debian/tmp ! -name '*.pyc' -a ! -name '*.pyo' -a \
+	    -type f -exec grep -qsm1 '^#!.*\bpython' {} \; \
+	    -exec sed -i -e '1 s|^#!.*\bpython[^ ]*|#!/usr/bin/python3|' {} \;
 
 override_dh_missing:
 	dh_missing --fail-missing
