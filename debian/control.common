@@ -57,6 +57,26 @@ Description: FreeIPA centralized identity framework -- client
  .
  This is the client package.
 
+Package: freeipa-client-samba
+Architecture: any
+Depends:
+ cifs-utils,
+ freeipa-client (= ${source:Version}),
+ libwbclient-sssd,
+ python3-samba,
+ samba-common-bin,
+ smbclient,
+ tdb-tools,
+ winbind,
+Description: FreeIPA centralized identity framework -- tools to configure samba on IPA client
+ FreeIPA is an integrated solution to provide centrally managed Identity
+ (machine, user, virtual machines, groups, authentication credentials), Policy
+ (configuration settings, access control information) and Audit (events,
+ logs, analysis thereof).
+ .
+ This package provides command-line tools to deploy Samba domain member
+ on the machine enrolled into a FreeIPA environment.
+
 Package: python3-ipaclient
 Architecture: all
 Section: python
