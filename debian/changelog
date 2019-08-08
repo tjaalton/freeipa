@@ -11,6 +11,7 @@ freeipa (4.8.0-1) UNRELEASED; urgency=medium
   * d/s/local-options: Updated.
   * install: Updated.
   * control, install: Add freeipa-client-samba.
+  * d/pydist-overrides: Updated.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Fri, 26 Apr 2019 00:12:20 +0300
 
