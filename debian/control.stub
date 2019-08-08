@@ -9,7 +9,7 @@ Vcs-Browser: https://salsa.debian.org/freeipa-team/freeipa
 Homepage: http://www.freeipa.org
 Build-Depends:
  check,
- debhelper (>= 11),
+ debhelper (>= 12),
  dh-python,
  gettext,
  krb5-user,
