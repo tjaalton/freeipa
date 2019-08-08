@@ -34,17 +34,17 @@ Depends:
  p11-kit,
  pki-ca (>= 10.6.0~),
  pki-kra (>= 10.6.0~),
- python-dateutil,
- python-ipaserver (= ${source:Version}),
- python-gssapi,
- python-ldap (>= 2.4.22),
- python-systemd,
+ python3-dateutil,
+ python3-ipaserver (= ${source:Version}),
+ python3-gssapi,
+ python3-ldap (>= 2.4.22),
+ python3-systemd,
  slapi-nis (>= 0.56.1),
  softhsm2 (>= 2.1.0-2),
  sssd-dbus,
  systemd-sysv,
  ${misc:Depends},
- ${python:Depends},
+ ${python3:Depends},
  ${shlibs:Depends}
 Recommends:
  freeipa-server-dns,
@@ -66,7 +66,7 @@ Depends:
  bind9-dyndb-ldap (>= 11.1-3),
  opendnssec (>= 1:1.4.9-2),
  ${misc:Depends},
- ${python:Depends},
+ ${python3:Depends},
  ${shlibs:Depends}
 Description: FreeIPA centralized identity framework -- IPA DNS integration
  FreeIPA is an integrated solution to provide centrally managed Identity
@@ -81,12 +81,12 @@ Architecture: amd64 arm64 armhf i386 mips mips64el mipsel ppc64 ppc64el s390x
 Depends:
  freeipa-common (= ${source:Version}),
  freeipa-server (= ${binary:Version}),
- python-ipaserver (= ${source:Version}),
- python-samba,
+ python3-ipaserver (= ${source:Version}),
+ python3-samba,
  samba,
  winbind,
  ${misc:Depends},
- ${python:Depends},
+ ${python3:Depends},
  ${shlibs:Depends}
 Description: FreeIPA centralized identity framework -- AD trust installer
  FreeIPA is an integrated solution to provide centrally managed Identity
@@ -102,12 +102,12 @@ Package: freeipa-tests
 Architecture: all
 Depends:
  freeipa-client (>= ${source:Version}),
- python-ipalib (>= ${source:Version}),
- python-ipatests (>= ${source:Version}),
- python-pytest,
+ python3-ipalib (>= ${source:Version}),
+ python3-ipatests (>= ${source:Version}),
+ python3-pytest,
  ${misc:Depends},
- ${python:Depends}
-Recommends: python-yaml
+ ${python3:Depends}
+Recommends: python3-yaml
 Description: FreeIPA centralized identity framework -- tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
@@ -116,7 +116,7 @@ Description: FreeIPA centralized identity framework -- tests
  .
  This package contains tests that verify IPA functionality.
 
-Package: python-ipaserver
+Package: python3-ipaserver
 Architecture: all
 Section: python
 Breaks: freeipa-server (<< 4.3.0-1),
@@ -126,55 +126,55 @@ Replaces: freeipa-server (<< 4.3.0-1),
 Depends:
  freeipa-common (= ${binary:Version}),
  pki-tools (>= 10.2.6-3),
- python-custodia (>= 0.5.0),
- python-dbus,
- python-dnspython,
- python-gssapi,
- python-ipaclient (= ${binary:Version}),
- python-ipalib (>= ${source:Version}),
- python-jwcrypto,
- python-kdcproxy,
- python-ldap (>= 2.4.22),
- python-libsss-nss-idmap,
- python-pyasn1,
- python-sss,
+ python3-custodia (>= 0.5.0),
+ python3-dbus,
+ python3-dnspython,
+ python3-gssapi,
+ python3-ipaclient (= ${binary:Version}),
+ python3-ipalib (>= ${source:Version}),
+ python3-jwcrypto,
+ python3-kdcproxy,
+ python3-ldap (>= 2.4.22),
+ python3-libsss-nss-idmap,
+ python3-pyasn1,
+ python3-sss,
  samba-common,
  zip,
  ${misc:Depends},
- ${python:Depends},
-Description: FreeIPA centralized identity framework -- Python modules for server
+ ${python3:Depends},
+Description: FreeIPA centralized identity framework -- Python3 modules for server
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
  (configuration settings, access control information) and Audit (events,
  logs, analysis thereof).
  .
- This Python module is used by FreeIPA server.
+ This Python3 module is used by FreeIPA server.
 
-Package: python-ipatests
+Package: python3-ipatests
 Architecture: all
 Section: python
 Breaks: freeipa-tests (<< 4.3.0-1)
 Replaces: freeipa-tests (<< 4.3.0-1)
 Depends:
  libnss3-tools,
- python-coverage,
- python-ipalib (>= ${source:Version}),
- python-mock,
- python-paramiko,
- python-paste,
- python-polib,
- python-pytest-multihost,
- python-pytest-sourceorder,
- python-sss,
+ python3-coverage,
+ python3-ipalib (>= ${source:Version}),
+ python3-mock,
+ python3-paramiko,
+ python3-paste,
+ python3-polib,
+ python3-pytest-multihost,
+ python3-pytest-sourceorder,
+ python3-sss,
  xz-utils,
  ${misc:Depends},
- ${python:Depends}
-Recommends: python-yaml
-Description: FreeIPA centralized identity framework -- Python modules for tests
+ ${python3:Depends}
+Recommends: python3-yaml
+Description: FreeIPA centralized identity framework -- Python3 modules for tests
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
  (configuration settings, access control information) and Audit (events,
  logs, analysis thereof).
  .
- This Python module is used by FreeIPA tests.
+ This Python3 module is used by FreeIPA tests.
 
