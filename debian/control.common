@@ -95,7 +95,6 @@ Depends:
  python-dbus,
  python-dnspython,
  python-gssapi,
- python-jwcrypto,
  python-ldap,
  python-libipa-hbac,
  python-lxml,

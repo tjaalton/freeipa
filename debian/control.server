@@ -132,6 +132,7 @@ Depends:
  python-gssapi,
  python-ipaclient (= ${binary:Version}),
  python-ipalib (>= ${source:Version}),
+ python-jwcrypto,
  python-kdcproxy,
  python-ldap (>= 2.4.22),
  python-libsss-nss-idmap,
