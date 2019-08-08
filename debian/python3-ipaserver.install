@@ -22,6 +22,7 @@ usr/lib/python*/dist-packages/ipaserver/install/dsinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/httpinstance.py
 usr/lib/python*/dist-packages/ipaserver/install/installutils.py
 usr/lib/python*/dist-packages/ipaserver/install/ipa_*.py
+usr/lib/python*/dist-packages/ipaserver/install/ipactl.py
 usr/lib/python*/dist-packages/ipaserver/install/kra.py
 usr/lib/python*/dist-packages/ipaserver/install/krainstance.py
 usr/lib/python*/dist-packages/ipaserver/install/krbinstance.py
