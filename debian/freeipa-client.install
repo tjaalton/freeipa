@@ -1,3 +1,4 @@
+etc/default/certmonger
 usr/bin/ipa
 usr/sbin/ipa-certupdate
 usr/sbin/ipa-client-automount

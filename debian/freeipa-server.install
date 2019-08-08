@@ -25,6 +25,10 @@ usr/lib/*/krb5/plugins/kdb/*.so
 usr/lib/certmonger/dogtag-ipa-ca-renew-agent-submit
 usr/lib/certmonger/ipa-server-guard
 usr/lib/ipa/certmonger/*
+usr/lib/ipa/custodia/ipa-custodia-dmldap
+usr/lib/ipa/custodia/ipa-custodia-pki-tomcat
+usr/lib/ipa/custodia/ipa-custodia-pki-tomcat-wrapped
+usr/lib/ipa/custodia/ipa-custodia-ra-agent
 usr/lib/ipa/ipa-custodia
 usr/lib/ipa/ipa-custodia-check
 usr/lib/ipa/ipa-dnskeysync-replica
@@ -41,6 +45,7 @@ usr/sbin/ipa-advise
 usr/sbin/ipa-backup
 usr/sbin/ipa-ca-install
 usr/sbin/ipa-cacert-manage
+usr/sbin/ipa-cert-fix
 usr/sbin/ipa-compat-manage
 usr/sbin/ipa-crlgen-manage
 usr/sbin/ipa-csreplica-manage
@@ -65,6 +70,7 @@ usr/share/ipa/*.uldif
 usr/share/ipa/advise/legacy/*.template
 usr/share/ipa/gssapi.login
 usr/share/ipa/html/*
+usr/share/ipa/ipaca_*.ini
 usr/share/ipa/ipakrb5.aug
 usr/share/ipa/kdcproxy.wsgi
 usr/share/ipa/migration/*
@@ -79,6 +85,7 @@ usr/share/man/man1/ipa-advise.1*
 usr/share/man/man1/ipa-backup.1*
 usr/share/man/man1/ipa-ca-install.1*
 usr/share/man/man1/ipa-cacert-manage.1*
+usr/share/man/man1/ipa-cert-fix.1*
 usr/share/man/man1/ipa-compat-manage.1*
 usr/share/man/man1/ipa-crlgen-manage.1*
 usr/share/man/man1/ipa-csreplica-manage.1*
