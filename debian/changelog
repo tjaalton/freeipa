@@ -1,3 +1,9 @@
+freeipa (4.8.1-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Sat, 07 Sep 2019 23:25:24 +0300
+
 freeipa (4.8.0-1) experimental; urgency=medium
 
   * New upstream release.
