@@ -414,13 +414,13 @@ def master_authoritative_for_client_domain(master, client):
     return result.returncode == 0
 
 
-def config_replica_resolvconf_with_master_data(master, replica):
+def config_host_resolvconf_with_master_data(master, host):
     """
-    Configure replica /etc/resolv.conf to use master as DNS server
+    Configure host /etc/resolv.conf to use master as DNS server
     """
     content = ('search {domain}\nnameserver {master_ip}'
                .format(domain=master.domain.name, master_ip=master.ip))
-    replica.put_file_contents(paths.RESOLV_CONF, content)
+    host.put_file_contents(paths.RESOLV_CONF, content)
 
 
 def install_replica(master, replica, setup_ca=True, setup_dns=False,
@@ -498,8 +498,8 @@ def install_replica(master, replica, setup_ca=True, setup_dns=False,
     return result
 
 
-def install_client(master, client, extra_args=(),
-                   user=None, password=None):
+def install_client(master, client, extra_args=[], user=None,
+                   password=None, unattended=True, stdin_text=None):
     client.collect_log(paths.IPACLIENT_INSTALL_LOG)
 
     apply_common_fixes(client)
@@ -516,14 +516,21 @@ def install_client(master, client, extra_args=(),
     if password is None:
         password = client.config.admin_password
 
-    result = client.run_command([
-        'ipa-client-install', '-U',
+    args = [
+        'ipa-client-install',
         '--domain', client.domain.name,
         '--realm', client.domain.realm,
         '-p', user,
         '-w', password,
-        '--server', master.hostname] + list(extra_args)
-    )
+        '--server', master.hostname
+    ]
+
+    if unattended:
+        args.append('-U')
+
+    args.extend(extra_args)
+
+    result = client.run_command(args, stdin_text=stdin_text)
 
     setup_sssd_debugging(client)
     kinit_admin(client)
@@ -1689,7 +1696,7 @@ def add_dns_zone(master, zone, skip_overlap_check=False,
 
 def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name,
                           root_ca_path_length=None, ipa_ca_path_length=1,
-                          key_size=None,):
+                          key_size=None, root_ca_extensions=()):
     """
     Sign ipa csr and save signed CA together with root CA back to the host.
     Returns root CA and IPA CA paths on the host.
@@ -1702,7 +1709,10 @@ def sign_ca_and_transport(host, csr_name, root_ca_name, ipa_ca_name,
 
     external_ca = ExternalCA(key_size=key_size)
     # Create root CA
-    root_ca = external_ca.create_ca(path_length=root_ca_path_length)
+    root_ca = external_ca.create_ca(
+        path_length=root_ca_path_length,
+        extensions=root_ca_extensions,
+    )
     # Sign CSR
     ipa_ca = external_ca.sign_csr(ipa_csr, path_length=ipa_ca_path_length)
 
@@ -1814,3 +1824,11 @@ def ldapsearch_dm(host, base, ldap_args, scope='sub', **kwargs):
     ]
     args.extend(ldap_args)
     return host.run_command(args, **kwargs)
+
+
+def create_temp_file(host, directory=None):
+    """Creates temproray file using mktemp."""
+    cmd = ['mktemp']
+    if directory is not None:
+        cmd += ['-p', directory]
+    return host.run_command(cmd).stdout_text

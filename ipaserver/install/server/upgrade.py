@@ -5,6 +5,7 @@
 from __future__ import print_function, absolute_import
 
 import errno
+import itertools
 import logging
 import re
 import os
@@ -20,6 +21,7 @@ from augeas import Augeas
 import dns.exception
 
 from ipalib import api, x509
+from ipalib.constants import RENEWAL_CA_NAME, RA_AGENT_PROFILE
 from ipalib.install import certmonger, sysrestore
 import SSSDConfig
 import ipalib.util
@@ -964,7 +966,7 @@ def named_add_crypto_policy():
     return True
 
 
-def certificate_renewal_update(ca, ds, http):
+def certificate_renewal_update(ca, kra, ds, http):
     """
     Update certmonger certificate renewal configuration.
     """
@@ -972,56 +974,34 @@ def certificate_renewal_update(ca, ds, http):
     template = paths.CERTMONGER_COMMAND_TEMPLATE
     serverid = ipaldap.realm_to_serverid(api.env.realm)
 
-    requests = [
-        {
+    requests = []
+
+    dogtag_reqs = ca.tracking_reqs.items()
+    if kra.is_installed():
+        dogtag_reqs = itertools.chain(dogtag_reqs, kra.tracking_reqs.items())
+
+    for nick, profile in dogtag_reqs:
+        req = {
             'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'auditSigningCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
+            'cert-nickname': nick,
+            'ca-name': RENEWAL_CA_NAME,
             'cert-presave-command': template % 'stop_pkicad',
             'cert-postsave-command':
-                (template % 'renew_ca_cert "auditSigningCert cert-pki-ca"'),
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'ocspSigningCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "ocspSigningCert cert-pki-ca"'),
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'subsystemCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "subsystemCert cert-pki-ca"'),
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'caSigningCert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "caSigningCert cert-pki-ca"'),
-            'template-profile': None,
-        },
-        {
-            'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
-            'cert-nickname': 'Server-Cert cert-pki-ca',
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
-            'cert-presave-command': template % 'stop_pkicad',
-            'cert-postsave-command':
-                (template % 'renew_ca_cert "Server-Cert cert-pki-ca"'),
-        },
+                (template % 'renew_ca_cert "{}"'.format(nick)),
+            'template-profile': profile,
+        }
+        requests.append(req)
+
+    requests.append(
         {
             'cert-file': paths.RA_AGENT_PEM,
             'key-file': paths.RA_AGENT_KEY,
-            'ca-name': 'dogtag-ipa-ca-renew-agent',
+            'ca-name': RENEWAL_CA_NAME,
+            'template-profile': RA_AGENT_PROFILE,
             'cert-presave-command': template % 'renew_ra_cert_pre',
             'cert-postsave-command': template % 'renew_ra_cert',
         },
-    ]
+    )
 
     logger.info("[Update certmonger certificate renewal configuration]")
     if not ca.is_configured():
@@ -1034,7 +1014,7 @@ def certificate_renewal_update(ca, ds, http):
         requests.append(
             {
                 'cert-file': paths.HTTPD_CERT_FILE,
-                'key-storage': paths.HTTPD_KEY_FILE,
+                'key-file': paths.HTTPD_KEY_FILE,
                 'ca-name': 'IPA',
                 'cert-postsave-command': template % 'restart_httpd',
             }
@@ -1062,7 +1042,7 @@ def certificate_renewal_update(ca, ds, http):
                 {
                     'cert-database': paths.PKI_TOMCAT_ALIAS_DIR,
                     'cert-nickname': nickname,
-                    'ca-name': 'dogtag-ipa-ca-renew-agent',
+                    'ca-name': RENEWAL_CA_NAME,
                     'cert-presave-command': template % 'stop_pkicad',
                     'cert-postsave-command':
                         (template % ('renew_ca_cert "%s"' % nickname)),
@@ -1071,18 +1051,33 @@ def certificate_renewal_update(ca, ds, http):
             )
 
     # State not set, lets see if we are already configured
+    missing_or_misconfigured_requests = []
     for request in requests:
         request_id = certmonger.get_request_id(request)
         if request_id is None:
-            break
-    else:
+            missing_or_misconfigured_requests.append(request)
+
+    if len(missing_or_misconfigured_requests) == 0:
         logger.info("Certmonger certificate renewal configuration already "
                     "up-to-date")
         return False
 
+    # Print info about missing requests
+    logger.info("Missing or incorrect tracking request for certificates:")
+    for request in missing_or_misconfigured_requests:
+        cert = None
+        if 'cert-file' in request:
+            cert = request['cert-file']
+        elif 'cert-database' in request and 'cert-nickname' in request:
+            cert = '{cert-database}:{cert-nickname}'.format(**request)
+        if cert is not None:
+            logger.info("  %s", cert)
+
     # Ok, now we need to stop tracking, then we can start tracking them
     # again with new configuration:
     ca.stop_tracking_certificates()
+    if kra.is_installed():
+        kra.stop_tracking_certificates()
     ds.stop_tracking_certificates(serverid)
     http.stop_tracking_certificates()
 
@@ -1095,8 +1090,9 @@ def certificate_renewal_update(ca, ds, http):
     ca.configure_certmonger_renewal()
     ca.configure_renewal()
     ca.configure_agent_renewal()
-    ca.track_servercert()
     ca.add_lightweight_ca_tracking_requests()
+    if kra.is_installed():
+        kra.configure_renewal()
     ds.start_tracking_certificates(serverid)
     http.start_tracking_certificates()
 
@@ -2078,7 +2074,7 @@ def upgrade_configuration():
         ca_restart,
         ca_upgrade_schema(ca),
         upgrade_ca_audit_cert_validity(ca),
-        certificate_renewal_update(ca, ds, http),
+        certificate_renewal_update(ca, kra, ds, http),
         ca_enable_pkix(ca),
         ca_configure_profiles_acl(ca),
         ca_configure_lightweight_ca_acls(ca),

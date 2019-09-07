@@ -38,7 +38,7 @@ import pki.system
 
 from ipalib import api, errors, x509
 from ipalib.install import certmonger
-from ipalib.constants import CA_DBUS_TIMEOUT, IPA_CA_RECORD
+from ipalib.constants import CA_DBUS_TIMEOUT, IPA_CA_RECORD, RENEWAL_CA_NAME
 from ipaplatform import services
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
@@ -95,12 +95,21 @@ class DogtagInstance(service.Service):
     CA, KRA, and eventually TKS and TPS.
     """
 
-    tracking_reqs = None
-    server_cert_name = None
+    # Mapping of nicknames for tracking requests, and the profile to
+    # use for that certificate.  'configure_renewal()' reads this
+    # dict.  The profile MUST be specified.
+    tracking_reqs = dict()
 
     # token for CA and subsystem certificates. For now, only internal token
     # is supported.
     token_name = "internal"
+
+    # override token for specific nicknames
+    token_names = dict()
+
+    def get_token_name(self, nickname):
+        """Look up token name for nickname."""
+        return self.token_names.get(nickname, self.token_name)
 
     ipaca_groups = DN(('ou', 'groups'), ('o', 'ipaca'))
     ipaca_people = DN(('ou', 'people'), ('o', 'ipaca'))
@@ -297,7 +306,7 @@ class DogtagInstance(service.Service):
                              '/org/fedorahosted/certmonger')
         iface = dbus.Interface(obj, 'org.fedorahosted.certmonger')
         for suffix, args in [('', ''), ('-reuse', ' --reuse-existing')]:
-            name = 'dogtag-ipa-ca-renew-agent' + suffix
+            name = RENEWAL_CA_NAME + suffix
             path = iface.find_ca_by_nickname(name)
             if not path:
                 command = paths.DOGTAG_IPA_CA_RENEW_AGENT_SUBMIT + args
@@ -318,45 +327,24 @@ class DogtagInstance(service.Service):
 
     def configure_renewal(self):
         """ Configure certmonger to renew system certs """
-        pin = self.__get_pin(self.token_name)
 
         for nickname in self.tracking_reqs:
+            token_name = self.get_token_name(nickname)
+            pin = self.__get_pin(token_name)
             try:
                 certmonger.start_tracking(
                     certpath=self.nss_db,
-                    ca='dogtag-ipa-ca-renew-agent',
+                    ca=RENEWAL_CA_NAME,
                     nickname=nickname,
-                    token_name=self.token_name,
+                    token_name=token_name,
                     pin=pin,
                     pre_command='stop_pkicad',
                     post_command='renew_ca_cert "%s"' % nickname,
+                    profile=self.tracking_reqs[nickname],
                 )
             except RuntimeError as e:
                 logger.error(
                     "certmonger failed to start tracking certificate: %s", e)
-
-    def track_servercert(self):
-        """
-        Specifically do not tell certmonger to restart the CA. This will be
-        done by the renewal script, renew_ca_cert once all the subsystem
-        certificates are renewed.
-        """
-        # server cert is always stored in internal token
-        token_name = "internal"
-        pin = self.__get_pin(token_name)
-        try:
-            certmonger.start_tracking(
-                certpath=self.nss_db,
-                ca='dogtag-ipa-ca-renew-agent',
-                nickname=self.server_cert_name,
-                token_name=token_name,
-                pin=pin,
-                pre_command='stop_pkicad',
-                post_command='renew_ca_cert "%s"' % self.server_cert_name
-            )
-        except RuntimeError as e:
-            logger.error(
-                "certmonger failed to start tracking certificate: %s", e)
 
     def stop_tracking_certificates(self, stop_certmonger=True):
         """Stop tracking our certificates. Called on uninstall.
@@ -371,11 +359,7 @@ class DogtagInstance(service.Service):
             services.knownservices.dbus.start()
         cmonger.start()
 
-        nicknames = list(self.tracking_reqs)
-        if self.server_cert_name is not None:
-            nicknames.append(self.server_cert_name)
-
-        for nickname in nicknames:
+        for nickname in self.tracking_reqs:
             try:
                 certmonger.stop_tracking(
                     self.nss_db, nickname=nickname)
@@ -853,7 +837,7 @@ class PKIIniLoader:
         if errs:
             raise ValueError(
                 '{} overrides immutable options:\n{}'.format(
-                    filename, '\n'.join(errors)
+                    filename, '\n'.join(errs)
                 )
             )
 
@@ -891,8 +875,7 @@ class PKIIniLoader:
         )
 
         # key backup is not compatible with HSM support
-        if (cfgtpl.has_option(section_name, 'pki_hsm_enable') and
-                cfgtpl.getboolean(section_name, 'pki_hsm_enable')):
+        if cfgtpl.getboolean(section_name, 'pki_hsm_enable', fallback=False):
             cfgtpl.set(section_name, 'pki_backup_keys', 'False')
             cfgtpl.set(section_name, 'pki_backup_password', '')
 

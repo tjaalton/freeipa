@@ -74,10 +74,10 @@ def match_in_journal(host, string, since='today', services=('certmonger',)):
     return match
 
 
-def install_server_external_ca_step1(host, extra_args=()):
+def install_server_external_ca_step1(host, extra_args=(), raiseonerr=True):
     """Step 1 to install the ipa server with external ca"""
     return tasks.install_master(
-        host, external_ca=True, extra_args=extra_args
+        host, external_ca=True, extra_args=extra_args, raiseonerr=raiseonerr,
     )
 
 
@@ -108,14 +108,14 @@ def check_ipaca_issuerDN(host, expected_dn):
     assert "Issuer DN: {}".format(expected_dn) in result.stdout_text
 
 
-def check_mscs_extension(ipa_csr, oid, value):
+def check_mscs_extension(ipa_csr, template):
     csr = x509.load_pem_x509_csr(ipa_csr, default_backend())
     extensions = [
         ext for ext in csr.extensions
-        if ext.oid.dotted_string == oid
+        if ext.oid.dotted_string == template.ext_oid
     ]
     assert extensions
-    assert extensions[0].value.value == value
+    assert extensions[0].value.value == template.get_ext_data()
 
 
 class TestExternalCA(IntegrationTest):
@@ -134,10 +134,7 @@ class TestExternalCA(IntegrationTest):
 
         # check CSR for extension
         ipa_csr = self.master.get_file_contents(paths.ROOT_IPA_CSR)
-        # Values for MSCSTemplateV1('SubCA')
-        oid = "1.3.6.1.4.1.311.20.2"
-        value = b'\x1e\n\x00S\x00u\x00b\x00C\x00A'
-        check_mscs_extension(ipa_csr, oid, value)
+        check_mscs_extension(ipa_csr, ipa_x509.MSCSTemplateV1(u'SubCA'))
 
         # Sign CA, transport it to the host and get ipa a root ca paths.
         root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
@@ -191,6 +188,36 @@ class TestExternalCA(IntegrationTest):
              '--server', self.master.hostname,
              '-w', client_pwd,
              '-U'])
+
+
+class TestExternalCAConstraints(IntegrationTest):
+    """Test of FreeIPA server installation with external CA and constraints
+    """
+    num_replicas = 0
+    num_clients = 1
+
+    def test_external_ca_constrained(self):
+        install_server_external_ca_step1(self.master)
+
+        # name constraints for IPA DNS domain (dot prefix)
+        nameconstraint = x509.NameConstraints(
+            permitted_subtrees=[
+                x509.DNSName("." + self.master.domain.name),
+            ],
+            excluded_subtrees=None
+        )
+
+        root_ca_fname, ipa_ca_fname = tasks.sign_ca_and_transport(
+            self.master, paths.ROOT_IPA_CSR, ROOT_CA, IPA_CA,
+            root_ca_extensions=[nameconstraint],
+        )
+
+        install_server_external_ca_step2(
+            self.master, ipa_ca_fname, root_ca_fname
+        )
+
+        tasks.kinit_admin(self.master)
+        self.master.run_command(['ipa', 'ping'])
 
 
 def verify_caentry(host, cert):
@@ -481,3 +508,114 @@ class TestMultipleExternalCA(IntegrationTest):
             'certutil', '-L', '-d', paths.PKI_TOMCAT_ALIAS_DIR,
             '-n', cert_nick])
         assert "CN=RootCA2" in result.stdout_text
+
+
+def _step1_profile(master, s):
+    return install_server_external_ca_step1(
+        master,
+        extra_args=['--external-ca-type=ms-cs', f'--external-ca-profile={s}'],
+        raiseonerr=False,
+    )
+
+
+def _test_invalid_profile(master, profile):
+    result = _step1_profile(master, profile)
+    assert result.returncode != 0
+    assert '--external-ca-profile' in result.stderr_text
+
+
+def _test_valid_profile(master, profile_cls, profile):
+    result = _step1_profile(master, profile)
+    assert result.returncode == 0
+    ipa_csr = master.get_file_contents(paths.ROOT_IPA_CSR)
+    check_mscs_extension(ipa_csr, profile_cls(profile))
+
+
+class TestExternalCAProfileScenarios(IntegrationTest):
+    """
+    Test the various --external-ca-profile scenarios.
+    This test is broken into sections, with each section first
+    testing invalid arguments, then a valid argument, and finally
+    uninstalling the half-installed IPA.
+
+    """
+
+    '''
+    Tranche 1: version 1 templates.
+
+    Test that --external-ca-profile=Foo gets propagated to the CSR.
+
+    The default template extension when --external-ca-type=ms-cs,
+    a V1 extension with value "SubCA", already gets tested by the
+    ``TestExternalCA`` class.
+
+    We only need to do Step 1 of installation, then check the CSR.
+
+    '''
+    def test_invalid_v1_template(self):
+        _test_invalid_profile(self.master, 'NotAnOid:1')
+
+    def test_valid_v1_template(self):
+        _test_valid_profile(
+            self.master, ipa_x509.MSCSTemplateV1, 'TemplateOfAwesome')
+
+    def test_uninstall_1(self):
+        tasks.uninstall_master(self.master)
+
+    '''
+    Tranche 2: V2 templates without minor version.
+
+    Test that V2 template specifiers without minor version get
+    propagated to CSR.  This class also tests all error modes in
+    specifying a V2 template, those being:
+
+    - no major version specified
+    - too many parts specified (i.e. major, minor, and then some more)
+    - major version is not an int
+    - major version is negative
+    - minor version is not an int
+    - minor version is negative
+
+    We only need to do Step 1 of installation, then check the CSR.
+
+    '''
+    def test_v2_template_too_few_parts(self):
+        _test_invalid_profile(self.master, '1.2.3.4')
+
+    def test_v2_template_too_many_parts(self):
+        _test_invalid_profile(self.master, '1.2.3.4:100:200:300')
+
+    def test_v2_template_major_version_not_int(self):
+        _test_invalid_profile(self.master, '1.2.3.4:wat:200')
+
+    def test_v2_template_major_version_negative(self):
+        _test_invalid_profile(self.master, '1.2.3.4:-1:200')
+
+    def test_v2_template_minor_version_not_int(self):
+        _test_invalid_profile(self.master, '1.2.3.4:100:wat')
+
+    def test_v2_template_minor_version_negative(self):
+        _test_invalid_profile(self.master, '1.2.3.4:100:-2')
+
+    def test_v2_template_valid_major_only(self):
+        _test_valid_profile(
+            self.master, ipa_x509.MSCSTemplateV2, '1.2.3.4:100')
+
+    def test_uninstall_2(self):
+        tasks.uninstall_master(self.master)
+
+    '''
+    Tranche 3: V2 templates with minor version.
+
+    Test that V2 template specifiers _with_ minor version get
+    propagated to CSR.  All error modes of V2 template specifiers
+    were tested in ``TestExternalCAProfileV2Major``.
+
+    We only need to do Step 1 of installation, then check the CSR.
+
+    '''
+    def test_v2_template_valid_major_minor(self):
+        _test_valid_profile(
+            self.master, ipa_x509.MSCSTemplateV2, '1.2.3.4:100:200')
+
+    # this is the end; no need to uninstall.

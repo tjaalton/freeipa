@@ -150,3 +150,11 @@ class TestSMB(IntegrationTest):
 
         smbsrv = self.replicas[0]
         smbsrv.run_command(['ipa-client-samba', '--uninstall', '-U'])
+        # test for https://pagure.io/freeipa/issue/8019
+        # try another uninstall after the first one:
+        smbsrv.run_command(['ipa-client-samba', '--uninstall', '-U'])
+        # test for https://pagure.io/freeipa/issue/8021
+        # try to install again:
+        smbsrv.run_command(["ipa-client-samba", "-U"])
+        # cleanup:
+        smbsrv.run_command(['ipa-client-samba', '--uninstall', '-U'])
