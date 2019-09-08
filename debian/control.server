@@ -136,6 +136,7 @@ Depends:
  python3-kdcproxy,
  python3-ldap (>= 2.4.22),
  python3-libsss-nss-idmap,
+ python3-pki-base,
  python3-pyasn1,
  python3-sss,
  samba-common,
