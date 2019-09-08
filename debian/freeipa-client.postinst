@@ -5,7 +5,7 @@ LOGFILE=/var/log/ipaclient-upgrade.log
 
 if [ "$1" = configure ]; then
     if [ -f /etc/ipa/nssdb/cert8.db ]; then
-        python2 -c 'from ipaclient.install.client import update_ipa_nssdb; update_ipa_nssdb()' \
+        python3 -c 'from ipaclient.install.client import update_ipa_nssdb; update_ipa_nssdb()' \
         > $LOGFILE 2>&1
     fi
 fi

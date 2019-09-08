@@ -94,8 +94,8 @@ if [ "$1" = configure ]; then
     fi
 
     # check if IPA is set up
-    is_configured=`python2 -c 'from ipaserver.install import installutils; print "yes" if installutils.is_ipa_configured() else "no";'`
-    if [ $is_configured = yes ]; then
+    is_configured=`python3 -c 'import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);'`
+    if [ $is_configured ]; then
         echo "Running ipa-server-upgrade..."
         ipa-server-upgrade --quiet >/dev/null
     fi
