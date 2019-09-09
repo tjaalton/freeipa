@@ -92,13 +92,6 @@ if [ "$1" = configure ]; then
             apache2_invoke ensite default-ssl || exit $?
         fi
     fi
-
-    # check if IPA is set up
-    is_configured=`python3 -c 'import sys; from ipaserver.install import installutils; sys.exit(0 if installutils.is_ipa_configured() else 1);'`
-    if [ $is_configured ]; then
-        echo "Running ipa-server-upgrade..."
-        ipa-server-upgrade --quiet >/dev/null
-    fi
 fi
 
 if [ ! -e /run/apache2/ipa ]; then
