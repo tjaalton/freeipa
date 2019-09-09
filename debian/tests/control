@@ -1,6 +1,6 @@
 Tests: server-install
 Depends:
- freeipa-server, freeipa-client, freeipa-server-dns, freeipa-admintools, ssl-cert
+ freeipa-server, freeipa-client, freeipa-server-dns, freeipa-admintools
 Restrictions:
  allow-stderr,
  isolation-container,

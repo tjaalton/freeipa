@@ -41,6 +41,7 @@ Depends:
  python3-systemd,
  slapi-nis (>= 0.56.1),
  softhsm2 (>= 2.1.0-2),
+ ssl-cert,
  sssd-dbus,
  systemd-sysv,
  ${misc:Depends},
