@@ -24,7 +24,7 @@ Depends:
  ldap-utils,
  libapache2-mod-auth-gssapi (>= 1.5.0),
  libapache2-mod-lookup-identity (>= 1.0.0),
- libapache2-mod-wsgi,
+ libapache2-mod-wsgi-py3,
  libjs-dojo-core,
  libjs-jquery,
  libjs-scriptaculous,
