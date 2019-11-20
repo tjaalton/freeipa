@@ -68,6 +68,7 @@ usr/share/ipa/*.ldif
 usr/share/ipa/*.template
 usr/share/ipa/*.uldif
 usr/share/ipa/advise/legacy/*.template
+usr/share/ipa/bind.ipa-ext.conf
 usr/share/ipa/gssapi.login
 usr/share/ipa/html/*
 usr/share/ipa/ipaca_*.ini

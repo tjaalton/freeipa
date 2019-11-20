@@ -2,6 +2,7 @@ freeipa (4.8.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * control: Server needs to depend on the py3 version of mod-wsgi.
+  * server.install: Updated.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 14 Oct 2019 10:48:27 +0300
 
