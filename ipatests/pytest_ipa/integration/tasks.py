@@ -30,6 +30,9 @@ import collections
 import itertools
 import tempfile
 import time
+from pipes import quote
+import configparser
+from contextlib import contextmanager
 
 import dns
 from ldif import LDIFWriter
@@ -601,48 +604,57 @@ def is_subdomain(subdomain, domain):
 
     return subdomain
 
-def configure_dns_for_trust(master, ad):
+
+def configure_dns_for_trust(master, *ad_hosts):
     """
     This configures DNS on IPA master according to the relationship of the
     IPA's and AD's domains.
     """
 
     kinit_admin(master)
+    dnssec_disabled = False
+    for ad in ad_hosts:
+        if is_subdomain(ad.domain.name, master.domain.name):
+            master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                                '%s.%s' % (ad.shortname, ad.netbios),
+                                '--a-ip-address', ad.ip])
 
-    if is_subdomain(ad.domain.name, master.domain.name):
-        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
-                            '%s.%s' % (ad.shortname, ad.netbios),
-                            '--a-ip-address', ad.ip])
+            master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
+                                ad.netbios,
+                                '--ns-hostname',
+                                '%s.%s' % (ad.shortname, ad.netbios)])
 
-        master.run_command(['ipa', 'dnsrecord-add', master.domain.name,
-                            ad.netbios,
-                            '--ns-hostname',
-                            '%s.%s' % (ad.shortname, ad.netbios)])
-
-        master.run_command(['ipa', 'dnszone-mod', master.domain.name,
-                            '--allow-transfer', ad.ip])
-    else:
-        disable_dnssec_validation(master)
-        master.run_command(['ipa', 'dnsforwardzone-add', ad.domain.name,
-                            '--forwarder', ad.ip,
-                            '--forward-policy', 'only',
-                            ])
+            master.run_command(['ipa', 'dnszone-mod', master.domain.name,
+                                '--allow-transfer', ad.ip])
+        else:
+            if not dnssec_disabled:
+                disable_dnssec_validation(master)
+                dnssec_disabled = True
+            master.run_command(['ipa', 'dnsforwardzone-add', ad.domain.name,
+                                '--forwarder', ad.ip,
+                                '--forward-policy', 'only',
+                                ])
 
 
-def unconfigure_dns_for_trust(master, ad):
+def unconfigure_dns_for_trust(master, *ad_hosts):
     """
     This undoes changes made by configure_dns_for_trust
     """
     kinit_admin(master)
-    if is_subdomain(ad.domain.name, master.domain.name):
-        master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
-                            '%s.%s' % (ad.shortname, ad.netbios),
-                            '--a-rec', ad.ip])
-        master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
-                            ad.netbios,
-                            '--ns-rec', '%s.%s' % (ad.shortname, ad.netbios)])
-    else:
-        master.run_command(['ipa', 'dnsforwardzone-del', ad.domain.name])
+    dnssec_needs_restore = False
+    for ad in ad_hosts:
+        if is_subdomain(ad.domain.name, master.domain.name):
+            master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
+                                '%s.%s' % (ad.shortname, ad.netbios),
+                                '--a-rec', ad.ip])
+            master.run_command(['ipa', 'dnsrecord-del', master.domain.name,
+                                ad.netbios,
+                                '--ns-rec',
+                                '%s.%s' % (ad.shortname, ad.netbios)])
+        else:
+            master.run_command(['ipa', 'dnsforwardzone-del', ad.domain.name])
+            dnssec_needs_restore = True
+    if dnssec_needs_restore:
         restore_dnssec_validation(master)
 
 
@@ -1221,7 +1233,7 @@ def double_circle_topo(master, replicas, site_size=6):
 
 def install_topo(topo, master, replicas, clients, domain_level=None,
                  skip_master=False, setup_replica_cas=True,
-                 setup_replica_kras=False):
+                 setup_replica_kras=False, clients_extra_args=()):
     """Install IPA servers and clients in the given topology"""
     if setup_replica_kras and not setup_replica_cas:
         raise ValueError("Option 'setup_replica_kras' requires "
@@ -1249,15 +1261,15 @@ def install_topo(topo, master, replicas, clients, domain_level=None,
                 setup_kra=setup_replica_kras
             )
         installed.add(child)
-    install_clients([master] + replicas, clients)
+    install_clients([master] + replicas, clients, clients_extra_args)
 
 
-def install_clients(servers, clients):
+def install_clients(servers, clients, extra_args=()):
     """Install IPA clients, distributing them among the given servers"""
     izip = getattr(itertools, 'izip', zip)
     for server, client in izip(itertools.cycle(servers), clients):
         logger.info('Installing client %s on %s', server, client)
-        install_client(server, client)
+        install_client(server, client, extra_args)
 
 
 def _entries_to_ldif(entries):
@@ -1338,9 +1350,8 @@ def wait_for_cleanallruv_tasks(ldap, timeout=30):
         ):
             logger.debug("All cleanallruv tasks finished successfully")
             break
-        else:
-            logger.debug("cleanallruv task in progress, (waited %s/%ss)",
-                         i, timeout)
+        logger.debug("cleanallruv task in progress, (waited %s/%ss)",
+                     i, timeout)
         time.sleep(1)
     else:
         logger.error('Giving up waiting for cleanallruv to finish')
@@ -1764,14 +1775,20 @@ def strip_cert_header(pem):
         return pem
 
 
-def user_add(host, login, first='test', last='user', extra_args=()):
+def user_add(host, login, first='test', last='user', extra_args=(),
+             password=None):
     cmd = [
         "ipa", "user-add", login,
         "--first", first,
         "--last", last
     ]
+    if password is not None:
+        cmd.append('--password')
+        stdin_text = '{0}\n{0}\n'.format(password)
+    else:
+        stdin_text = None
     cmd.extend(extra_args)
-    return host.run_command(cmd)
+    return host.run_command(cmd, stdin_text=stdin_text)
 
 
 def group_add(host, groupname, extra_args=()):
@@ -1831,4 +1848,102 @@ def create_temp_file(host, directory=None):
     cmd = ['mktemp']
     if directory is not None:
         cmd += ['-p', directory]
-    return host.run_command(cmd).stdout_text
+    return host.run_command(cmd).stdout_text.strip()
+
+
+def create_active_user(host, login, password, first='test', last='user'):
+    """Create user and do login to set password"""
+    temp_password = 'Secret456789'
+    kinit_admin(host)
+    user_add(host, login, first=first, last=last, password=temp_password)
+    host.run_command(
+        ['kinit', login],
+        stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password))
+    kdestroy_all(host)
+
+
+def kdestroy_all(host):
+    return host.run_command(['kdestroy', '-A'])
+
+
+def run_command_as_user(host, user, command, *args, **kwargs):
+    """Run command on remote host using 'su -l'
+
+    Arguments are similar to Host.run_command
+    """
+    if not isinstance(command, str):
+        command = ' '.join(quote(s) for s in command)
+    cwd = kwargs.pop('cwd', None)
+    if cwd is not None:
+        command = 'cd {}; {}'.format(quote(cwd), command)
+    command = ['su', '-l', user, '-c', command]
+    return host.run_command(command, *args, **kwargs)
+
+
+def kinit_as_user(host, user, password):
+    host.run_command(['kinit', user], stdin_text=password + '\n')
+
+
+class FileBackup:
+    """Create file backup and do restore on remote host
+
+    Examples:
+
+        config_backup = FileBackup(host, '/etc/some.conf')
+        ... modify the file and do the test ...
+        config_backup.restore()
+
+    Use as a context manager:
+
+        with FileBackup(host, '/etc/some.conf'):
+            ... modify the file and do the test ...
+
+    """
+
+    def __init__(self, host, filename):
+        """Create file backup."""
+        self._host = host
+        self._filename = filename
+        self._backup = create_temp_file(host)
+        host.run_command(['cp', '--preserve=all', filename, self._backup])
+
+    def restore(self):
+        """Restore file. Can be called multiple times."""
+        self._host.run_command(['mv', self._backup, self._filename])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.restore()
+
+
+@contextmanager
+def remote_ini_file(host, filename):
+    """Context manager for editing an ini file on a remote host.
+
+    It provides RawConfigParser object which is automatically serialized and
+    uploaded to remote host upon exit from the context.
+
+    If exception is raised inside the context then the ini file is NOT updated
+    on remote host.
+
+    Example:
+
+        with remote_ini_file(master, '/etc/some.conf') as some_conf:
+            some_conf.set('main', 'timeout', 10)
+
+
+    """
+    data = host.get_file_contents(filename, encoding='utf-8')
+    ini_file = configparser.RawConfigParser()
+    ini_file.read_string(data)
+    yield ini_file
+    data = StringIO()
+    ini_file.write(data)
+    host.put_file_contents(filename, data.getvalue())
+
+
+def is_selinux_enabled(host):
+    res = host.run_command('selinuxenabled', ok_returncode=(0, 1))
+    return res.returncode == 0

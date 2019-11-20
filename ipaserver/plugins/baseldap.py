@@ -200,7 +200,7 @@ def validate_del_attribute(ugettext, attr):
     validate_attribute(ugettext, 'delattr', attr)
 
 def validate_attribute(ugettext, name, attr):
-    m = re.match("\s*(.*?)\s*=\s*(.*?)\s*$", attr)
+    m = re.match(r"\s*(.*?)\s*=\s*(.*?)\s*$", attr)
     if not m or len(m.groups()) != 2:
         raise errors.ValidationError(
             name=name, error=_('Invalid format. Should be name=value'))
@@ -564,6 +564,11 @@ class LDAPObject(Object):
         'memberofindirect': (
             'Indirect Member Of', None, 'not_in_indirect_'
         ),
+        'membermanager': (
+            'Group membership managed by',
+            'membermanager_',
+            'not_membermanager_'
+        ),
     }
     label = _('Entry')
     label_singular = _('Entry')
@@ -812,7 +817,7 @@ class LDAPObject(Object):
             attrlist.append(attr.names[0].lower())
         json_dict['aciattrs'] = attrlist
         attrlist.sort()
-        json_dict['methods'] = [m for m in self.methods]
+        json_dict['methods'] = list(self.methods)
         json_dict['can_have_permissions'] = bool(
             self.permission_filter_objectclasses)
         return json_dict
@@ -919,7 +924,7 @@ last, after all sets and adds."""),
         elif type(attrs) not in (list, tuple):
             attrs = [attrs]
         for a in attrs:
-            m = re.match("\s*(.*?)\s*=\s*(.*?)\s*$", a)
+            m = re.match(r"\s*(.*?)\s*=\s*(.*?)\s*$", a)
             attr = str(m.group(1)).lower()
             value = m.group(2)
             if attr in self.obj.params and attr not in self.params:

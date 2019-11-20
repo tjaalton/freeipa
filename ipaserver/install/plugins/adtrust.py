@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 register = Registry()
 
 DEFAULT_ID_RANGE_SIZE = 200000
+trust_read_keys_template = \
+    ["cn=adtrust agents,cn=sysaccounts,cn=etc,{basedn}",
+     "cn=trust admins,cn=groups,cn=accounts,{basedn}"]
 
 
 @register()
@@ -576,8 +579,15 @@ class update_tdo_to_new_layout(Updater):
                     'krbprincipalkey')
                 entry_data['krbextradata'] = en.single_value.get(
                     'krbextradata')
-                entry_data['ipaAllowedToPerform;read_keys'] = en.get(
-                    'ipaAllowedToPerform;read_keys', [])
+                read_keys = en.get('ipaAllowedToPerform;read_keys', [])
+                if not read_keys:
+                    # Old style, no ipaAllowedToPerform;read_keys in the entry,
+                    # use defaults that ipasam should have set when creating a
+                    # trust
+                    read_keys = list(map(
+                        lambda x: x.format(basedn=self.api.env.basedn),
+                        trust_read_keys_template))
+                entry_data['ipaAllowedToPerform;read_keys'] = read_keys
 
         entry.update(entry_data)
         try:
@@ -721,7 +731,7 @@ class update_tdo_to_new_layout(Updater):
 
 
 KeyEntry = namedtuple('KeyEntry',
-                      ['kvno', 'date', 'time', 'principal', 'etype', 'key'])
+                      ['kvno', 'principal', 'etype', 'key'])
 
 
 @register()
@@ -741,7 +751,7 @@ class update_host_cifs_keytabs(Updater):
     def extract_key_refs(self, keytab):
         host_princ = self.host_princ_template.format(
             master=self.api.env.host, realm=self.api.env.realm)
-        result = ipautil.run([paths.KLIST, "-etK", "-k", keytab],
+        result = ipautil.run([paths.KLIST, "-eK", "-k", keytab],
                              capture_output=True, raiseonerr=False,
                              nolog_output=True)
         if result.returncode != 0:
@@ -752,8 +762,8 @@ class update_host_cifs_keytabs(Updater):
             if (host_princ in l and any(e in l for e in self.valid_etypes)):
 
                 els = l.split()
-                els[4] = els[4].strip('()')
-                els[5] = els[5].strip('()')
+                els[-2] = els[-2].strip('()')
+                els[-1] = els[-1].strip('()')
                 keys_to_sync.append(KeyEntry._make(els))
 
         return keys_to_sync
@@ -805,9 +815,64 @@ class update_host_cifs_keytabs(Updater):
                         self.copy_key(paths.SAMBA_KEYTAB, hostkey)
                         copied = True
                         break
-                    else:
-                        uptodate = True
+                    uptodate = True
             if not (copied or uptodate):
                 self.copy_key(paths.SAMBA_KEYTAB, hostkey)
+
+        return False, []
+
+
+@register()
+class update_tdo_default_read_keys_permissions(Updater):
+    trust_filter = \
+        "(&(objectClass=krbPrincipal)(krbPrincipalName=krbtgt/{nbt}@*))"
+
+    def execute(self, **options):
+        ldap = self.api.Backend.ldap2
+
+        # First, see if trusts are enabled on the server
+        if not self.api.Command.adtrust_is_enabled()['result']:
+            logger.debug('AD Trusts are not enabled on this server')
+            return False, []
+
+        result = self.api.Command.trustconfig_show()['result']
+        our_nbt_name = result.get('ipantflatname', [None])[0]
+        if not our_nbt_name:
+            return False, []
+
+        trusts_dn = self.api.env.container_adtrusts + self.api.env.basedn
+        trust_filter = self.trust_filter.format(nbt=our_nbt_name)
+
+        # We might be in a situation when no trusts exist yet
+        # In such case there is nothing to upgrade but we have to catch
+        # an exception or it will abort the whole upgrade process
+        try:
+            tdos = ldap.get_entries(
+                base_dn=trusts_dn,
+                scope=ldap.SCOPE_SUBTREE,
+                filter=trust_filter,
+                attrs_list=['*'])
+        except errors.EmptyResult:
+            tdos = []
+
+        for tdo in tdos:
+            updates = dict()
+            oc = tdo.get('objectClass', [])
+            if 'ipaAllowedOperations' not in oc:
+                updates['objectClass'] = oc + ['ipaAllowedOperations']
+
+            read_keys = tdo.get('ipaAllowedToPerform;read_keys', [])
+            if not read_keys:
+                read_keys_values = list(map(
+                    lambda x: x.format(basedn=self.api.env.basedn),
+                    trust_read_keys_template))
+                updates['ipaAllowedToPerform;read_keys'] = read_keys_values
+
+            tdo.update(updates)
+            try:
+                ldap.update_entry(tdo)
+            except errors.EmptyModlist:
+                logger.debug("No update was required for TDO %s",
+                             tdo.single_value.get('krbCanonicalName'))
 
         return False, []

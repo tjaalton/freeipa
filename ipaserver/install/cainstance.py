@@ -61,7 +61,7 @@ from ipaserver.install import installutils
 from ipaserver.install import ldapupdate
 from ipaserver.install import replication
 from ipaserver.install import sysupgrade
-from ipaserver.install.dogtaginstance import DogtagInstance
+from ipaserver.install.dogtaginstance import DogtagInstance, INTERNAL_TOKEN
 from ipaserver.plugins import ldap2
 from ipaserver.masters import ENABLED_SERVICE
 
@@ -280,7 +280,8 @@ class CAInstance(DogtagInstance):
         server_cert_name: 'caServerCert',
     }
     token_names = {
-        server_cert_name: 'internal',  # Server-Cert always on internal token
+        # Server-Cert always on internal token
+        server_cert_name: INTERNAL_TOKEN,
     }
 
     # The following must be aligned with the RewriteRule defined in
@@ -581,6 +582,7 @@ class CAInstance(DogtagInstance):
         nolog_list = [self.dm_password, self.admin_password, pki_pin]
 
         config = self._create_spawn_config(cfg)
+        self.set_hsm_state(config)
         pent = pwd.getpwnam(self.service_user)
         with tempfile.NamedTemporaryFile('w') as f:
             config.write(f)
@@ -641,7 +643,7 @@ class CAInstance(DogtagInstance):
         operations in 'certutil' calls.
         """
         passwd = None
-        token = 'internal'
+        token = INTERNAL_TOKEN
         with open(paths.PKI_TOMCAT_PASSWORD_CONF, 'r') as f:
             for line in f:
                 (tok, pin) = line.split('=', 1)
@@ -872,7 +874,7 @@ class CAInstance(DogtagInstance):
                 pre_command='renew_ra_cert_pre',
                 post_command='renew_ra_cert',
                 storage="FILE",
-                resubmit_timeout=api.env.replication_wait_timeout
+                resubmit_timeout=api.env.certmonger_wait_timeout
             )
             self.__set_ra_cert_perms()
 
@@ -920,6 +922,7 @@ class CAInstance(DogtagInstance):
                 self.config, quotes=False, separator='=') as ds:
             # Enable file publishing, disable LDAP
             ds.set('ca.publish.enable', 'true')
+            ds.set('ca.publish.cert.enable', 'false')
             ds.set('ca.publish.ldappublish.enable', 'false')
 
             # Create the file publisher, der only, not b64
@@ -974,6 +977,7 @@ class CAInstance(DogtagInstance):
     def uninstall(self):
         # just eat state
         self.restore_state("enabled")
+        self.restore_hsm_state()
 
         DogtagInstance.uninstall(self)
 
@@ -2051,7 +2055,7 @@ def add_lightweight_ca_tracking_requests(lwcas):
             try:
                 certmonger.start_tracking(
                     certpath=paths.PKI_TOMCAT_ALIAS_DIR,
-                    pin=certmonger.get_pin('internal'),
+                    pin=certmonger.get_pin(INTERNAL_TOKEN),
                     nickname=nickname,
                     ca=ipalib.constants.RENEWAL_CA_NAME,
                     profile='caCACert',

@@ -744,4 +744,30 @@ class RedHatTaskNamespace(BaseTaskNamespace):
 
         return filenames
 
+    def get_pkcs11_modules(self):
+        """Return the list of module config files setup by IPA
+        """
+        return tuple(os.path.join(paths.ETC_PKCS11_MODULES_DIR,
+                                  "{}.module".format(name))
+                     for name, _module, _disabled in PKCS11_MODULES)
+
+    def enable_ldap_automount(self, statestore):
+        """
+        Point automount to ldap in nsswitch.conf.
+        This function is for non-SSSD setups only.
+        """
+        super(RedHatTaskNamespace, self).enable_ldap_automount(statestore)
+
+        authselect_cmd = [paths.AUTHSELECT, "enable-feature",
+                          "with-custom-automount"]
+        ipautil.run(authselect_cmd)
+
+    def disable_ldap_automount(self, statestore):
+        """Disable ldap-based automount"""
+        super(RedHatTaskNamespace, self).disable_ldap_automount(statestore)
+
+        authselect_cmd = [paths.AUTHSELECT, "disable-feature",
+                          "with-custom-automount"]
+        ipautil.run(authselect_cmd)
+
 tasks = RedHatTaskNamespace()

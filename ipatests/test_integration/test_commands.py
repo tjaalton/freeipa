@@ -643,3 +643,59 @@ class TestIPACommand(IntegrationTest):
                 },
             )
             self.master.run_command(['systemctl', 'restart', 'sssd.service'])
+
+    def test_user_mod_change_capitalization_issue5879(self):
+        """
+        Test that an existing user which has been modified using ipa user-mod
+        and has the first and last name beginning with caps does not
+        throw the error 'ipa: ERROR: Type or value exists:' and
+        instead gets modified
+
+        This is a test case for Pagure issue
+        https://pagure.io/freeipa/issue/5879
+
+        Steps:
+        1. setup a master
+        2. add ipa user on master
+        3. now run ipa user-mod and specifying capital letters in names
+        4. user details should be modified
+        5. ipa: ERROR: Type or value exists is not displayed on console.
+        """
+        # Create an ipa-user
+        tasks.kinit_admin(self.master)
+        ipauser = 'ipauser1'
+        first = 'ipauser'
+        modfirst = 'IpaUser'
+        last = 'test'
+        modlast = 'Test'
+        password = 'Secret123'
+        self.master.run_command(
+            ['ipa', 'user-add', ipauser, '--first', first, '--last', last,
+             '--password'],
+            stdin_text="%s\n%s\n" % (password, password))
+        cmd = self.master.run_command(
+            ['ipa', 'user-mod', ipauser, '--first', modfirst,
+             '--last', modlast])
+        assert 'Modified user "%s"' % (ipauser) in cmd.stdout_text
+        assert 'First name: %s' % (modfirst) in cmd.stdout_text
+        assert 'Last name: %s' % (modlast) in cmd.stdout_text
+
+    def test_enabled_tls_protocols(self):
+        """Check that only TLS 1.2 is enabled in Apache.
+
+        This is the regression test for issue
+        https://pagure.io/freeipa/issue/7995.
+        """
+        def is_tls_version_enabled(tls_version):
+            res = self.master.run_command(
+                ['openssl', 's_client',
+                 '-connect', '{}:443'.format(self.master.hostname),
+                 '-{}'.format(tls_version)],
+                stdin_text='\n',
+                ok_returncode=[0, 1]
+            )
+            return res.returncode == 0
+
+        assert not is_tls_version_enabled('tls1')
+        assert not is_tls_version_enabled('tls1_1')
+        assert is_tls_version_enabled('tls1_2')

@@ -179,6 +179,9 @@ def _get_requests(criteria=dict()):
         for criterion in criteria:
             if criterion == 'ca-name':
                 ca_path = request.obj_if.get_ca()
+                if ca_path is None:
+                    raise RuntimeError("certmonger CA '%s' is not defined" %
+                                       criteria.get('ca-name'))
                 ca = _cm_dbus_object(cm.bus, cm, ca_path, DBUS_CM_CA_IF,
                                      DBUS_CM_IF)
                 value = ca.obj_if.get_nickname()
@@ -326,7 +329,11 @@ def request_and_wait_for_cert(
 
     deadline = time.time() + resubmit_timeout
     while True:  # until success, timeout, or error
-        state = wait_for_request(req_id, api.env.replication_wait_timeout)
+        try:
+            state = wait_for_request(req_id, api.env.http_timeout)
+        except RuntimeError as e:
+            logger.debug("wait_for_request raised %s", e)
+            state = 'TIMEOUT'
         ca_error = get_request_value(req_id, 'ca-error')
         if state == 'MONITORING' and ca_error is None:
             # we got a winner, exiting
@@ -336,16 +343,19 @@ def request_and_wait_for_cert(
         logger.debug(
             "Cert request %s failed: %s (%s)", req_id, state, ca_error
         )
-        if state not in {'CA_REJECTED', 'CA_UNREACHABLE'}:
+        if state in {'CA_REJECTED', 'CA_UNREACHABLE'}:
             # probably unrecoverable error
             logger.debug("Giving up on cert request %s", req_id)
             break
-        elif not resubmit_timeout:
+        if not resubmit_timeout:
             # no resubmit
             break
-        elif time.time() > deadline:
-            logger.debug("Request %s reached resubmit dead line", req_id)
+        if time.time() > deadline:
+            logger.debug("Request %s reached resubmit deadline", req_id)
             break
+        if state == 'TIMEOUT':
+            logger.debug("%s not in final state, continue waiting", req_id)
+            time.sleep(10)
         else:
             # sleep and resubmit
             logger.debug("Sleep and resubmit cert request %s", req_id)

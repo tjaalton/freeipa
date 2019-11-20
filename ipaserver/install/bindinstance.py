@@ -67,8 +67,8 @@ if six.PY3:
 
 logger = logging.getLogger(__name__)
 
-named_conf_section_ipa_start_re = re.compile('\s*dyndb\s+"ipa"\s+"[^"]+"\s+{')
-named_conf_section_options_start_re = re.compile('\s*options\s+{')
+named_conf_section_ipa_start_re = re.compile(r'\s*dyndb\s+"ipa"\s+"[^"]+"\s+{')
+named_conf_section_options_start_re = re.compile(r'\s*options\s+{')
 named_conf_section_end_re = re.compile('};')
 named_conf_arg_ipa_re = re.compile(
     r'(?P<indent>\s*)(?P<name>\S+)\s"(?P<value>[^"]+)";')
@@ -293,6 +293,26 @@ def find_reverse_zone(ip_address, api=api):
         zone = zone.partition('.')[2]
 
     return None
+
+
+def named_add_ext_conf_file(src, dest, t_params={}):
+    """
+    Ensure included file is present, but don't override it.
+
+    :param src: String. Absolute path to source template
+    :param dest: String. Absolute path to destination
+    :param t_params: Dict. Parameters for source template
+    """
+    if not os.path.exists(dest):
+        ipa_ext_txt = ipautil.template_file(src, t_params)
+        gid = pwd.getpwnam(constants.NAMED_USER).pw_gid
+
+        with open(dest, 'w') as ipa_ext:
+            os.fchmod(ipa_ext.fileno(), 0o640)
+            os.fchown(ipa_ext.fileno(), 0, gid)
+            ipa_ext.write(ipa_ext_txt)
+        return True
+    return False
 
 
 def read_reverse_zone(default, ip_address, allow_zone_overlap=False):
@@ -818,6 +838,7 @@ class BindInstance(service.Service):
             NAMED_VAR_DIR=paths.NAMED_VAR_DIR,
             BIND_LDAP_SO=paths.BIND_LDAP_SO,
             INCLUDE_CRYPTO_POLICY=crypto_policy,
+            CUSTOM_CONFIG=paths.NAMED_CUSTOM_CONFIG,
             NAMED_DATA_DIR=constants.NAMED_DATA_DIR,
             NAMED_ZONE_COMMENT=constants.NAMED_ZONE_COMMENT,
         )
@@ -974,6 +995,9 @@ class BindInstance(service.Service):
         named_fd.truncate(0)
         named_fd.write(named_txt)
         named_fd.close()
+
+        named_add_ext_conf_file(paths.NAMED_CUSTOM_CFG_SRC,
+                                paths.NAMED_CUSTOM_CONFIG)
 
         if self.no_dnssec_validation:
             # disable validation
@@ -1237,5 +1261,6 @@ class BindInstance(service.Service):
         if named_regular_running:
             self.named_regular.start()
 
+        ipautil.remove_file(paths.NAMED_CUSTOM_CONFIG)
         ipautil.remove_keytab(self.keytab)
         ipautil.remove_ccache(run_as=self.service_user)

@@ -24,6 +24,7 @@ The classes in this module make heavy use of Python container emulation. If
 you are unfamiliar with this Python feature, see
 http://docs.python.org/ref/sequence-types.html
 """
+
 import logging
 import operator
 import re
@@ -173,7 +174,7 @@ class Plugin(ReadOnly):
     def __summary_getter(cls):
         doc = cls.doc
         if not _(doc).msg:
-            return u'<%s.%s>' % (cls.__module__, cls.__name__)
+            return '<%s.%s>' % (cls.__module__, cls.__name__)
         else:
             return unicode(doc).split('\n\n', 1)[0].strip()
 
@@ -451,7 +452,7 @@ class API(ReadOnly):
         if root_logger.handlers or self.env.validate_api:
             return
 
-        if self.env.debug:
+        if self.env.debug:  # pylint: disable=using-constant-test
             level = logging.DEBUG
         else:
             level = logging.INFO
@@ -467,7 +468,7 @@ class API(ReadOnly):
             level = ipa_log_manager.convert_log_level(match.group(1))
 
             value = getattr(self.env, attr)
-            regexps = re.split('\s*,\s*', value)
+            regexps = re.split(r'\s*,\s*', value)
 
             # Add the regexp, it maps to the configured level
             for regexp in regexps:
@@ -475,7 +476,7 @@ class API(ReadOnly):
 
         # Add stderr handler:
         level = logging.INFO
-        if self.env.debug:
+        if self.env.debug:  # pylint: disable=using-constant-test
             level = logging.DEBUG
         else:
             if self.env.context == 'cli':
@@ -507,7 +508,7 @@ class API(ReadOnly):
                 return
 
         level = logging.INFO
-        if self.env.debug:
+        if self.env.debug:  # pylint: disable=using-constant-test
             level = logging.DEBUG
         try:
             handler = logging.FileHandler(self.env.log)
@@ -651,7 +652,8 @@ class API(ReadOnly):
                 logger.debug("skipping plugin module %s: %s", name, e.reason)
                 continue
             except Exception as e:
-                if self.env.startup_traceback:
+                tb = self.env.startup_traceback
+                if tb:  # pylint: disable=using-constant-test
                     logger.exception("could not load plugin module %s", name)
                 raise
 

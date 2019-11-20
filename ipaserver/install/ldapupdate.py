@@ -42,6 +42,7 @@ from ipalib import api, create_api
 from ipalib import constants
 from ipaplatform.constants import constants as platformconstants
 from ipaplatform.paths import paths
+from ipaplatform.tasks import tasks
 from ipapython.dn import DN
 
 if six.PY3:
@@ -325,6 +326,8 @@ class LDAPUpdate:
         if not self.sub_dict.get("SELINUX_USERMAP_ORDER"):
             self.sub_dict["SELINUX_USERMAP_ORDER"] = \
                 platformconstants.SELINUX_USERMAP_ORDER
+        if "FIPS" not in self.sub_dict:
+            self.sub_dict["FIPS"] = '#' if tasks.is_fips_enabled() else ''
         self.api = create_api(mode=None)
         self.api.bootstrap(in_server=True,
                            context='updates',
@@ -368,6 +371,7 @@ class LDAPUpdate:
 
             * Strip leading & trailing whitespace
             * Substitute any variables
+            * Strip again and skip empty/commented lines after substitution
             * Get the action, attribute, and value
             * Each update has one list per disposition, append to specified disposition list
             '''
@@ -378,6 +382,12 @@ class LDAPUpdate:
 
             # Perform variable substitution on constructued line
             logical_line = self._template_str(logical_line)
+
+            # skip line if substitution has added a comment. FIPS mode
+            # disables some lines that way.
+            logical_line = logical_line.strip()
+            if not logical_line or logical_line.startswith('#'):
+                return
 
             items = logical_line.split(':', 2)
 
@@ -521,9 +531,8 @@ class LDAPUpdate:
                 if source_line.startswith(' '):
                     logical_line += source_line[1:]
                     continue
-                else:
-                    emit_item(logical_line)
-                    logical_line = source_line
+                emit_item(logical_line)
+                logical_line = source_line
 
         if dn is not None:
             emit_item(logical_line)

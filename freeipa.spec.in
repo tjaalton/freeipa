@@ -86,9 +86,9 @@
 # Fedora
 %endif
 
-# 10.7 includes 'pki-server cert-fix' enhancements required
-# by ipa-cert-fix: https://pagure.io/freeipa/issue/7885
-%global pki_version 10.7.0-1
+# 10.7.3 supports LWCA key replication using AES
+# https://pagure.io/freeipa/issue/8020
+%global pki_version 10.7.3-1
 
 # https://pagure.io/certmonger/issue/90
 %global certmonger_version 0.79.7-1
@@ -119,7 +119,7 @@
 %define AT_SIGN @
 # redefine IPA_VERSION only if its value matches the Autoconf placeholder
 %if "%{IPA_VERSION}" == "%{AT_SIGN}VERSION%{AT_SIGN}"
-	%define IPA_VERSION nonsense.to.please.RPM.SPEC.parser
+    %define IPA_VERSION nonsense.to.please.RPM.SPEC.parser
 %endif
 
 Name:           %{package_name}
@@ -264,7 +264,7 @@ BuildRequires:  python3-yubico
 %if ! %{ONLY_CLIENT}
 BuildRequires:  libcmocka-devel
 # Required by ipa_kdb_tests
-BuildRequires:  %{_libdir}/krb5/plugins/kdb/db2.so
+BuildRequires:  krb5-server >= %{krb5_version}
 # ONLY_CLIENT
 %endif
 
@@ -956,6 +956,8 @@ if [ $1 -gt 1 ] ; then
             cp /etc/ipa/ca.crt /var/lib/ipa-client/pki/kdc-ca-bundle.pem
             cp /etc/ipa/ca.crt /var/lib/ipa-client/pki/ca-bundle.pem
         fi
+
+        %{__python3} -c 'from ipaclient.install.client import configure_krb5_snippet; configure_krb5_snippet()' >>/var/log/ipaupgrade.log 2>&1
     fi
 
     if [ $restore -ge 2 ]; then
@@ -1119,6 +1121,7 @@ fi
 %{_usr}/share/ipa/*.ldif
 %{_usr}/share/ipa/*.uldif
 %{_usr}/share/ipa/*.template
+%{_usr}/share/ipa/bind.ipa-ext.conf
 %dir %{_usr}/share/ipa/advise
 %dir %{_usr}/share/ipa/advise/legacy
 %{_usr}/share/ipa/advise/legacy/*.template
@@ -1163,6 +1166,7 @@ fi
 %ghost %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/httpd/conf.d/ipa-pki-proxy.conf
 %ghost %attr(0644,root,root) %config(noreplace) %{_sysconfdir}/ipa/kdcproxy/ipa-kdc-proxy.conf
 %ghost %attr(0644,root,root) %config(noreplace) %{_usr}/share/ipa/html/ca.crt
+%ghost %attr(0640,root,named) %config(noreplace) %{_sysconfdir}/named/ipa-ext.conf
 %ghost %attr(0644,root,root) %{_usr}/share/ipa/html/krb.con
 %ghost %attr(0644,root,root) %{_usr}/share/ipa/html/krb5.ini
 %ghost %attr(0644,root,root) %{_usr}/share/ipa/html/krbrealm.con

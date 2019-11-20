@@ -23,13 +23,13 @@ from pkg_resources import parse_version
 import six
 
 from ipaclient.install.client import check_ldap_conf
-from ipaclient.install.ipachangeconf import IPAChangeConf
 import ipaclient.install.timeconf
 from ipalib.install import certstore, sysrestore
 from ipalib.install.kinit import kinit_keytab
 from ipapython import ipaldap, ipautil
 from ipapython.dn import DN
 from ipapython.admintool import ScriptError
+from ipapython.ipachangeconf import IPAChangeConf
 from ipaplatform import services
 from ipaplatform.tasks import tasks
 from ipaplatform.paths import paths
@@ -494,7 +494,7 @@ def promote_openldap_conf(hostname, master):
         for opt in old_opts:
             if opt['type'] == 'comment' and master in opt['value']:
                 continue
-            elif (opt['type'] == 'option' and opt['name'] == 'URI' and
+            if (opt['type'] == 'option' and opt['name'] == 'URI' and
                     master in opt['value']):
                 continue
             new_opts.append(opt)
@@ -789,6 +789,8 @@ def promote_check(installer):
             print("IPA client is already configured on this system, ignoring "
                   "the --domain, --server, --realm, --hostname, --password "
                   "and --keytab options.")
+            # Make sure options.server is not used
+            options.server = None
 
         # The NTP configuration can not be touched on pre-installed client:
         if options.no_ntp or options.ntp_servers or options.ntp_pool:
@@ -904,7 +906,11 @@ def promote_check(installer):
                            "certificate")
 
     installutils.verify_fqdn(config.host_name, options.no_host_dns)
-    installutils.verify_fqdn(config.master_host_name, options.no_host_dns)
+    # Inside the container environment master's IP address does not
+    # resolve to its name. See https://pagure.io/freeipa/issue/6210
+    container_environment = tasks.detect_container() is not None
+    installutils.verify_fqdn(config.master_host_name, options.no_host_dns,
+                             local_hostname=not container_environment)
 
     ccache = os.environ['KRB5CCNAME']
     kinit_keytab('host/{env.host}@{env.realm}'.format(env=api.env),
@@ -1039,8 +1045,15 @@ def promote_check(installer):
             config.subject_base = DN(subject_base)
 
         # Find any server with a CA
+        # The order of preference is
+        # 1. the first server specified in --server, if any
+        # 2. the server specified in the config file
+        # 3. any other
+        preferred_cas = [config.ca_host_name]
+        if options.server:
+            preferred_cas.insert(0, options.server)
         ca_host = find_providing_server(
-            'CA', conn, [config.ca_host_name]
+            'CA', conn, preferred_cas
         )
         if ca_host is not None:
             config.ca_host_name = ca_host
@@ -1049,6 +1062,14 @@ def promote_check(installer):
                 logger.error("Certificates could not be provided when "
                              "CA is present on some master.")
                 raise ScriptError(rval=3)
+            if options.setup_ca and options.server and \
+               ca_host != options.server:
+                # Installer was provided with a specific master
+                # but this one doesn't provide CA
+                logger.error("The specified --server %s does not provide CA, "
+                             "please provide a server with the CA role",
+                             options.server)
+                raise ScriptError(rval=4)
         else:
             if options.setup_ca:
                 logger.error("The remote master does not have a CA "
@@ -1063,12 +1084,27 @@ def promote_check(installer):
                 raise ScriptError(rval=3)
 
         # Find any server with a KRA
+        # The order of preference is
+        # 1. the first server specified in --server, if any
+        # 2. the server specified in the config file
+        # 3. any other
+        preferred_kras = [config.kra_host_name]
+        if options.server:
+            preferred_kras.insert(0, options.server)
         kra_host = find_providing_server(
-            'KRA', conn, [config.kra_host_name]
+            'KRA', conn, preferred_kras
         )
         if kra_host is not None:
             config.kra_host_name = kra_host
             kra_enabled = True
+            if options.setup_kra and options.server and \
+               kra_host != options.server:
+                # Installer was provided with a specific master
+                # but this one doesn't provide KRA
+                logger.error("The specified --server %s does not provide KRA, "
+                             "please provide a server with the KRA role",
+                             options.server)
+                raise ScriptError(rval=4)
         else:
             if options.setup_kra:
                 logger.error("There is no active KRA server in the domain, "

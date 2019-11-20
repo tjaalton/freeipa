@@ -21,6 +21,7 @@
  */
 
 #include "ipa_kdb.h"
+#include "ipa_krb5.h"
 #include <unicase.h>
 
 /*
@@ -318,15 +319,6 @@ static void ipadb_validate_radius(struct ipadb_context *ipactx,
         ldap_value_free_len(vals);
 }
 
-static void ipadb_validate_password(struct ipadb_context *ipactx,
-                                    LDAPMessage *lentry,
-                                    enum ipadb_user_auth *ua)
-{
-    /* If no mechanisms are set, use password. */
-    if (*ua == IPADB_USER_AUTH_NONE)
-        *ua |= IPADB_USER_AUTH_PASSWORD;
-}
-
 static enum ipadb_user_auth ipadb_get_user_auth(struct ipadb_context *ipactx,
                                                 LDAPMessage *lentry)
 {
@@ -354,7 +346,6 @@ static enum ipadb_user_auth ipadb_get_user_auth(struct ipadb_context *ipactx,
     /* Perform flag validation. */
     ipadb_validate_otp(ipactx, lentry, &ua);
     ipadb_validate_radius(ipactx, lentry, &ua);
-    ipadb_validate_password(ipactx, lentry, &ua);
 
     return ua;
 }
@@ -554,6 +545,17 @@ static krb5_error_code ipadb_parse_ldap_entry(krb5_context kcontext,
         return KRB5_KDB_DBNOTINITED;
     }
     lcontext = ipactx->lcontext;
+    if (!lcontext) {
+        krb5_klog_syslog(LOG_INFO,
+                         "No LDAP connection in ipadb_parse_ldap_entry(); retrying...\n");
+        ret = ipadb_get_connection(ipactx);
+        if (ret != 0) {
+            krb5_klog_syslog(LOG_ERR,
+                             "No LDAP connection on retry in ipadb_parse_ldap_entry()!\n");
+            kerr = KRB5_KDB_INTERNAL_ERROR;
+            goto done;
+        }
+    }
 
     entry->magic = KRB5_KDB_MAGIC_NUMBER;
     entry->len = KRB5_KDB_V1_BASE_LENGTH;
@@ -708,13 +710,6 @@ static krb5_error_code ipadb_parse_ldap_entry(krb5_context kcontext,
                                       &res_key_data, &result, &mkvno);
     switch (ret) {
     case 0:
-        /* Only set a principal's key if password auth should be used. */
-        if (!(ua & IPADB_USER_AUTH_PASSWORD)) {
-            /* This is the same behavior as ENOENT below. */
-            ipa_krb5_free_key_data(res_key_data, result);
-            break;
-        }
-
         entry->key_data = res_key_data;
         entry->n_key_data = result;
         if (mkvno) {
@@ -850,6 +845,8 @@ static krb5_error_code ipadb_parse_ldap_entry(krb5_context kcontext,
     if (ret == 0) {
         ied->authz_data = authz_data_list;
     }
+
+    ied->user_auth = ua;
 
     /* If enabled, set the otp user string, enabling otp. */
     if (ua & IPADB_USER_AUTH_OTP) {
@@ -1057,7 +1054,7 @@ static krb5_flags maybe_require_preauth(struct ipadb_context *ipactx,
     struct ipadb_e_data *ied;
 
     config = ipadb_get_global_config(ipactx);
-    if (config->disable_preauth_for_spns) {
+    if (config && config->disable_preauth_for_spns) {
         ied = (struct ipadb_e_data *)entry->e_data;
         if (ied && ied->ipa_user != true) {
             /* not a user, assume SPN */

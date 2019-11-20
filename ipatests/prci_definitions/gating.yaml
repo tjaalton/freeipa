@@ -11,25 +11,33 @@ topologies:
     name: master_1repl_1client
     cpu: 4
     memory: 7400
+  ad_master_2client: &ad_master_2client
+    name: ad_master_2client
+    cpu: 4
+    memory: 12000
+  ipaserver: &ipaserver
+    name: ipaserver
+    cpu: 2
+    memory: 2400
 
 jobs:
   fedora-30/build:
     requires: []
-    priority: 100
+    priority: 150
     job:
       class: Build
       args:
         git_repo: '{git_repo}'
         git_refspec: '{git_refspec}'
         template: &ci-master-f30
-          name: freeipa/ci-master-f30
-          version: 0.0.3
+          name: freeipa/ci-ipa-4-8-f30
+          version: 0.0.2
         timeout: 1800
         topology: *build
 
   fedora-30/test_installation_TestInstallMaster:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -41,7 +49,7 @@ jobs:
 
   fedora-30/simple_replication:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -53,7 +61,7 @@ jobs:
 
   fedora-30/caless:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -65,7 +73,7 @@ jobs:
 
   fedora-30/external_ca_1:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -77,7 +85,7 @@ jobs:
 
   fedora-30/external_ca_2:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -89,7 +97,7 @@ jobs:
 
   fedora-30/external_ca_templates:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -101,7 +109,7 @@ jobs:
 
   fedora-30/test_topologies:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -113,7 +121,7 @@ jobs:
 
   fedora-30/test_sudo:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -125,7 +133,7 @@ jobs:
 
   fedora-30/test_commands:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -137,7 +145,7 @@ jobs:
 
   fedora-30/test_kerberos_flags:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -149,7 +157,7 @@ jobs:
 
   fedora-30/test_forced_client_enrolment:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -161,7 +169,7 @@ jobs:
 
   fedora-30/test_advise:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -173,7 +181,7 @@ jobs:
 
   fedora-30/test_testconfig:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -185,7 +193,7 @@ jobs:
 
   fedora-30/test_service_permissions:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -197,7 +205,7 @@ jobs:
 
   fedora-30/test_netgroup:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -209,7 +217,7 @@ jobs:
 
   fedora-30/test_authconfig:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -219,21 +227,9 @@ jobs:
         timeout: 4800
         topology: *master_1repl_1client
 
-  fedora-30/test_smb:
-    requires: [fedora-30/build]
-    priority: 50
-    job:
-      class: RunPytest
-      args:
-        build_url: '{fedora-30/build_url}'
-        test_suite: test_integration/test_smb.py
-        template: *ci-master-f30
-        timeout: 4800
-        topology: *master_1repl_1client
-
   fedora-30/replica_promotion:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -245,7 +241,7 @@ jobs:
 
   fedora-30/dnssec:
     requires: [fedora-30/build]
-    priority: 50
+    priority: 100
     job:
       class: RunPytest
       args:
@@ -255,3 +251,26 @@ jobs:
         timeout: 3600
         topology: *master_1repl
 
+  fedora-30/membermanager:
+    requires: [fedora-30/build]
+    priority: 100
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_membermanager.py
+        template: *ci-master-f30
+        timeout: 1800
+        topology: *ipaserver
+
+  fedora-30/test_smb:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunADTests
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_smb.py
+        template: *ci-master-f30
+        timeout: 7200
+        topology: *ad_master_2client

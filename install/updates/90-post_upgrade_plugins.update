@@ -13,6 +13,7 @@ plugin: update_default_trust_view
 plugin: update_tdo_gidnumber
 plugin: update_tdo_to_new_layout
 plugin: update_host_cifs_keytabs
+plugin: update_tdo_default_read_keys_permissions
 plugin: update_ca_renewal_master
 plugin: update_idrange_type
 plugin: update_pacs
@@ -22,6 +23,7 @@ plugin: update_upload_cacrt
 # update_ra_cert_store has to be executed after update_ca_renewal_master
 plugin: update_ra_cert_store
 plugin: update_mapping_Guests_to_nobody
+plugin: fix_kra_people_entry
 
 # last
 # DNS version 1

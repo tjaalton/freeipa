@@ -90,6 +90,8 @@ enum ipadb_user_auth {
   IPADB_USER_AUTH_PASSWORD = 1 << 1,
   IPADB_USER_AUTH_RADIUS   = 1 << 2,
   IPADB_USER_AUTH_OTP      = 1 << 3,
+  IPADB_USER_AUTH_PKINIT   = 1 << 4,
+  IPADB_USER_AUTH_HARDENED = 1 << 5,
 };
 
 struct ipadb_global_config {
@@ -139,6 +141,7 @@ struct ipadb_e_data {
     time_t last_admin_unlock;
     char **authz_data;
     bool has_tktpolaux;
+    enum ipadb_user_auth user_auth;
 };
 
 struct ipadb_context *ipadb_get_context(krb5_context kcontext);

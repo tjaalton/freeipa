@@ -349,6 +349,7 @@ class KrbInstance(service.Service):
     def __configure_instance(self):
         self.__template_file(paths.KRB5KDC_KDC_CONF, chmod=None)
         self.__template_file(paths.KRB5_CONF)
+        self.__template_file(paths.KRB5_FREEIPA_SERVER)
         self.__template_file(paths.KRB5_FREEIPA, client_template=True)
         self.__template_file(paths.HTML_KRB5_INI)
         self.__template_file(paths.KRB_CON)
@@ -459,7 +460,7 @@ class KrbInstance(service.Service):
                 profile=KDC_PROFILE,
                 post_command='renew_kdc_cert',
                 perms=(0o644, 0o600),
-                resubmit_timeout=api.env.replication_wait_timeout
+                resubmit_timeout=api.env.certmonger_wait_timeout
             )
         except dbus.DBusException as e:
             # if the certificate is already tracked, ignore the error

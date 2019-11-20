@@ -140,7 +140,7 @@ def find_autoredirect(fqdn):
     """
     filename = paths.HTTPD_IPA_REWRITE_CONF
     if os.path.exists(filename):
-        pattern = "^RewriteRule \^/\$ https://%s/ipa/ui \[L,NC,R=301\]" % fqdn
+        pattern = r"^RewriteRule \^/\$ https://%s/ipa/ui \[L,NC,R=301\]" % fqdn
         p = re.compile(pattern)
         for line in fileinput.input(filename):
             if p.search(line):
@@ -157,7 +157,7 @@ def find_version(filename):
     If the file does not exist, returns -1.
     """
     if os.path.exists(filename):
-        pattern = "^[\s#]*VERSION\s+([0-9]+)\s+.*"
+        pattern = r"^[\s#]*VERSION\s+([0-9]+)\s+.*"
         p = re.compile(pattern)
         for line in fileinput.input(filename):
             if p.search(line):
@@ -459,6 +459,28 @@ def ca_add_default_ocsp_uri(ca):
     return True  # restart needed
 
 
+def ca_disable_publish_cert(ca):
+    logger.info('[Disabling cert publishing]')
+    if not ca.is_configured():
+        logger.info('CA is not configured')
+        return False
+
+    value = directivesetter.get_directive(
+        paths.CA_CS_CFG_PATH,
+        'ca.publish.cert.enable',
+        separator='=')
+    if value:
+        return False  # already set; restart not needed
+
+    directivesetter.set_directive(
+        paths.CA_CS_CFG_PATH,
+        'ca.publish.cert.enable',
+        'false',
+        quotes=False,
+        separator='=')
+    return True  # restart needed
+
+
 def upgrade_ca_audit_cert_validity(ca):
     """
     Update the Dogtag audit signing certificate.
@@ -471,6 +493,17 @@ def upgrade_ca_audit_cert_validity(ca):
     else:
         logger.info('CA is not configured')
         return False
+
+
+def ca_initialize_hsm_state(ca):
+    """Initializse HSM state as False / internal token
+    """
+    if not ca.sstore.has_state(ca.hsm_sstore):
+        section_name = ca.subsystem.upper()
+        config = SafeConfigParser()
+        config.add_section(section_name)
+        config.set(section_name, 'pki_hsm_enable', 'False')
+        ca.set_hsm_state(config)
 
 
 def named_remove_deprecated_options():
@@ -516,6 +549,34 @@ def named_remove_deprecated_options():
     logger.debug('The following configuration options have been removed: %s',
                  ', '.join(removed_options))
     return True
+
+
+def named_add_ipa_ext_conf_include():
+    """
+    Ensures named.conf does include the ipa-ext.conf file
+    """
+    if not bindinstance.named_conf_exists():
+        logger.info('DNS is not configured.')
+        return False
+
+    if not bindinstance.named_conf_include_exists(paths.NAMED_CUSTOM_CONFIG):
+        bindinstance.named_conf_add_include(paths.NAMED_CUSTOM_CONFIG)
+        return True
+    return False
+
+
+def named_add_ipa_ext_conf_file():
+    """
+    Wrapper around bindinstance.named_add_ext_conf_file().
+    Ensures named is configured before pushing the file.
+    """
+    if not bindinstance.named_conf_exists():
+        logger.info('DNS is not configured.')
+        return False
+
+    return bindinstance.named_add_ext_conf_file(
+        paths.NAMED_CUSTOM_CFG_SRC,
+        paths.NAMED_CUSTOM_CONFIG)
 
 
 def named_set_minimum_connections():
@@ -1643,36 +1704,17 @@ def setup_spake(krb):
         aug.close()
 
 
-def enable_certauth(krb):
-    logger.info("[Enable certauth]")
+# Currently, this doesn't support templating.
+def enable_server_snippet():
+    logger.info("[Enable server krb5.conf snippet]")
+    template = os.path.join(
+        paths.USR_SHARE_IPA_DIR,
+        os.path.basename(paths.KRB5_FREEIPA_SERVER) + ".template"
+    )
+    shutil.copy(template, paths.KRB5_FREEIPA_SERVER)
+    os.chmod(paths.KRB5_FREEIPA_SERVER, 0o644)
 
-    aug = Augeas(flags=Augeas.NO_LOAD | Augeas.NO_MODL_AUTOLOAD,
-                 loadpath=paths.USR_SHARE_IPA_DIR)
-    try:
-        aug.transform('IPAKrb5', paths.KRB5_CONF)
-        aug.load()
-
-        path = '/files{}/plugins/certauth'.format(paths.KRB5_CONF)
-        modified = False
-
-        if not aug.match(path):
-            aug.set('{}/module'.format(path), 'ipakdb:kdb/ipadb.so')
-            aug.set('{}/enable_only'.format(path), 'ipakdb')
-            modified = True
-
-        if modified:
-            try:
-                aug.save()
-            except IOError:
-                for error_path in aug.match('/augeas//error'):
-                    logger.error('augeas: %s', aug.get(error_path))
-                raise
-
-            if krb.is_running():
-                krb.stop()
-            krb.start()
-    finally:
-        aug.close()
+    tasks.restore_context(paths.KRB5_FREEIPA_SERVER)
 
 
 def ntpd_cleanup(fqdn, fstore):
@@ -2039,6 +2081,8 @@ def upgrade_configuration():
     # has been altered
     named_conf_changes = (
                           named_remove_deprecated_options(),
+                          named_add_ipa_ext_conf_file(),
+                          named_add_ipa_ext_conf_include(),
                           named_set_minimum_connections(),
                           named_update_gssapi_configuration(),
                           named_update_pid_file(),
@@ -2080,6 +2124,7 @@ def upgrade_configuration():
         ca_configure_lightweight_ca_acls(ca),
         ca_ensure_lightweight_cas_container(ca),
         ca_add_default_ocsp_uri(ca),
+        ca_disable_publish_cert(ca),
     ])
 
     if ca_restart:
@@ -2104,6 +2149,7 @@ def upgrade_configuration():
         cainstance.repair_profile_caIPAserviceCert()
         ca.setup_lightweight_ca_key_retrieval()
         cainstance.ensure_ipa_authority_entry()
+        ca_initialize_hsm_state(ca)
 
     migrate_to_authselect()
     add_systemd_user_hbac()
@@ -2132,7 +2178,7 @@ def upgrade_configuration():
     krb.add_anonymous_principal()
     setup_spake(krb)
     setup_pkinit(krb)
-    enable_certauth(krb)
+    enable_server_snippet()
 
     if not ds_running:
         ds.stop(ds.serverid)

@@ -41,7 +41,7 @@ def get_trusted_group_name():
         return None
 
     ad_netbios = trusts['result'][0]['ipantflatname']
-    return u'%s\Domain Admins' % ad_netbios
+    return r'%s\Domain Admins' % ad_netbios
 
 
 @pytest.mark.tier1

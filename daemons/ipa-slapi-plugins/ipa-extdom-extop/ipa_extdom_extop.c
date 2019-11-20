@@ -42,7 +42,6 @@
 #include "util.h"
 
 #define DEFAULT_MAX_NSS_BUFFER (128*1024*1024)
-#define DEFAULT_MAX_NSS_TIMEOUT (10*1000)
 
 Slapi_PluginDesc ipa_extdom_plugin_desc = {
     IPA_EXTDOM_FEATURE_DESC,
@@ -54,6 +53,7 @@ Slapi_PluginDesc ipa_extdom_plugin_desc = {
 static char *ipa_extdom_oid_list[] = {
     EXOP_EXTDOM_OID,
     EXOP_EXTDOM_V1_OID,
+    EXOP_EXTDOM_V2_OID,
     NULL
 };
 
@@ -196,6 +196,8 @@ static int ipa_extdom_extop(Slapi_PBlock *pb)
         version = EXTDOM_V0;
     } else if (strcasecmp(oid, EXOP_EXTDOM_V1_OID) == 0) {
         version = EXTDOM_V1;
+    } else if (strcasecmp(oid, EXOP_EXTDOM_V2_OID) == 0) {
+        version = EXTDOM_V2;
     } else {
         return SLAPI_PLUGIN_EXTENDED_NOT_HANDLED;
     }
@@ -242,6 +244,8 @@ static int ipa_extdom_extop(Slapi_PBlock *pb)
     if (ret != LDAP_SUCCESS) {
         if (ret == LDAP_NO_SUCH_OBJECT) {
             rc = LDAP_NO_SUCH_OBJECT;
+        } else if (ret == LDAP_TIMELIMIT_EXCEEDED) {
+            rc = LDAP_TIMELIMIT_EXCEEDED;
         } else {
             rc = LDAP_OPERATIONS_ERROR;
             err_msg = "Failed to handle the request.\n";

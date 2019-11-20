@@ -33,6 +33,7 @@ class DebianPathNamespace(BasePathNamespace):
     OLD_IPA_KEYTAB = "/etc/apache2/ipa.keytab"
     HTTPD_PASSWORD_CONF = "/etc/apache2/password.conf"
     NAMED_CONF = "/etc/bind/named.conf"
+    NAMED_CUSTOM_CONFIG = "/etc/bind/ipa-ext.conf"
     NAMED_VAR_DIR = "/var/cache/bind"
     NAMED_KEYTAB = "/etc/bind/named.keytab"
     NAMED_RFC1912_ZONES = "/etc/bind/named.conf.default-zones"
@@ -109,6 +110,7 @@ class DebianPathNamespace(BasePathNamespace):
     IPA_ODS_EXPORTER_CCACHE = "/var/lib/opendnssec/tmp/ipa-ods-exporter.ccache"
     IPA_CUSTODIA_SOCKET = "/run/apache2/ipa-custodia.sock"
     IPA_CUSTODIA_AUDIT_LOG = '/var/log/ipa-custodia.audit.log'
+    IPA_CUSTODIA_HANDLER = "/usr/lib/ipa/custodia"
     WSGI_PREFIX_DIR = "/run/apache2/wsgi"
 
 paths = DebianPathNamespace()

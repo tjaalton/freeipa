@@ -28,6 +28,7 @@ import pytest
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
 from ipaplatform.tasks import tasks as platformtasks
+from ipapython.ipaldap import realm_to_serverid
 from ipapython.dn import DN
 from ipapython import ipautil
 from ipatests.test_integration.base import IntegrationTest
@@ -76,7 +77,7 @@ def check_admin_in_cli(host):
     # LDAP do not guarantee any order, so the test cannot assume it. Based on
     # that, the code bellow order the 'Member of groups' field to able to
     # assert it latter.
-    data = dict(re.findall("\W*(.+):\W*(.+)\W*", result.stdout_text))
+    data = dict(re.findall(r"\W*(.+):\W*(.+)\W*", result.stdout_text))
     data["Member of groups"] = ', '.join(sorted(data["Member of groups"]
                                                 .split(", ")))
     result.stdout_text = ''.join([' {}: {}\n'.format(k, v)
@@ -115,6 +116,17 @@ def check_custodia_files(host):
     return True
 
 
+def check_pkcs11_modules(host):
+    """regression test for https://pagure.io/freeipa/issue/8073"""
+    # Return a dictionary with key = filename, value = file content
+    # containing all the PKCS11 modules modified by the installer
+    result = dict()
+    for filename in platformtasks.get_pkcs11_modules():
+        assert host.transport.file_exists(filename)
+        result[filename] = host.get_file_contents(filename)
+    return result
+
+
 CHECKS = [
     (check_admin_in_ldap, assert_entries_equal),
     (check_admin_in_cli, assert_results_equal),
@@ -122,7 +134,8 @@ CHECKS = [
     (check_certs, assert_results_equal),
     (check_dns, assert_results_equal),
     (check_kinit, assert_results_equal),
-    (check_custodia_files, assert_deepequal)
+    (check_custodia_files, assert_deepequal),
+    (check_pkcs11_modules, assert_deepequal)
 ]
 
 
@@ -204,6 +217,15 @@ class TestBackupAndRestore(IntegrationTest):
             dirman_password = self.master.config.dirman_password
             self.master.run_command(['ipa-restore', backup_path],
                                     stdin_text=dirman_password + '\nyes')
+
+            # check the file permssion and ownership is set to 770 and
+            # dirsrv:dirsrv after restore on /var/log/dirsrv/slapd-<instance>
+            # related ticket : https://pagure.io/freeipa/issue/7725
+            instance = realm_to_serverid(self.master.domain.realm)
+            log_path = paths.VAR_LOG_DIRSRV_INSTANCE_TEMPLATE % instance
+            cmd = self.master.run_command(['stat', '-c',
+                                           '"%a %G:%U"', log_path])
+            assert "770 dirsrv:dirsrv" in cmd.stdout_text
 
     def test_full_backup_and_restore_with_removed_users(self):
         """regression test for https://fedorahosted.org/freeipa/ticket/3866"""

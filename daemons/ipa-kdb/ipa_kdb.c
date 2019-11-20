@@ -24,6 +24,7 @@
 #include <sys/utsname.h>
 
 #include "ipa_kdb.h"
+#include "ipa_krb5.h"
 
 #define IPADB_GLOBAL_CONFIG_CACHE_TIME 60
 
@@ -193,6 +194,8 @@ static const struct {
     { "password", IPADB_USER_AUTH_PASSWORD },
     { "radius", IPADB_USER_AUTH_RADIUS },
     { "otp", IPADB_USER_AUTH_OTP },
+    { "pkinit", IPADB_USER_AUTH_PKINIT },
+    { "hardened", IPADB_USER_AUTH_HARDENED },
     { }
 };
 
@@ -586,8 +589,9 @@ static krb5_error_code ipadb_init_module(krb5_context kcontext,
 
     ret = ipadb_get_connection(ipactx);
     if (ret != 0) {
-        /* not a fatal failure, as the LDAP server may be temporarily down */
-        /* TODO: spam syslog with this error */
+        /* Not a fatal failure, as the LDAP server may be temporarily down. */
+        krb5_klog_syslog(LOG_INFO,
+                         "Didn't connect to LDAP on startup: %d", ret);
     }
 
     kerr = krb5_db_set_context(kcontext, ipactx);

@@ -45,12 +45,14 @@ dist_app_DATA =				\
 	domainlevel.ldif			\
 	kerberos.ldif			\
 	indices.ldif			\
+	bind.ipa-ext.conf		\
 	bind.named.conf.template	\
 	certmap.conf.template		\
 	kdc.conf.template		\
 	kdc_extensions.template		\
 	kdc_req.conf.template		\
 	krb5.conf.template		\
+	freeipa-server.template		\
 	krb5.ini.template		\
 	krb.con.template		\
 	krbrealm.con.template		\

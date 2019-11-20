@@ -189,6 +189,8 @@ class i18n_messages(Command):
             "type_otp": _("Two factor authentication (password + OTP)"),
             "type_password": _("Password"),
             "type_radius": _("RADIUS"),
+            "type_pkinit": _("PKINIT"),
+            "type_hardened": _("Hardened Password (by SPAKE or FAST)"),
             "type_disabled": _("Disable per-user override"),
             "user_tooltip": _("<p>Per-user setting, overwrites the global setting if any option is checked.</p><p><strong>Password + Two-factor:</strong> LDAP and Kerberos allow authentication with either one of the authentication types but Kerberos uses pre-authentication method which requires to use armor ccache.</p><p><strong>RADIUS with another type:</strong> Kerberos always use RADIUS, but LDAP never does. LDAP only recognize the password and two-factor authentication options.</p>"),
         },
@@ -299,6 +301,7 @@ class i18n_messages(Command):
             "managedby": _("${primary_key} is managed by:"),
             "member": _("${primary_key} members:"),
             "memberof": _("${primary_key} is a member of:"),
+            "membermanager": _("${primary_key} member managers:"),
         },
         "facets": {
             "details": _("Settings"),
@@ -812,6 +815,22 @@ class i18n_messages(Command):
                 "add_users": _(
                     "Add users into user group '${primary_key}'"
                 ),
+                "add_membermanager_group": _(
+                    "Add groups as member managers for user group "
+                    "'${primary_key}'"
+                ),
+                "remove_membermanager_group": _(
+                    "Remove groups from member managers for user group "
+                    "'${primary_key}'"
+                ),
+                "add_membermanager_user": _(
+                    "Add users as member managers for user group "
+                    "'${primary_key}'"
+                ),
+                "remove_membermanager_user": _(
+                    "Remove users from member managers for user group "
+                    "'${primary_key}'"
+                ),
                 "details": _("Group Settings"),
                 "external": _("External"),
                 "groups": _("Groups"),
@@ -1023,6 +1042,22 @@ class i18n_messages(Command):
                 ),
                 "add_into_sudo": _(
                     "Add host group '${primary_key}' into sudo rules"
+                ),
+                "add_membermanager_group": _(
+                    "Add groups as member managers for host group "
+                    "'${primary_key}'"
+                ),
+                "remove_membermanager_group": _(
+                    "Remove groups from member managers for host group "
+                    "'${primary_key}'"
+                ),
+                "add_membermanager_user": _(
+                    "Add users as member managers for host group "
+                    "'${primary_key}'"
+                ),
+                "remove_membermanager_user": _(
+                    "Remove users from member managers for host group "
+                    "'${primary_key}'"
                 ),
                 "host_group": _("Host Groups"),
                 "identity": _("Host Group Settings"),

@@ -759,13 +759,16 @@ class TestHiddenReplicaPromotion(IntegrationTest):
             query = resolve_records_from_server(
                 name_abs, rtype, self.master.ip
             )
-            txt = query.to_text()
+            if rtype == 'SRV':
+                records = [q.target.to_text() for q in query]
+            else:
+                records = [q.address for q in query]
             for host in hosts_expected:
-                value = host.hostname if rtype == 'SRV' else host.ip
-                assert value in txt
+                value = host.hostname + "." if rtype == 'SRV' else host.ip
+                assert value in records
             for host in hosts_unexpected:
-                value = host.hostname if rtype == 'SRV' else host.ip
-                assert value not in txt
+                value = host.hostname + "." if rtype == 'SRV' else host.ip
+                assert value not in records
 
     def _check_server_role(self, host, status, kra=True, dns=True):
         roles = [u'IPA master', u'CA server']
@@ -925,3 +928,28 @@ class TestHiddenReplicaPromotion(IntegrationTest):
         # FIXME: restore turns hidden replica into enabled replica
         self._check_config([self.master, self.replicas[0]])
         self._check_server_role(self.replicas[0], 'enabled')
+
+    def test_hidden_replica_automatic_crl(self):
+        """Exercises if automatic CRL configuration works with
+           hidden replica.
+        """
+        # Demoting Replica to be hidden.
+        self.replicas[0].run_command([
+            'ipa', 'server-state',
+            self.replicas[0].hostname, '--state=hidden'
+        ])
+        self._check_server_role(self.replicas[0], 'hidden')
+
+        # check CRL status
+        result = self.replicas[0].run_command([
+            'ipa-crlgen-manage', 'status'])
+        assert "CRL generation: disabled" in result.stdout_text
+
+        # Enbable CRL status on hidden replica
+        self.replicas[0].run_command([
+            'ipa-crlgen-manage', 'enable'])
+
+        # check CRL status
+        result = self.replicas[0].run_command([
+            'ipa-crlgen-manage', 'status'])
+        assert "CRL generation: enabled" in result.stdout_text

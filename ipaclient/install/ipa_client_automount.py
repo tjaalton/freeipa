@@ -29,6 +29,7 @@ import shutil
 import time
 import tempfile
 import gssapi
+import warnings
 
 try:
     from xml.etree import cElementTree as etree
@@ -41,7 +42,8 @@ from six.moves.urllib.parse import urlsplit
 
 # pylint: enable=import-error
 from optparse import OptionParser  # pylint: disable=deprecated-module
-from ipaclient.install import ipachangeconf, ipadiscovery
+from ipapython import ipachangeconf
+from ipaclient.install import ipadiscovery
 from ipaclient.install.client import (
     CLIENT_NOT_CONFIGURED,
     CLIENT_ALREADY_CONFIGURED,
@@ -85,7 +87,7 @@ def parse_options():
         "--idmap-domain",
         dest="idmapdomain",
         default=None,
-        help="nfs domain for idmap.conf",
+        help="nfs domain for idmapd.conf",
     )
     parser.add_option(
         "--debug",
@@ -177,31 +179,19 @@ def configure_xml(fstore):
         print("Configured %s" % authconf)
 
 
-def configure_nsswitch(fstore, options):
+def configure_nsswitch(statestore, options):
     """
-    Point automount to ldap in nsswitch.conf. This function is for non-SSSD
-    setups only
+    This function was deprecated. Use ipaplatform.tasks.
+
+    Point automount to ldap in nsswitch.conf.
+    This function is for non-SSSD setups only.
     """
-    fstore.backup_file(paths.NSSWITCH_CONF)
-
-    conf = ipachangeconf.IPAChangeConf("IPA Installer")
-    conf.setOptionAssignment(':')
-
-    nss_value = ' files ldap'
-
-    opts = [
-        {
-            'name': 'automount',
-            'type': 'option',
-            'action': 'set',
-            'value': nss_value,
-        },
-        {'name': 'empty', 'type': 'empty'},
-    ]
-
-    conf.changeConf(paths.NSSWITCH_CONF, opts)
-
-    print("Configured %s" % paths.NSSWITCH_CONF)
+    warnings.warn(
+        "Use ipaplatform.tasks.tasks.enable_ldap_automount",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return tasks.enable_ldap_automount(statestore)
 
 
 def configure_autofs_sssd(fstore, statestore, autodiscover, options):
@@ -322,19 +312,14 @@ def configure_autofs_common(fstore, statestore, options):
 def uninstall(fstore, statestore):
     RESTORE_FILES = [
         paths.SYSCONFIG_AUTOFS,
-        paths.NSSWITCH_CONF,
         paths.AUTOFS_LDAP_AUTH_CONF,
         paths.SYSCONFIG_NFS,
         paths.IDMAPD_CONF,
     ]
     STATES = ['autofs', 'rpcidmapd', 'rpcgssd']
 
-    # automount only touches /etc/nsswitch.conf if LDAP is
-    # used. Don't restore it otherwise.
-    if statestore.get_state('authconfig', 'sssd') or (
-        statestore.get_state('authselect', 'profile') == 'sssd'
-    ):
-        RESTORE_FILES.remove(paths.NSSWITCH_CONF)
+    if not statestore.get_state('autofs', 'sssd'):
+        tasks.disable_ldap_automount(statestore)
 
     if not any(fstore.has_file(f) for f in RESTORE_FILES) or not any(
         statestore.has_state(s) for s in STATES
@@ -588,7 +573,7 @@ def configure_automount():
 
     try:
         if not options.sssd:
-            configure_nsswitch(fstore, options)
+            tasks.enable_ldap_automount(statestore)
         configure_nfs(fstore, statestore, options)
         if options.sssd:
             configure_autofs_sssd(fstore, statestore, autodiscover, options)

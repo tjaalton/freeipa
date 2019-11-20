@@ -21,7 +21,7 @@
 ########################################################
 define(IPA_VERSION_MAJOR, 4)
 define(IPA_VERSION_MINOR, 8)
-define(IPA_VERSION_RELEASE, 1)
+define(IPA_VERSION_RELEASE, 2)
 
 ########################################################
 # For 'pre' releases the version will be               #
@@ -86,9 +86,8 @@ define(IPA_DATA_VERSION, 20100614120000)
 #                                                      #
 ########################################################
 define(IPA_API_VERSION_MAJOR, 2)
-define(IPA_API_VERSION_MINOR, 233)
-# Last change: Added service_add_smb command
-
+define(IPA_API_VERSION_MINOR, 235)
+# Last change: Add memberManager to groups.
 
 ########################################################
 # Following values are auto-generated from values above

@@ -310,7 +310,7 @@ def template_str(txt, vars):
     # eval() is a special string one can insert into a template to have the
     # Python interpreter evaluate the string. This is intended to allow
     # math to be performed in templates.
-    pattern = re.compile('(eval\s*\(([^()]*)\))')
+    pattern = re.compile(r'(eval\s*\(([^()]*)\))')
     val = pattern.sub(lambda x: str(eval(x.group(2))), val)
 
     return val
@@ -515,14 +515,18 @@ def run(args, stdin=None, raiseonerr=True, nolog=(), env=None,
             for group, gid in zip(suplementary_groups, suplementary_gids):
                 logger.debug('suplementary_group=%s (GID %d)', group, gid)
 
-    def preexec_fn():
-        if runas is not None:
-            os.setgroups(suplementary_gids)
-            os.setregid(pent.pw_gid, pent.pw_gid)
-            os.setreuid(pent.pw_uid, pent.pw_uid)
+    if runas is not None or umask is not None:
+        # preexec function is not supported in WSGI environment
+        def preexec_fn():
+            if runas is not None:
+                os.setgroups(suplementary_gids)
+                os.setregid(pent.pw_gid, pent.pw_gid)
+                os.setreuid(pent.pw_uid, pent.pw_uid)
 
-        if umask:
-            os.umask(umask)
+            if umask is not None:
+                os.umask(umask)
+    else:
+        preexec_fn = None
 
     try:
         # pylint: disable=subprocess-popen-preexec-fn
@@ -1145,7 +1149,7 @@ def config_replace_variables(filepath, replacevars=dict(), appendvars=dict(),
     One have to run restore_context(filepath) afterwards or
     security context of the file will not be correct after modification
     """
-    pattern = re.compile('''
+    pattern = re.compile(r'''
 (^
                         \s*
         (?P<option>     [^\#;]+?)
@@ -1220,7 +1224,7 @@ def inifile_replace_variables(filepath, section, replacevars=dict(), appendvars=
     One have to run restore_context(filepath) afterwards or
     security context of the file will not be correct after modification
     """
-    pattern = re.compile('''
+    pattern = re.compile(r'''
 (^
                         \[
         (?P<section>    .+) \]

@@ -463,7 +463,7 @@ class DsInstance(service.Service):
                 ('cn', 'config')),
             objectclass=["top", "nsSaslMapping"],
             cn=["Full Principal"],
-            nsSaslMapRegexString=['\(.*\)@\(.*\)'],
+            nsSaslMapRegexString=[r'\(.*\)@\(.*\)'],
             nsSaslMapBaseDNTemplate=[self.suffix],
             nsSaslMapFilterTemplate=['(krbPrincipalName=\\1@\\2)'],
             nsSaslMapPriority=['10'],
@@ -872,7 +872,7 @@ class DsInstance(service.Service):
                     profile=dogtag.DEFAULT_PROFILE,
                     dns=[self.fqdn],
                     post_command=cmd,
-                    resubmit_timeout=api.env.replication_wait_timeout
+                    resubmit_timeout=api.env.certmonger_wait_timeout
                 )
             finally:
                 if prev_helper is not None:

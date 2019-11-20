@@ -62,10 +62,10 @@ static enum nss_status __convert_sss_nss2nss_status(int errcode) {
         return NSS_STATUS_SUCCESS;
     case ENOENT:
         return NSS_STATUS_NOTFOUND;
-    case ETIME:
-        /* fall-through */
     case ERANGE:
         return NSS_STATUS_TRYAGAIN;
+    case ETIME:
+        /* fall-through */
     case ETIMEDOUT:
         /* fall-through */
     default:
@@ -109,6 +109,14 @@ void back_extdom_set_timeout(struct nss_ops_ctx *nss_context,
     }
 
     nss_context->timeout = timeout;
+}
+
+unsigned int back_extdom_get_timeout(struct nss_ops_ctx *nss_context) {
+    if (nss_context == NULL) {
+        return DEFAULT_MAX_NSS_TIMEOUT;
+    }
+
+    return nss_context->timeout;
 }
 
 void back_extdom_evict_user(struct nss_ops_ctx *nss_context,
@@ -272,4 +280,3 @@ enum nss_status back_extdom_getgrouplist(struct nss_ops_ctx *nss_context,
     }
     return __convert_sss_nss2nss_status(ret);
 }
-

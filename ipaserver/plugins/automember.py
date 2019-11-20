@@ -70,11 +70,11 @@ EXAMPLES:
  Add the initial rule:
    ipa automember-add --type=hostgroup webservers
    ipa automember-add --type=group devel
-""") + _("""
+""") + _(r"""
  Add a condition to the rule:
    ipa automember-add-condition --key=fqdn --type=hostgroup --inclusive-regex=^web[1-9]+\.example\.com webservers
    ipa automember-add-condition --key=manager --type=group --inclusive-regex=^uid=mscott devel
-""") + _("""
+""") + _(r"""
  Add an exclusive condition to the rule to prevent auto assignment:
    ipa automember-add-condition --key=fqdn --type=hostgroup --exclusive-regex=^web5\.example\.com webservers
 """) + _("""
@@ -95,7 +95,7 @@ EXAMPLES:
       Description: Developers
       GID: 1004200000
       Member users: tuser
-""") + _("""
+""") + _(r"""
  Remove a condition from the rule:
    ipa automember-remove-condition --key=fqdn --type=hostgroup --inclusive-regex=^web[1-9]+\.example\.com webservers
 """) + _("""
@@ -810,10 +810,9 @@ class automember_rebuild(Method):
                     if str(task.single_value['nstaskexitcode']) == '0':
                         summary=task.single_value['nstaskstatus']
                         break
-                    else:
-                        raise errors.DatabaseError(
-                            desc=task.single_value['nstaskstatus'],
-                            info=_("Task DN = '%s'" % task_dn))
+                    raise errors.DatabaseError(
+                        desc=task.single_value['nstaskstatus'],
+                        info=_("Task DN = '%s'" % task_dn))
                 time.sleep(1)
                 if time.time() > (start_time + 60):
                    raise errors.TaskTimeout(task=_('Automember'), task_dn=task_dn)

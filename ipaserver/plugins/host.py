@@ -28,7 +28,7 @@ import six
 
 from ipalib import api, errors, util
 from ipalib import messages
-from ipalib import Str, Flag
+from ipalib import Str, StrEnum, Flag
 from ipalib.parameters import Principal, Certificate
 from ipalib.plugable import Registry
 from .baseldap import (LDAPQuery, LDAPObject, LDAPCreate,
@@ -254,6 +254,18 @@ def validate_ipaddr(ugettext, ipaddr):
     return None
 
 
+class HostPassword(Str):
+    """
+    A data type for host passwords to not log password values
+
+    The Password type cannot be used because it disallows
+    setting a password on the command-line which would break
+    backwards compatibility.
+    """
+    def safe_value(self, value):
+        return u'********'
+
+
 @register()
 class host(LDAPObject):
     """
@@ -470,10 +482,11 @@ class host(LDAPObject):
             label=_('Operating system'),
             doc=_('Host operating system and version (e.g. "Fedora 9")'),
         ),
-        Str('userpassword?',
-            cli_name='password',
-            label=_('User password'),
-            doc=_('Password used in bulk enrollment'),
+        HostPassword('userpassword?',
+                     cli_name='password',
+                     label=_('User password'),
+                     doc=_('Password used in bulk enrollment'),
+                     flags=('no_search',),
         ),
         Flag('random?',
             doc=_('Generate a random password to be used in bulk enrollment'),
@@ -541,7 +554,7 @@ class host(LDAPObject):
         ),
         Str('macaddress*',
             normalizer=lambda value: value.upper(),
-            pattern='^([a-fA-F0-9]{2}[:|\-]?){5}[a-fA-F0-9]{2}$',
+            pattern=r'^([a-fA-F0-9]{2}[:|\-]?){5}[a-fA-F0-9]{2}$',
             pattern_errmsg=('Must be of the form HH:HH:HH:HH:HH:HH, where '
                             'each H is a hexadecimal character.'),
             label=_('MAC address'),
@@ -567,13 +580,19 @@ class host(LDAPObject):
             label=_('Assigned ID View'),
             flags=['no_option'],
         ),
-        Str('krbprincipalauthind*',
+        StrEnum(
+            'krbprincipalauthind*',
             cli_name='auth_ind',
             label=_('Authentication Indicators'),
             doc=_("Defines a whitelist for Authentication Indicators."
                   " Use 'otp' to allow OTP-based 2FA authentications."
                   " Use 'radius' to allow RADIUS-based 2FA authentications."
-                  " Other values may be used for custom configurations."),
+                  " Use 'pkinit' to allow PKINIT-based 2FA authentications."
+                  " Use 'hardened' to allow brute-force hardened password"
+                  " authentication by SPAKE or FAST."
+                  " With no indicator specified,"
+                  " all authentication mechanisms are allowed."),
+            values=(u'radius', u'otp', u'pkinit', u'hardened'),
         ),
     ) + ticket_flags_params
 

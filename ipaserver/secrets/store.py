@@ -15,8 +15,13 @@ class UnknownKeyName(Exception):
     pass
 
 
+class InvalidKeyArguments(Exception):
+    pass
+
+
 class DBMAPHandler:
     dbtype = None
+    supports_extra_args = False
 
     def __init__(self, config, dbmap, nickname):
         dbtype = dbmap.get('type')
@@ -81,9 +86,35 @@ class NSSWrappedCertDB(DBMAPCommandHandler):
     private key of the primary CA.
     """
     dbtype = 'NSSDB'
+    supports_extra_args = True
+
+    OID_DES_EDE3_CBC = '1.2.840.113549.3.7'
+
+    def __init__(self, config, dbmap, nickname, *extra_args):
+        super().__init__(config, dbmap, nickname)
+
+        # Extra args is either a single OID specifying desired wrap
+        # algorithm, or empty.  If empty, we must assume that the
+        # client is an old version that only supports DES-EDE3-CBC.
+        #
+        # Using either the client's requested algorithm or the
+        # default of DES-EDE3-CBC, we pass it along to the handler
+        # via the --algorithm option.  The handler, in turn, passes
+        # it along to the 'pki ca-authority-key-export' program
+        # (which is part of Dogtag).
+        #
+        if len(extra_args) > 1:
+            raise InvalidKeyArguments("Too many arguments")
+        if len(extra_args) == 1:
+            self.alg = extra_args[0]
+        else:
+            self.alg = self.OID_DES_EDE3_CBC
 
     def export_key(self):
-        return self.run_handler(['--nickname', self.nickname])
+        return self.run_handler([
+            '--nickname', self.nickname,
+            '--algorithm', self.alg,
+        ])
 
 
 class NSSCertDB(DBMAPCommandHandler):
@@ -162,12 +193,15 @@ class IPASecStore(CSStore):
 
     def _get_handler(self, key):
         path = key.split('/', 3)
-        if len(path) != 3 or path[0] != 'keys':
+        if len(path) < 3 or path[0] != 'keys':
             raise ValueError('Invalid name')
         if path[1] not in NAME_DB_MAP:
             raise UnknownKeyName("Unknown DB named '%s'" % path[1])
         dbmap = NAME_DB_MAP[path[1]]
-        return dbmap['handler'](self.config, dbmap, path[2])
+        handler = dbmap['handler']
+        if len(path) > 3 and not handler.supports_extra_args:
+            raise InvalidKeyArguments('Handler does not support extra args')
+        return handler(self.config, dbmap, path[2], *path[3:])
 
     def get(self, key):
         try:

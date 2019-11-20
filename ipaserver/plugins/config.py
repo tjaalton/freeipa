@@ -253,11 +253,13 @@ class config(LDAPObject):
             doc=_('Default types of PAC supported for services'),
             values=(u'MS-PAC', u'PAD', u'nfs:NONE'),
         ),
-        StrEnum('ipauserauthtype*',
+        StrEnum(
+            'ipauserauthtype*',
             cli_name='user_auth_type',
             label=_('Default user authentication types'),
             doc=_('Default types of supported user authentication'),
-            values=(u'password', u'radius', u'otp', u'disabled'),
+            values=(u'password', u'radius', u'otp',
+                    u'pkinit', u'hardened', u'disabled'),
         ),
         Str(
             'ipa_master_server*',
@@ -493,7 +495,7 @@ class config_mod(LDAPUpdate):
                               for field in entry_attrs[k].split(',')]
                 # test if all base types (without sub-types) are allowed
                 for a in attributes:
-                    a, _dummy, _dummy = a.partition(';')
+                    a, _unused1, _unused2 = a.partition(';')
                     if a not in allowed_attrs:
                         raise errors.ValidationError(
                             name=k, error=_('attribute "%s" not allowed') % a
@@ -503,12 +505,12 @@ class config_mod(LDAPUpdate):
 
         # Set ipasearchrecordslimit to -1 if 0 is used
         if 'ipasearchrecordslimit' in entry_attrs:
-            if entry_attrs['ipasearchrecordslimit'] is 0:
+            if entry_attrs['ipasearchrecordslimit'] == 0:
                  entry_attrs['ipasearchrecordslimit'] = -1
 
         # Set ipasearchtimelimit to -1 if 0 is used
         if 'ipasearchtimelimit' in entry_attrs:
-            if entry_attrs['ipasearchtimelimit'] is 0:
+            if entry_attrs['ipasearchtimelimit'] == 0:
                  entry_attrs['ipasearchtimelimit'] = -1
 
         for (attr, obj) in (('ipauserobjectclasses', 'user'),
@@ -525,7 +527,7 @@ class config_mod(LDAPUpdate):
                 if self.api.Object[obj].uuid_attribute:
                     checked_attrs = checked_attrs + [self.api.Object[obj].uuid_attribute]
                 for obj_attr in checked_attrs:
-                    obj_attr, _dummy, _dummy = obj_attr.partition(';')
+                    obj_attr, _unused1, _unused2 = obj_attr.partition(';')
                     if obj_attr in OPERATIONAL_ATTRIBUTES:
                         continue
                     if obj_attr in self.api.Object[obj].params and \

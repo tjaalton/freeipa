@@ -92,7 +92,6 @@ disable=
     singleton-comparison,
     len-as-condition,  # new in pylint 1.7
     no-else-return,  # new in pylint 1.7
-    literal-comparison,  # new in pylint 1.7
     single-string-used-for-slots,  # new in pylint 1.7
     useless-super-delegation,  # new in pylint 1.7
     redefined-argument-from-local,  # new in pylint 1.7
@@ -102,6 +101,7 @@ disable=
     keyword-arg-before-vararg,  # pylint 2.0, remove after dropping Python 2
     consider-using-enumerate,  # pylint 2.1, clean up tests later
     no-else-raise, # python 2.4.0
+    import-outside-toplevel, # pylint 2.4.2
 
 [REPORTS]
 
