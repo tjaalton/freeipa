@@ -1,0 +1,27 @@
+From 1ca93942b852285c81fb6b951051446841b4af8f Mon Sep 17 00:00:00 2001
+From: Timo Aaltonen <tjaalton@debian.org>
+Date: Sat, 23 Nov 2019 14:59:07 +0200
+Subject: [PATCH] Debian: Fix font-awesome path.
+
+Signed-off-by: Timo Aaltonen <tjaalton@debian.org>
+Reviewed-By: Christian Heimes <cheimes@redhat.com>
+---
+ ipaplatform/debian/paths.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ipaplatform/debian/paths.py b/ipaplatform/debian/paths.py
+index 1e01ae3d9..764b5a281 100644
+--- a/ipaplatform/debian/paths.py
++++ b/ipaplatform/debian/paths.py
+@@ -93,7 +93,7 @@ class DebianPathNamespace(BasePathNamespace):
+     HTTPD = "/usr/sbin/apache2ctl"
+     FONTS_DIR = "/usr/share/fonts/truetype"
+     FONTS_OPENSANS_DIR = "/usr/share/fonts/truetype/open-sans"
+-    FONTS_FONTAWESOME_DIR = "/usr/share/fonts/truetype/fontawesome"
++    FONTS_FONTAWESOME_DIR = "/usr/share/fonts/truetype/font-awesome"
+     VAR_KERBEROS_KRB5KDC_DIR = "/var/lib/krb5kdc/"
+     VAR_KRB5KDC_K5_REALM = "/var/lib/krb5kdc/.k5."
+     CACERT_PEM = "/var/lib/ipa/certs/cacert.pem"
+-- 
+2.20.1
+

@@ -1,4 +1,5 @@
 # upstreamed
+Fix-font-awesome-path.patch
 
 # not upstreamable
 fix-ods-conf-template.diff
