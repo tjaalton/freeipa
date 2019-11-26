@@ -1,5 +1,9 @@
-freeipa (4.8.2-2) UNRELEASED; urgency=medium
+freeipa (4.8.3-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
+    - CVE-2019-10195: Don't log passwords embedded in commands in calls
+      using batch
+    - CVE-2019-14867: Make sure to have storage space for tag
   * Fix-font-awesome-path.patch: Fix the path to font-awesome dir. (LP:
     #1853863)
 
