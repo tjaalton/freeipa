@@ -102,7 +102,6 @@ Description: FreeIPA centralized identity framework -- AD trust installer
 Package: freeipa-tests
 Architecture: all
 Depends:
- freeipa-client (>= ${source:Version}),
  python3-ipalib (>= ${source:Version}),
  python3-ipatests (>= ${source:Version}),
  python3-pytest,
