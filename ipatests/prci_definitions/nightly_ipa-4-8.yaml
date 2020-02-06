@@ -32,9 +32,9 @@ topologies:
     cpu: 4
     memory: 12000
   ad_master: &ad_master
-   name: ad_master
-   cpu: 4
-   memory: 12000
+    name: ad_master
+    cpu: 4
+    memory: 12000
 
 jobs:
   fedora-30/build:
@@ -155,6 +155,18 @@ jobs:
       args:
         build_url: '{fedora-30/build_url}'
         test_suite: test_integration/test_http_kdc_proxy.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl_1client
+
+  fedora-30/test_fips:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_fips.py
         template: *ci-master-f30
         timeout: 3600
         topology: *master_1repl_1client
@@ -419,6 +431,18 @@ jobs:
       args:
         build_url: '{fedora-30/build_url}'
         test_suite: test_integration/test_installation.py::TestInstallMasterDNS
+        template: *ci-master-f30
+        timeout: 10800
+        topology: *master_1repl
+
+  fedora-30/test_installation_TestInstallMasterDNSRepeatedly:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_installation.py::TestInstallMasterDNSRepeatedly
         template: *ci-master-f30
         timeout: 10800
         topology: *master_1repl
@@ -1241,6 +1265,18 @@ jobs:
         timeout: 10800
         topology: *master_1repl_1client
 
+  fedora-30/test_otp:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_otp.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
+
   fedora-30/test_pkinit_manage:
     requires: [fedora-30/build]
     priority: 50
@@ -1361,7 +1397,7 @@ jobs:
         timeout: 7200
         topology: *master_1repl
 
-  fedora-30/membermanager:
+  fedora-30/test_membermanager:
     requires: [fedora-30/build]
     priority: 50
     job:
@@ -1371,4 +1407,16 @@ jobs:
         test_suite: test_integration/test_membermanager.py
         template: *ci-master-f30
         timeout: 1800
-        topology: *ipaserver
+        topology: *master_1repl
+
+  fedora-latest/krbtpolicy:
+    requires: [fedora-30/build]
+    priority: 50
+    job:
+      class: RunPytest
+      args:
+        build_url: '{fedora-30/build_url}'
+        test_suite: test_integration/test_krbtpolicy.py
+        template: *ci-master-f30
+        timeout: 3600
+        topology: *master_1repl
