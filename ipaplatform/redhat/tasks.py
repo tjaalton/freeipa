@@ -188,12 +188,6 @@ class RedHatTaskNamespace(BaseTaskNamespace):
                 "globally, disable it on the specific interfaces in "
                 "sysctl.conf except 'lo' interface.")
 
-        # XXX This is a hack to work around an issue with Travis CI by
-        # skipping IPv6 address test. The Dec 2017 update removed ::1 from
-        # loopback, see https://github.com/travis-ci/travis-ci/issues/8891.
-        if os.environ.get('TRAVIS') == 'true':
-            return
-
         try:
             localhost6 = ipautil.CheckedIPAddress('::1', allow_loopback=True)
             if localhost6.get_matching_interface() is None:
@@ -590,10 +584,10 @@ class RedHatTaskNamespace(BaseTaskNamespace):
         self.systemd_daemon_reload()
 
     def configure_httpd_protocol(self):
-        # TLS 1.3 is not yet supported
-        directivesetter.set_directive(paths.HTTPD_SSL_CONF,
-                                      'SSLProtocol',
-                                      'TLSv1.2', False)
+        # use default crypto policy for SSLProtocol
+        directivesetter.set_directive(
+            paths.HTTPD_SSL_CONF, 'SSLProtocol', None, False
+        )
 
     def set_hostname(self, hostname):
         ipautil.run([paths.BIN_HOSTNAMECTL, 'set-hostname', hostname])
