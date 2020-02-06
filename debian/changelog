@@ -3,6 +3,7 @@ freeipa (4.8.4-1) UNRELEASED; urgency=medium
   * New upstream release.
   * control: Drop client from freeipa-tests depends.
   * Fix-font-awesome-path.patch: Dropped, upstream.
+  * Use debhelper-compat.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 28 Nov 2019 15:07:31 +0200
 
