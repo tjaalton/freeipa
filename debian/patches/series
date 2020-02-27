@@ -4,3 +4,4 @@
 fix-ods-conf-template.diff
 
 # send upstream
+write-out-only-one-cert-per-file.diff
