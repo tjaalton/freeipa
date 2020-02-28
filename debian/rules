@@ -3,8 +3,8 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+include /usr/share/dpkg/architecture.mk
 include /usr/share/dpkg/pkg-info.mk
-DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
 # build server only where nodejs is available
 ifneq (,$(filter $(DEB_HOST_ARCH), amd64 arm64 armhf i386 mips mips64el mipsel ppc64 ppc64el s390x))
