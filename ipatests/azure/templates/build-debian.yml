@@ -1,0 +1,10 @@
+steps:
+- script: |
+    set -e
+    echo "Running deb build"
+    DEB_BUILD_OPTIONS='parallel=1 noddebs' dpkg-buildpackage -b
+
+    echo "Moving packages to dist/"
+    mkdir -p $(builddir)/dist/
+    mv ../*.deb dist
+  displayName: Build packages

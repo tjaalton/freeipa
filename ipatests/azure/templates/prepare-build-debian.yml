@@ -1,0 +1,31 @@
+steps:
+- script: |
+    set -e
+    sudo apt-get update -y
+    sudo apt-get dist-upgrade -y
+    echo "Installing base development environment"
+    sudo \
+        DEBIAN_FRONTEND=noninteractive \
+        apt-get install -y \
+        dpkg-dev \
+        docker.io \
+        python3-all-dev \
+        python3-cffi \
+        python3-m2r \
+        python3-paramiko \
+        python3-sphinx \
+        python3-yaml \
+        rpmlint \
+
+    echo "Fetching debian packaging from salsa.debian.org"
+    wget https://salsa.debian.org/freeipa-team/freeipa/-/archive/master/freeipa-master.tar?path=debian \
+        -O freeipa-master.tar
+    tar xf freeipa-master.tar
+    mv freeipa-master-debian/debian .
+    rm -fr debian/patches freeipa-master-debian
+
+    echo "Installing FreeIPA development dependencies"
+    sudo dpkg-checkbuilddeps 2>&1 \
+        | sed 's/.*dependencies: //;s/([^)]*)//g' \
+        | xargs sudo DEBIAN_FRONTEND=noninteractive apt-get install -y
+  displayName: Prepare build environment
