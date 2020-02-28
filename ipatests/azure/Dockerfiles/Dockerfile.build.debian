@@ -1,0 +1,17 @@
+FROM quay.io/tjaalton/freeipa:ipa-ci
+
+MAINTAINER [Debian FreeIPA Team pkg-freeipa-devel@alioth-lists.debian.net]
+ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8 DEBIAN_FRONTEND=noninteractive
+
+ADD dist /root
+RUN \
+    apt-get update \
+    && apt-get dist-upgrade -y \
+    && apt-get install -y sudo gnupg2 firewalld libnss3-tools librpm8 locales iptables openssh-server \
+    && ls /root/*.deb | xargs apt-get -y install \
+    && rm /etc/opendnssec/prevent-startup \
+    && echo 'PermitRootLogin yes' > /etc/ssh/sshd_config.d/root-login.conf
+
+STOPSIGNAL RTMIN+3
+VOLUME ["/freeipa", "/run", "/tmp"]
+ENTRYPOINT [ "/sbin/init" ]
