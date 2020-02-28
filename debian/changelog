@@ -7,6 +7,8 @@ freeipa (4.8.4-1) UNRELEASED; urgency=medium
   * Add debian/gitlab-ci.yml.
     - allow blhc and piuparts to fail
   * write-out-only-one-cert-per-file.diff: Fix writing CA cert to file.
+  * tests: Make failure an actual failure again, and dump only last 2000
+    lines on failure, also from ipaclient log.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 28 Nov 2019 15:07:31 +0200
 

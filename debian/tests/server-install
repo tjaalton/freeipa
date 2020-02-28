@@ -40,6 +40,8 @@ ipa-server-install \
 
 if [ $? != 0 ]; then
     echo ">>>>> IPASERVER log >>>>>>>"
-    cat /var/log/ipaserver-install.log
-    exit 0
+    tail -n 2000 /var/log/ipaserver-install.log
+    echo ">>>>> IPACLIENT log >>>>>>>"
+    tail -n 2000 /var/log/ipaclient-install.log
+    exit 1
 fi
