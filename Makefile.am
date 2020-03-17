@@ -4,7 +4,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 if ENABLE_SERVER
     IPASERVER_SUBDIRS = ipaserver
-    SERVER_SUBDIRS = daemons init install
+    SERVER_SUBDIRS = daemons init install selinux
 endif
 
 if WITH_IPATESTS
@@ -22,6 +22,8 @@ PYTHON_SCRIPT_SUBDIRS = \
         $(top_builddir)/install/restart_scripts \
         $(top_builddir)/install/tools \
         $(NULL)
+
+AZURE_PYTHON_SCRIPT_SUBDIR = $(top_builddir)/ipatests/azure
 
 IPA_PLACEHOLDERS = freeipa ipa ipaserver ipatests
 SUBDIRS = asn1 util client contrib po pypi $(PYTHON_SUBDIRS) $(SERVER_SUBDIRS)
@@ -275,16 +277,33 @@ polint:
 rpmlint: freeipa.spec
 	rpmlint ./$<
 
-YAML_FILES = \
-	$(top_srcdir)/.lgtm.yml \
-	$(wildcard $(top_srcdir)/.*.yaml) \
-	$(wildcard $(top_srcdir)/ipatests/prci_definitions/*.yaml)
-
+# Try to load yml/yaml files via safe_load, which recognizes only standard
+# YAML tags and cannot construct an arbitrary Python object.
+# There are Jinja yaml templates, which differ from reqular ones. These
+# files should be placed on skip list (YAML_TEMPLATE_FILES), otherwise
+# safe_load fails.
 .PHONY: yamllint
-yamllint: $(YAML_FILES)
-	@for YAML in $^; do \
-		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" || exit 1; \
-	done
+yamllint:
+	YAML_TEMPLATE_FILES="\
+		$(top_srcdir)/ipatests/azure/templates/ipa-test-config-template.yaml \
+	"; \
+	echo "jinja template files:"; \
+	for YAML in $${YAML_TEMPLATE_FILES}; do \
+		echo $${YAML}; \
+		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" >/dev/null 2>&1 \
+		&& { echo Unexpected PASS of parsing yaml: $${YAML}. This file is a regular yaml.; exit 1; }; \
+	done; \
+	YAML_FILES=`find $(top_srcdir) \
+		\( -name '*.yaml' -o \
+		-name '*.yml' \) \
+		$$(printf '! -path %s ' $${YAML_TEMPLATE_FILES})`; \
+	echo -e "\nlint yaml files"; \
+	echo "-----------"; \
+	for YAML in $${YAML_FILES}; do \
+		echo $${YAML}; \
+		$(PYTHON) -c "import yaml; f = open('$${YAML}'); yaml.safe_load(f); f.close()" || { echo Your YAML file: $${YAML} has a wrong syntax or this is a Jinja template. In the latter clause, consider to add your YAML file to the YAML_TEMPLATE_FILES list in Makefile.am.; exit 1; } \
+	done; \
+	echo "-----------"
 
 # Run pylint for all python files. Finds all python files/packages, skips
 # folders rpmbuild, freeipa-* and dist. Skip (match, but don't print) .*,
@@ -307,7 +326,8 @@ pylint: $(GENERATED_PYTHON_FILES) ipasetup.py python_scripts
 		-name '*~' -o \
 		-name '*.py' -print -o \
 		-type f -exec grep -qsm1 '^#!.*\bpython' '{}' \; -print`; \
-	echo "Pylint on $(PYTHON) is running, please wait ..."; \
+	FILES=`echo -e "$${FILES}\n$(AZURE_PYTHON_SCRIPT_SUBDIR)"`; \
+	echo -e "Pylint on $(PYTHON) is running over files:\n$${FILES}\nPlease wait ...\n"; \
 	PYTHONPATH=$(top_srcdir) $(PYTHON) -m pylint \
 		--rcfile=$(top_srcdir)/pylintrc \
 		--load-plugins pylint_plugins \

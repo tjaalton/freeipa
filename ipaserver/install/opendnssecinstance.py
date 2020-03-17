@@ -13,6 +13,7 @@ import shutil
 from subprocess import CalledProcessError
 
 from ipalib.install import sysrestore
+from ipaserver.dnssec.opendnssec import tasks
 from ipaserver.install import service
 from ipaserver.masters import ENABLED_SERVICE
 from ipapython.dn import DN
@@ -21,7 +22,6 @@ from ipapython import ipautil
 from ipaplatform import services
 from ipaplatform.constants import constants
 from ipaplatform.paths import paths
-from ipaplatform.tasks import tasks
 from ipalib import errors, api
 from ipaserver import p11helper
 from ipalib.constants import SOFTHSM_DNSSEC_TOKEN_LABEL
@@ -179,6 +179,12 @@ class OpenDNSSECInstance(service.Service):
         # add pin to template
         sub_conf_dict = self.conf_file_dict
         sub_conf_dict['PIN'] = pin
+        if paths.ODS_KSMUTIL is not None and os.path.exists(paths.ODS_KSMUTIL):
+            # OpenDNSSEC 1.4
+            sub_conf_dict['INTERVAL'] = '<Interval>PT3600S</Interval>'
+        else:
+            # OpenDNSSEC 2.x
+            sub_conf_dict['INTERVAL'] = '<!-- Interval not used in 2x -->'
 
         ods_conf_txt = ipautil.template_file(
             os.path.join(paths.USR_SHARE_IPA_DIR, "opendnssec_conf.template"),
@@ -287,14 +293,6 @@ class OpenDNSSECInstance(service.Service):
             os.chown(paths.OPENDNSSEC_KASP_DB, self.ods_uid, self.ods_gid)
             os.chmod(paths.OPENDNSSEC_KASP_DB, 0o660)
 
-            # regenerate zonelist.xml
-            result = tasks.run_ods_manager(
-                ['zonelist', 'export'], capture_output=True
-            )
-            with open(paths.OPENDNSSEC_ZONELIST_FILE, 'w') as f:
-                f.write(result.output)
-                os.fchown(f.fileno(), self.ods_uid, self.ods_gid)
-                os.fchmod(f.fileno(), 0o660)
         else:
             # initialize new kasp.db
             tasks.run_ods_setup()
@@ -308,6 +306,16 @@ class OpenDNSSECInstance(service.Service):
 
     def __start(self):
         self.restart()  # needed to reload conf files
+        tasks.run_ods_policy_import()
+        if self.kasp_db_file:
+            # regenerate zonelist.xml
+            result = tasks.run_ods_manager(
+                ['zonelist', 'export'], capture_output=True
+            )
+            with open(paths.OPENDNSSEC_ZONELIST_FILE, 'w') as f:
+                f.write(result.output)
+                os.fchown(f.fileno(), self.ods_uid, self.ods_gid)
+                os.fchmod(f.fileno(), 0o660)
 
     def uninstall(self):
         if not self.is_configured():

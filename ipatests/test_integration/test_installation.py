@@ -29,6 +29,7 @@ from ipatests.pytest_ipa.integration import tasks
 from ipatests.pytest_ipa.integration.env_config import get_global_config
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.test_integration.test_caless import CALessBase, ipa_certs_cleanup
+from ipaplatform import services
 
 config = get_global_config()
 
@@ -187,7 +188,7 @@ class TestInstallWithCA1(InstallTestBase1):
         https://pagure.io/freeipa/issue/7418
         """
         ldap_conf = paths.OPENLDAP_LDAP_CONF
-        base_dn = self.master.domain.basedn  # pylint: disable=no-member
+        base_dn = self.master.domain.basedn
         client = self.replicas[0]
         tasks.uninstall_master(client)
         expected_msg1 = "contains deprecated and unsupported " \
@@ -224,6 +225,124 @@ class TestInstallWithCA2(InstallTestBase2):
                         reason='does not work on DOMAIN_LEVEL_0 by design')
     def test_replica2_ipa_kra_install(self):
         super(TestInstallWithCA2, self).test_replica2_ipa_kra_install()
+
+
+class TestInstallCA(IntegrationTest):
+    """
+    Tests for CA installation on a replica
+    """
+
+    num_replicas = 2
+
+    @classmethod
+    def install(cls, mh):
+        tasks.install_master(cls.master, setup_dns=False)
+
+    def test_replica_ca_install_with_no_host_dns(self):
+        """
+        Test for ipa-ca-install --no-host-dns on a replica
+        """
+
+        tasks.install_replica(self.master, self.replicas[0], setup_ca=False)
+        tasks.install_ca(self.replicas[0], extra_args=["--no-host-dns"])
+
+    def test_replica_ca_install_with_skip_schema_check(self):
+        """
+        Test for ipa-ca-install --skip-schema-check on a replica
+        """
+
+        tasks.install_replica(self.master, self.replicas[1], setup_ca=False)
+        tasks.install_ca(self.replicas[1], extra_args=["--skip-schema-check"])
+
+    def test_certmonger_reads_token_HSM(self):
+        """Test if certmonger reads the token in HSM
+
+        This is to ensure added HSM support for FreeIPA. This test adds
+        certificate with sofhsm token and checks if certmonger is tracking
+        it.
+
+        related : https://pagure.io/certmonger/issue/125
+        """
+        test_service = 'test/%s' % self.master.hostname
+        pkcs_passwd = 'Secret123'
+        pin = '123456'
+        noisefile = '/tmp/noisefile'
+        self.master.put_file_contents(noisefile, os.urandom(64))
+
+        tasks.kinit_admin(self.master)
+        tasks.install_dns(self.master)
+        self.master.run_command(['ipa', 'service-add', test_service])
+
+        # create a csr
+        cmd_args = ['certutil', '-d', paths.NSS_DB_DIR, '-R', '-a',
+                    '-o', '/root/ipa.csr',
+                    '-s', "CN=%s" % self.master.hostname,
+                    '-z', noisefile]
+        self.master.run_command(cmd_args)
+
+        # request certificate
+        cmd_args = ['ipa', 'cert-request', '--principal', test_service,
+                    '--certificate-out', '/root/test.pem', '/root/ipa.csr']
+        self.master.run_command(cmd_args)
+
+        # adding trust flag
+        cmd_args = ['certutil', '-A', '-d', paths.NSS_DB_DIR, '-n',
+                    'test', '-a', '-i', '/root/test.pem', '-t', 'u,u,u']
+        self.master.run_command(cmd_args)
+
+        # export pkcs12 file
+        cmd_args = ['pk12util', '-o', '/root/test.p12',
+                    '-d', paths.NSS_DB_DIR, '-n', 'test', '-W', pkcs_passwd]
+        self.master.run_command(cmd_args)
+
+        # add softhsm lib
+        cmd_args = ['modutil', '-dbdir', paths.NSS_DB_DIR, '-add',
+                    'softhsm', '-libfile', '/usr/lib64/softhsm/libsofthsm.so']
+        self.master.run_command(cmd_args, stdin_text="\n\n")
+
+        # create a token
+        cmd_args = ['softhsm2-util', '--init-token', '--label', 'test',
+                    '--pin', pin, '--so-pin', pin, '--free']
+        self.master.run_command(cmd_args)
+
+        self.master.run_command(['softhsm2-util', '--show-slots'])
+
+        cmd_args = ['certutil', '-F', '-d', paths.NSS_DB_DIR, '-n', 'test']
+        self.master.run_command(cmd_args)
+
+        cmd_args = ['pk12util', '-i', '/root/test.p12',
+                    '-d', paths.NSS_DB_DIR, '-h', 'test',
+                    '-W', pkcs_passwd, '-K', pin]
+        self.master.run_command(cmd_args)
+
+        cmd_args = ['certutil', '-A', '-d', paths.NSS_DB_DIR, '-n', 'IPA CA',
+                    '-t', 'CT,,', '-a', '-i', paths.IPA_CA_CRT]
+        self.master.run_command(cmd_args)
+
+        # validate the certificate
+        self.master.put_file_contents('/root/pinfile', pin)
+        cmd_args = ['certutil', '-V', '-u', 'V', '-e', '-d', paths.NSS_DB_DIR,
+                    '-h', 'test', '-n', 'test:test', '-f', '/root/pinfile']
+        result = self.master.run_command(cmd_args)
+        assert 'certificate is valid' in result.stdout_text
+
+        # add certificate tracking to certmonger
+        cmd_args = ['ipa-getcert', 'start-tracking', '-d', paths.NSS_DB_DIR,
+                    '-n', 'test', '-t', 'test', '-P', pin,
+                    '-K', test_service]
+        result = self.master.run_command(cmd_args)
+        request_id = re.findall(r'\d+', result.stdout_text)
+
+        # check if certificate is tracked by certmonger
+        status = tasks.wait_for_request(self.master, request_id[0], 300)
+        assert status == "MONITORING"
+
+        # ensure if key and token are re-usable
+        cmd_args = ['getcert', 'resubmit', '-i', request_id[0]]
+        self.master.run_command(cmd_args)
+
+        status = tasks.wait_for_request(self.master, request_id[0], 300)
+        assert status == "MONITORING"
 
 
 class TestInstallWithCA_KRA1(InstallTestBase1):
@@ -392,6 +511,21 @@ def get_pki_tomcatd_pid(host):
     return(pid)
 
 
+def get_ipa_services_pids(host):
+    ipa_services_name = [
+        "krb5kdc", "kadmin", "named", "httpd", "ipa-custodia",
+        "pki_tomcatd", "ipa-dnskeysyncd"
+    ]
+    pids_of_ipa_services = {}
+    for name in ipa_services_name:
+        service_name = services.knownservices[name].systemd_name
+        result = host.run_command(
+            ["systemctl", "-p", "MainPID", "--value", "show", service_name]
+        )
+        pids_of_ipa_services[service_name] = int(result.stdout_text.strip())
+    return pids_of_ipa_services
+
+
 ##
 # Rest of master installation tests
 ##
@@ -443,6 +577,75 @@ class TestInstallMaster(IntegrationTest):
         # check if pid for pki-tomcad changed
         pki_pid_after_restart_2 = get_pki_tomcatd_pid(self.master)
         assert pki_pid_after_restart != pki_pid_after_restart_2
+
+    def test_ipactl_scenario_check(self):
+        """ Test if ipactl starts services stopped by systemctl
+        This will first check if all services are running then it will stop
+        few service. After that it will restart all services and then check
+        the status and pid of services.It will also compare pid after ipactl
+        start and restart in case of start it will remain unchanged on the
+        other hand in case of restart it will change.
+        """
+        # listing all services
+        services = [
+            "Directory", "krb5kdc", "kadmin", "named", "httpd", "ipa-custodia",
+            "pki-tomcatd", "ipa-otpd", "ipa-dnskeysyncd"
+        ]
+
+        # checking the service status
+        cmd = self.master.run_command(['ipactl', 'status'])
+        for service in services:
+            assert f"{service} Service: RUNNING" in cmd.stdout_text
+
+        # stopping few services
+        service_stop = ["krb5kdc", "kadmin", "httpd"]
+        for service in service_stop:
+            self.master.run_command(['systemctl', 'stop', service])
+
+        # checking service status
+        service_start = [
+            svcs for svcs in services if svcs not in service_stop
+        ]
+        cmd = self.master.run_command(['ipactl', 'status'])
+        for service in service_start:
+            assert f"{service} Service: RUNNING" in cmd.stdout_text
+        for service in service_stop:
+            assert f'{service} Service: STOPPED' in cmd.stdout_text
+
+        # starting all services again
+        self.master.run_command(['ipactl', 'start'])
+
+        # checking service status
+        cmd = self.master.run_command(['ipactl', 'status'])
+        for service in services:
+            assert f"{service} Service: RUNNING" in cmd.stdout_text
+
+        # get process id of services
+        ipa_services_pids = get_ipa_services_pids(self.master)
+
+        # restarting all services again
+        self.master.run_command(['ipactl', 'restart'])
+
+        # checking service status
+        cmd = self.master.run_command(['ipactl', 'status'])
+        for service in services:
+            assert f"{service} Service: RUNNING" in cmd.stdout_text
+
+        # check if pid for services are different
+        svcs_pids_after_restart = get_ipa_services_pids(self.master)
+        assert ipa_services_pids != svcs_pids_after_restart
+
+        # starting all services again
+        self.master.run_command(['ipactl', 'start'])
+
+        # checking service status
+        cmd = self.master.run_command(['ipactl', 'status'])
+        for service in services:
+            assert f"{service} Service: RUNNING" in cmd.stdout_text
+
+        # check if pid for services are same
+        svcs_pids_after_start = get_ipa_services_pids(self.master)
+        assert svcs_pids_after_restart == svcs_pids_after_start
 
     def test_WSGI_worker_process(self):
         """ Test if WSGI worker process count is set to 4
@@ -619,6 +822,30 @@ class TestInstallMasterDNS(IntegrationTest):
             setup_dns=True,
             extra_args=['--zonemgr', 'me@example.org'],
         )
+
+    def test_server_install_lock_bind_recursion(self):
+        """Test if server installer lock Bind9 recursion
+
+        This test is to check if recursion can be configured.
+        It checks if newly added file /etc/named/ipa-ext.conf
+        exists and /etc/named.conf should not have
+        'allow-recursion { any; };'. It also checks if ipa-backup
+        command backup the /etc/named/ipa-ext.conf file as well
+
+        related : https://pagure.io/freeipa/issue/8079
+        """
+        # check of /etc/named/ipa-ext.conf exist
+        assert self.master.transport.file_exists(paths.NAMED_CUSTOM_CONFIG)
+
+        # check if /etc/named.conf does not contain 'allow-recursion { any; };'
+        string_to_check = 'allow-recursion { any; };'
+        named_contents = self.master.get_file_contents(paths.NAMED_CONF,
+                                                       encoding='utf-8')
+        assert string_to_check not in named_contents
+
+        # check if ipa-backup command backups the /etc/named/ipa-ext.conf
+        result = self.master.run_command(['ipa-backup', '-v'])
+        assert paths.NAMED_CUSTOM_CONFIG in result.stderr_text
 
     def test_install_kra(self):
         tasks.install_kra(self.master, first_instance=True)

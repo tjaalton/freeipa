@@ -1032,6 +1032,9 @@ def certificate_renewal_update(ca, kra, ds, http):
     Update certmonger certificate renewal configuration.
     """
 
+    # First ensure the renewal helpers are defined.
+    ca.configure_certmonger_renewal_helpers()
+
     template = paths.CERTMONGER_COMMAND_TEMPLATE
     serverid = ipaldap.realm_to_serverid(api.env.realm)
 
@@ -1148,7 +1151,6 @@ def certificate_renewal_update(ca, kra, ds, http):
             logger.info("Removing %s", filename)
             ipautil.remove_file(filename)
 
-    ca.configure_certmonger_renewal()
     ca.configure_renewal()
     ca.configure_agent_renewal()
     ca.add_lightweight_ca_tracking_requests()
@@ -1945,6 +1947,14 @@ def upgrade_configuration():
                      os.path.join(paths.USR_SHARE_IPA_DIR,
                                   "ipa-kdc-proxy.conf.template"))
         if ca.is_configured():
+            # Handle upgrade of AJP connector configuration
+            ca.secure_ajp_connector()
+            if ca.ajp_secret:
+                sub_dict['DOGTAG_AJP_SECRET'] = "secret={}".format(
+                    ca.ajp_secret)
+            else:
+                sub_dict['DOGTAG_AJP_SECRET'] = ''
+
             upgrade_file(
                 sub_dict,
                 paths.HTTPD_IPA_PKI_PROXY_CONF,

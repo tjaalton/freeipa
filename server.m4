@@ -167,4 +167,3 @@ AC_ARG_WITH([systemdtmpfilesdir],
             [systemdtmpfilesdir=$with_systemdtmpfilesdir],
         [systemdtmpfilesdir=$($PKG_CONFIG --define-variable=prefix='${prefix}' --variable=tmpfilesdir systemd)])
 AC_SUBST([systemdtmpfilesdir])
-

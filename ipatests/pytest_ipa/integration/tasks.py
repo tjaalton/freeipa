@@ -28,6 +28,7 @@ import textwrap
 import re
 import collections
 import itertools
+import shutil
 import tempfile
 import time
 from pipes import quote
@@ -140,6 +141,7 @@ def check_arguments_are(slice, instanceof):
         return wrapped
     return wrapper
 
+
 def prepare_reverse_zone(host, ip):
     zone = get_reverse_zone_default(ip)
     result = host.run_command(["ipa",
@@ -148,6 +150,7 @@ def prepare_reverse_zone(host, ip):
     if result.returncode > 0:
         logger.warning("%s", result.stderr_text)
     return zone, result.returncode
+
 
 def prepare_host(host):
     if isinstance(host, Host):
@@ -238,6 +241,7 @@ def host_service_active(host, service):
 
     return res.returncode == 0
 
+
 def fix_apache_semaphores(master):
     systemd_available = master.transport.file_exists(paths.SYSTEMCTL)
 
@@ -308,6 +312,7 @@ def enable_replication_debugging(host, log_level=0):
         nsslapd-errorlog-level: {log_level}
         """.format(log_level=log_level))
     ldapmodify_dm(host, logging_ldif)
+
 
 def set_default_ttl_for_ipa_dns_zone(host, raiseonerr=True):
     args = [
@@ -776,20 +781,74 @@ def setup_sssd_debugging(host):
     clear_sssd_cache(host)
 
 
-def modify_sssd_conf(host, domain, mod_dict, provider='ipa',
-                     provider_subtype=None):
-    """
-    modify options in a single domain section of host's sssd.conf
-    :param host: multihost.Host object
-    :param domain: domain section name to modify
-    :param mod_dict: dictionary of options which will be passed to
-        SSSDDomain.set_option(). To remove an option specify its value as
-        None
-    :param provider: provider backend to set. Defaults to ipa
-    :param provider_subtype: backend subtype (e.g. id or sudo), will be added
-        to the domain config if not present
-    """
+@contextmanager
+def remote_sssd_config(host):
+    """Context manager for editing sssd config file on a remote host.
+
+    It provides SimpleSSSDConfig object which is automatically serialized and
+    uploaded to remote host upon exit from the context.
+
+    If exception is raised inside the context then the ini file is NOT updated
+    on remote host.
+
+    SimpleSSSDConfig is a SSSDConfig descendant with added helper methods
+    for modifying options: edit_domain and edit_service.
+
+
+    Example:
+
+        with remote_sssd_config(master) as sssd_conf:
+            # use helper methods
+            # add/replace option
+            sssd_conf.edit_domain(master.domain, 'filter_users', 'root')
+            # add/replace provider option
+            sssd_conf.edit_domain(master.domain, 'sudo_provider', 'ipa')
+            # delete option
+            sssd_conf.edit_service('pam', 'pam_verbosity', None)
+
+            # use original methods of SSSDConfig
+            domain = sssd_conf.get_domain(master.domain.name)
+            domain.set_name('example.test')
+            self.save_domain(domain)
+        """
+
     from SSSDConfig import SSSDConfig
+
+    class SimpleSSSDConfig(SSSDConfig):
+        def edit_domain(self, domain_or_name, option, value):
+            """Add/replace/delete option in a domain section.
+
+            :param domain_or_name: Domain object or domain name
+            :param option: option name
+            :param value: value to assign to option. If None, option will be
+                deleted
+            """
+            if hasattr(domain_or_name, 'name'):
+                domain_name = domain_or_name.name
+            else:
+                domain_name = domain_or_name
+            domain = self.get_domain(domain_name)
+            if value is None:
+                domain.remove_option(option)
+            else:
+                domain.set_option(option, value)
+            self.save_domain(domain)
+
+        def edit_service(self, service_name, option, value):
+            """Add/replace/delete option in a service section.
+
+            :param service_name: a string
+            :param option: option name
+            :param value: value to assign to option. If None, option will be
+                deleted
+            """
+            service = self.get_service(service_name)
+            if value is None:
+                service.remove_option(option)
+            else:
+                service.set_option(option, value)
+            self.save_service(service)
+
     fd, temp_config_file = tempfile.mkstemp()
     os.close(fd)
     try:
@@ -798,23 +857,40 @@ def modify_sssd_conf(host, domain, mod_dict, provider='ipa',
         with open(temp_config_file, 'wb') as f:
             f.write(current_config)
 
-        sssd_config = SSSDConfig()
+        # In order to use SSSDConfig() locally we need to import the schema
+        # Create a tar file with /usr/share/sssd.api.conf and
+        # /usr/share/sssd/sssd.api.d
+        tmpname = create_temp_file(host)
+        host.run_command(
+            ['tar', 'cJvf', tmpname,
+             'sssd.api.conf',
+             'sssd.api.d'],
+            log_stdout=False, cwd="/usr/share/sssd")
+        # fetch tar file
+        tar_dir = tempfile.mkdtemp()
+        tarname = os.path.join(tar_dir, "sssd_schema.tar.xz")
+        with open(tarname, 'wb') as f:
+            f.write(host.get_file_contents(tmpname))
+        # delete from remote
+        host.run_command(['rm', '-f', tmpname])
+        # Unpack on the local side
+        ipautil.run([paths.TAR, 'xJvf', tarname], cwd=tar_dir)
+        os.unlink(tarname)
+
+        # Use the imported schema
+        sssd_config = SimpleSSSDConfig(
+            schemafile=os.path.join(tar_dir, "sssd.api.conf"),
+            schemaplugindir=os.path.join(tar_dir, "sssd.api.d"))
         sssd_config.import_config(temp_config_file)
-        sssd_domain = sssd_config.get_domain(domain)
 
-        if provider_subtype is not None:
-            sssd_domain.add_provider(provider, provider_subtype)
-
-        for m in mod_dict:
-            sssd_domain.set_option(m, mod_dict[m])
-
-        sssd_config.save_domain(sssd_domain)
+        yield sssd_config
 
         new_config = sssd_config.dump(sssd_config.opts).encode('utf-8')
         host.transport.put_file_contents(paths.SSSD_CONF, new_config)
     finally:
         try:
             os.remove(temp_config_file)
+            shutil.rmtree(tar_dir)
         except OSError:
             pass
 
@@ -1439,13 +1515,18 @@ def install_kra(host, domain_level=None, first_instance=False, raiseonerr=True):
     return result
 
 
-def install_ca(host, domain_level=None, first_instance=False,
-               external_ca=False, cert_files=None, raiseonerr=True):
+def install_ca(
+        host, domain_level=None, first_instance=False, external_ca=False,
+        cert_files=None, raiseonerr=True, extra_args=()
+):
     if domain_level is None:
         domain_level = domainlevel(host)
     check_domain_level(domain_level)
     command = ["ipa-ca-install", "-U", "-p", host.config.dirman_password,
                "-P", 'admin', "-w", host.config.admin_password]
+    if not isinstance(extra_args, (tuple, list)):
+        raise TypeError("extra_args must be tuple or list")
+    command.extend(extra_args)
     # First step of ipa-ca-install --external-ca
     if external_ca:
         command.append('--external-ca')
@@ -1582,9 +1663,19 @@ def upload_temp_contents(host, contents, encoding='utf-8'):
     return tmpname
 
 
-def assert_error(result, stderr_text, returncode=None):
-    "Assert that `result` command failed and its stderr contains `stderr_text`"
-    assert stderr_text in result.stderr_text, result.stderr_text
+def assert_error(result, pattern, returncode=None):
+    """
+    Assert that ``result`` command failed and its stderr contains ``pattern``.
+    ``pattern`` may be a ``str`` or a ``re.Pattern`` (regular expression).
+
+    """
+    if hasattr(pattern, "search"):  # re pattern
+        assert pattern.search(result.stderr_text), \
+            f"pattern {pattern} not found in stderr {result.stderr_text!r}"
+    else:
+        assert pattern in result.stderr_text, \
+            f"substring {pattern!r} not found in stderr {result.stderr_text!r}"
+
     if returncode is not None:
         assert result.returncode == returncode
     else:
@@ -1811,7 +1902,7 @@ def ldapmodify_dm(host, ldif_text, **kwargs):
     args = [
         'ldapmodify',
         '-x',
-        '-D', str(host.config.dirman_dn),  # pylint: disable=no-member
+        '-D', str(host.config.dirman_dn),
         '-w', host.config.dirman_password
     ]
     return host.run_command(args, stdin_text=ldif_text, **kwargs)
@@ -1832,7 +1923,7 @@ def ldapsearch_dm(host, base, ldap_args, scope='sub', **kwargs):
         '-x', '-ZZ',
         '-h', host.hostname,
         '-p', '389',
-        '-D', str(host.config.dirman_dn),  # pylint: disable=no-member
+        '-D', str(host.config.dirman_dn),
         '-w', host.config.dirman_password,
         '-s', scope,
         '-b', base,
@@ -1853,11 +1944,13 @@ def create_temp_file(host, directory=None, create_file=True):
     return host.run_command(cmd).stdout_text.strip()
 
 
-def create_active_user(host, login, password, first='test', last='user'):
+def create_active_user(host, login, password, first='test', last='user',
+                       extra_args=()):
     """Create user and do login to set password"""
     temp_password = 'Secret456789'
     kinit_admin(host)
-    user_add(host, login, first=first, last=last, password=temp_password)
+    user_add(host, login, first=first, last=last, extra_args=extra_args,
+             password=temp_password)
     host.run_command(
         ['kinit', login],
         stdin_text='{0}\n{1}\n{1}\n'.format(temp_password, password))
@@ -1910,7 +2003,7 @@ class FileBackup:
         host.run_command(['cp', '--preserve=all', filename, self._backup])
 
     def restore(self):
-        """Restore file. Can be called multiple times."""
+        """Restore file. Can be called only once."""
         self._host.run_command(['mv', self._backup, self._filename])
 
     def __enter__(self):
@@ -1949,3 +2042,69 @@ def remote_ini_file(host, filename):
 def is_selinux_enabled(host):
     res = host.run_command('selinuxenabled', ok_returncode=(0, 1))
     return res.returncode == 0
+
+
+def get_logsize(host, logfile):
+    """ get current logsize"""
+    logsize = len(host.get_file_contents(logfile))
+    return logsize
+
+
+def get_platform(host):
+    result = host.run_command([
+        'python3', '-c',
+        'from ipaplatform.osinfo import OSInfo; print(OSInfo().platform)'
+    ], raiseonerr=False)
+    assert result.returncode == 0
+    return result.stdout_text.strip()
+
+
+def install_packages(host, pkgs):
+    """Install packages on a remote host.
+    :param host: the host where the installation takes place
+    :param pkgs: packages to install, provided as a list of strings
+    """
+    platform = get_platform(host)
+    # Only supports RHEL 8+ and Fedora for now
+    if platform in ('rhel', 'fedora'):
+        install_cmd = ['/usr/bin/dnf', 'install', '-y']
+    elif platform in ('ubuntu'):
+        install_cmd = ['apt-get', 'install', '-y']
+    else:
+        raise ValueError('install_packages: unknown platform %s' % platform)
+    host.run_command(install_cmd + pkgs)
+
+
+def uninstall_packages(host, pkgs):
+    """Uninstall packages on a remote host.
+    :param host: the host where the uninstallation takes place
+    :param pkgs: packages to uninstall, provided as a list of strings
+    """
+    platform = get_platform(host)
+    # Only supports RHEL 8+ and Fedora for now
+    if platform in ('rhel', 'fedora'):
+        install_cmd = ['/usr/bin/dnf', 'remove', '-y']
+    elif platform in ('ubuntu'):
+        install_cmd = ['apt-get', 'remove', '-y']
+    else:
+        raise ValueError('install_packages: unknown platform %s' % platform)
+    host.run_command(install_cmd + pkgs)
+
+
+def wait_for_request(host, request_id, timeout=120):
+    for _i in range(0, timeout, 5):
+        result = host.run_command(
+            "getcert list -i %s | grep status: | awk '{ print $2 }'" %
+            request_id
+        )
+
+        state = result.stdout_text.strip()
+        print("certmonger request is in state %r", state)
+        if state in ('CA_REJECTED', 'CA_UNREACHABLE', 'CA_UNCONFIGURED',
+                     'NEED_GUIDANCE', 'NEED_CA', 'MONITORING'):
+            break
+        time.sleep(5)
+    else:
+        raise RuntimeError("request timed out")
+
+    return state

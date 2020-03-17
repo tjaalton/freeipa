@@ -26,11 +26,14 @@ from ipaplatform.paths import paths
 
 from ipapython.dn import DN
 
+from ipapython.certdb import get_ca_nickname
+
 from ipatests.test_integration.base import IntegrationTest
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.tasks import tasks as platform_tasks
 from ipatests.create_external_ca import ExternalCA
 from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
+from ipapython.ipautil import realm_to_suffix
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,79 @@ logger = logging.getLogger(__name__)
 CONFIGURED_SERVICE = u'configuredService'
 ENABLED_SERVICE = u'enabledService'
 HIDDEN_SERVICE = u'hiddenService'
+
+isrgrootx1 = (
+    b'-----BEGIN CERTIFICATE-----\n'
+    b'MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n'
+    b'TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n'
+    b'cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4\n'
+    b'WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu\n'
+    b'ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY\n'
+    b'MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc\n'
+    b'h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+\n'
+    b'0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U\n'
+    b'A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW\n'
+    b'T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH\n'
+    b'B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC\n'
+    b'B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv\n'
+    b'KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn\n'
+    b'OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn\n'
+    b'jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw\n'
+    b'qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI\n'
+    b'rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV\n'
+    b'HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq\n'
+    b'hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL\n'
+    b'ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ\n'
+    b'3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK\n'
+    b'NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5\n'
+    b'ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur\n'
+    b'TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC\n'
+    b'jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc\n'
+    b'oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq\n'
+    b'4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA\n'
+    b'mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d\n'
+    b'emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n'
+    b'-----END CERTIFICATE-----\n'
+)
+isrgrootx1_nick = 'CN=ISRG Root X1,O=Internet Security Research Group,C=US'
+
+# This sub-CA expires on Oct 6, 2021 but it is functional for our
+# purposes of testing, the date validity is not considered (yet).
+letsencryptauthorityx3 = (
+    b'-----BEGIN CERTIFICATE-----\n'
+    b'MIIFjTCCA3WgAwIBAgIRANOxciY0IzLc9AUoUSrsnGowDQYJKoZIhvcNAQELBQAw\n'
+    b'TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n'
+    b'cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTYxMDA2MTU0MzU1\n'
+    b'WhcNMjExMDA2MTU0MzU1WjBKMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg\n'
+    b'RW5jcnlwdDEjMCEGA1UEAxMaTGV0J3MgRW5jcnlwdCBBdXRob3JpdHkgWDMwggEi\n'
+    b'MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCc0wzwWuUuR7dyXTeDs2hjMOrX\n'
+    b'NSYZJeG9vjXxcJIvt7hLQQWrqZ41CFjssSrEaIcLo+N15Obzp2JxunmBYB/XkZqf\n'
+    b'89B4Z3HIaQ6Vkc/+5pnpYDxIzH7KTXcSJJ1HG1rrueweNwAcnKx7pwXqzkrrvUHl\n'
+    b'Npi5y/1tPJZo3yMqQpAMhnRnyH+lmrhSYRQTP2XpgofL2/oOVvaGifOFP5eGr7Dc\n'
+    b'Gu9rDZUWfcQroGWymQQ2dYBrrErzG5BJeC+ilk8qICUpBMZ0wNAxzY8xOJUWuqgz\n'
+    b'uEPxsR/DMH+ieTETPS02+OP88jNquTkxxa/EjQ0dZBYzqvqEKbbUC8DYfcOTAgMB\n'
+    b'AAGjggFnMIIBYzAOBgNVHQ8BAf8EBAMCAYYwEgYDVR0TAQH/BAgwBgEB/wIBADBU\n'
+    b'BgNVHSAETTBLMAgGBmeBDAECATA/BgsrBgEEAYLfEwEBATAwMC4GCCsGAQUFBwIB\n'
+    b'FiJodHRwOi8vY3BzLnJvb3QteDEubGV0c2VuY3J5cHQub3JnMB0GA1UdDgQWBBSo\n'
+    b'SmpjBH3duubRObemRWXv86jsoTAzBgNVHR8ELDAqMCigJqAkhiJodHRwOi8vY3Js\n'
+    b'LnJvb3QteDEubGV0c2VuY3J5cHQub3JnMHIGCCsGAQUFBwEBBGYwZDAwBggrBgEF\n'
+    b'BQcwAYYkaHR0cDovL29jc3Aucm9vdC14MS5sZXRzZW5jcnlwdC5vcmcvMDAGCCsG\n'
+    b'AQUFBzAChiRodHRwOi8vY2VydC5yb290LXgxLmxldHNlbmNyeXB0Lm9yZy8wHwYD\n'
+    b'VR0jBBgwFoAUebRZ5nu25eQBc4AIiMgaWPbpm24wDQYJKoZIhvcNAQELBQADggIB\n'
+    b'ABnPdSA0LTqmRf/Q1eaM2jLonG4bQdEnqOJQ8nCqxOeTRrToEKtwT++36gTSlBGx\n'
+    b'A/5dut82jJQ2jxN8RI8L9QFXrWi4xXnA2EqA10yjHiR6H9cj6MFiOnb5In1eWsRM\n'
+    b'UM2v3e9tNsCAgBukPHAg1lQh07rvFKm/Bz9BCjaxorALINUfZ9DD64j2igLIxle2\n'
+    b'DPxW8dI/F2loHMjXZjqG8RkqZUdoxtID5+90FgsGIfkMpqgRS05f4zPbCEHqCXl1\n'
+    b'eO5HyELTgcVlLXXQDgAWnRzut1hFJeczY1tjQQno6f6s+nMydLN26WuU4s3UYvOu\n'
+    b'OsUxRlJu7TSRHqDC3lSE5XggVkzdaPkuKGQbGpny+01/47hfXXNB7HntWNZ6N2Vw\n'
+    b'p7G6OfY+YQrZwIaQmhrIqJZuigsrbe3W+gdn5ykE9+Ky0VgVUsfxo52mwFYs1JKY\n'
+    b'2PGDuWx8M6DlS6qQkvHaRUo0FMd8TsSlbF0/v965qGFKhSDeQoMpYnwcmQilRh/0\n'
+    b'ayLThlHLN81gSkJjVrPI0Y8xCVPB4twb1PFUd2fPM3sA1tJ83sZ5v8vgFv2yofKR\n'
+    b'PB0t6JzUA81mSqM3kxl5e+IZwhYAyO0OTg3/fs8HqGTNKd9BqoUwSRBzp06JMg5b\n'
+    b'rUCGwbCUDI0mxadJ3Bz4WxR6fyNpBK2yAinWEsikxqEt\n'
+    b'-----END CERTIFICATE-----\n'
+)
+le_x3_nick = "CN=Let's Encrypt Authority X3,O=Let's Encrypt,C=US"
 
 
 class TestIPACommand(IntegrationTest):
@@ -54,6 +130,26 @@ class TestIPACommand(IntegrationTest):
         cacrt = host.get_file_contents(path, encoding='ascii')
         cader = ssl.PEM_cert_to_DER_cert(cacrt)
         return base64.b64encode(cader).decode('ascii')
+
+    def test_aes_sha_kerberos_enctypes(self):
+        """Test AES SHA 256 and 384 Kerberos enctypes enabled
+
+        AES SHA 256 and 384-bit enctypes supported by MIT kerberos but
+        was not enabled in IPA. This test is to check if these types are
+        enabled.
+
+        related: https://pagure.io/freeipa/issue/8110
+        """
+        tasks.kinit_admin(self.master)
+        dn = DN(("cn", self.master.domain.realm), ("cn", "kerberos"),
+                realm_to_suffix(self.master.domain.realm))
+        result = tasks.ldapsearch_dm(self.master, str(dn),
+                                     ["krbSupportedEncSaltTypes"],
+                                     scope="base")
+        assert "aes128-sha2:normal" in result.stdout_text
+        assert "aes128-sha2:special" in result.stdout_text
+        assert "aes256-sha2:normal" in result.stdout_text
+        assert "aes256-sha2:special" in result.stdout_text
 
     def test_certmap_match_issue7520(self):
         # https://pagure.io/freeipa/issue/7520
@@ -108,7 +204,7 @@ class TestIPACommand(IntegrationTest):
             raiseonerr=False
         )
         assert result.returncode == 2
-        err = result.stderr_text.strip()  # pylint: disable=no-member
+        err = result.stderr_text.strip()
         assert err == "ipa: ERROR: loc: privilege not found"
         # add privilege
         result = self.master.run_command(
@@ -131,7 +227,7 @@ class TestIPACommand(IntegrationTest):
 
         master = self.master
 
-        base_dn = str(master.domain.basedn)  # pylint: disable=no-member
+        base_dn = str(master.domain.basedn)
         entry_ldif = textwrap.dedent("""
             dn: uid=system,cn=sysaccounts,cn=etc,{base_dn}
             changetype: add
@@ -150,7 +246,7 @@ class TestIPACommand(IntegrationTest):
                                            new_passwd, master)
 
     def get_krbinfo(self, user):
-        base_dn = str(self.master.domain.basedn)  # pylint: disable=no-member
+        base_dn = str(self.master.domain.basedn)
         result = tasks.ldapsearch_dm(
             self.master,
             'uid={user},cn=users,cn=accounts,{base_dn}'.format(
@@ -173,7 +269,7 @@ class TestIPACommand(IntegrationTest):
         new_passwd = 'userPasswd123'
         new_passwd2 = 'mynewPwd123'
         master = self.master
-        base_dn = str(master.domain.basedn)  # pylint: disable=no-member
+        base_dn = str(master.domain.basedn)
 
         # Create a user with a password
         tasks.kinit_admin(master)
@@ -218,7 +314,7 @@ class TestIPACommand(IntegrationTest):
         time.sleep(1)
         master.run_command([
             paths.LDAPPASSWD,
-            '-D', str(master.config.dirman_dn),   # pylint: disable=no-member
+            '-D', str(master.config.dirman_dn),
             '-w', master.config.dirman_password,
             '-a', new_passwd,
             '-s', new_passwd2,
@@ -301,7 +397,7 @@ class TestIPACommand(IntegrationTest):
 
         test_user = 'test-ssh'
         external_master_hostname = \
-            self.master.external_hostname  # pylint: disable=no-member
+            self.master.external_hostname
 
         pub_keys = []
 
@@ -496,7 +592,7 @@ class TestIPACommand(IntegrationTest):
         assert 'User category: all' in lines
         assert 'Host category: all' in lines
         assert 'Enabled: TRUE' in lines
-        assert 'Services: systemd-user' in lines
+        assert 'HBAC Services: systemd-user' in lines
         assert 'accessruletype: allow' in lines
 
         # delete both
@@ -520,7 +616,7 @@ class TestIPACommand(IntegrationTest):
         assert 'User category: all' in lines
         assert 'Host category: all' in lines
         assert 'Enabled: TRUE' in lines
-        assert 'Services: systemd-user' in lines
+        assert 'HBAC Services: systemd-user' in lines
         assert 'accessruletype: allow' in lines
 
         self.master.run_command(
@@ -553,7 +649,7 @@ class TestIPACommand(IntegrationTest):
         dn = DN(
             ('cn', 'HTTP'), ('cn', self.master.hostname), ('cn', 'masters'),
             ('cn', 'ipa'), ('cn', 'etc'),
-            self.master.domain.basedn  # pylint: disable=no-member
+            self.master.domain.basedn
         )
 
         conn = self.master.ldap_connect()
@@ -602,14 +698,10 @@ class TestIPACommand(IntegrationTest):
 
         username = "testuser" + str(random.randint(200000, 9999999))
         # add ldap_deref_threshold=0 to /etc/sssd/sssd.conf
-        domain = self.master.domain
-        tasks.modify_sssd_conf(
-            self.master,
-            domain.name,
-            {
-                'ldap_deref_threshold': 0
-            },
-        )
+        sssd_conf_backup = tasks.FileBackup(self.master, paths.SSSD_CONF)
+        with tasks.remote_sssd_config(self.master) as sssd_config:
+            sssd_config.edit_domain(
+                self.master.domain, 'ldap_deref_threshold', 0)
         try:
             self.master.run_command(['systemctl', 'restart', 'sssd.service'])
 
@@ -635,15 +727,7 @@ class TestIPACommand(IntegrationTest):
                            password='Secret123')
             client.close()
         finally:
-            # revert back to original ldap config
-            # remove ldap_deref_threshold=0
-            tasks.modify_sssd_conf(
-                self.master,
-                domain.name,
-                {
-                    'ldap_deref_threshold': None
-                },
-            )
+            sssd_conf_backup.restore()
             self.master.run_command(['systemctl', 'restart', 'sssd.service'])
 
     def test_user_mod_change_capitalization_issue5879(self):
@@ -717,17 +801,7 @@ class TestIPACommand(IntegrationTest):
         assert is_tls_version_enabled('tls1_2')
         assert is_tls_version_enabled('tls1_3')
 
-    def test_samba_config_file(self):
-        """Check that ipa-adtrust-install generates sane smb.conf
-
-        This is regression test for issue
-        https://pagure.io/freeipa/issue/6951
-        """
-        self.master.run_command(
-            ['ipa-adtrust-install', '-a', 'Secret123', '--add-sids', '-U'])
-        res = self.master.run_command(['testparm', '-s'])
-        assert 'ERROR' not in (res.stdout_text + res.stderr_text)
-
+    @pytest.mark.skip(reason='https://pagure.io/freeipa/issue/8151')
     def test_sss_ssh_authorizedkeys(self):
         """Login via Ssh using private-key for ipa-user should work.
 
@@ -742,7 +816,8 @@ class TestIPACommand(IntegrationTest):
         user_key = tasks.create_temp_file(self.master, create_file=False)
         pem_file = tasks.create_temp_file(self.master)
         # Create a user with a password
-        tasks.create_active_user(self.master, user, passwd)
+        tasks.create_active_user(self.master, user, passwd, extra_args=[
+            '--homedir', '/home/{}'.format(user)])
         tasks.kinit_admin(self.master)
         tasks.run_command_as_user(
             self.master, user, ['ssh-keygen', '-N', '',
@@ -773,10 +848,72 @@ class TestIPACommand(IntegrationTest):
             self.master.run_command(
                 ['ssh', '-o', 'PasswordAuthentication=no',
                  '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=no',
-                 '-l', user, '-i', user_key, self.master.hostname, 'true'])
+                 '-o', 'ConnectTimeout=10', '-l', user, '-i', user_key,
+                 self.master.hostname, 'true'])
         finally:
             # cleanup
             self.master.run_command(['ipa', 'user-del', user])
             backup.restore()
             self.master.run_command(['rm', '-f', pem_file, user_key,
                                      '{}.pub'.format(user_key)])
+
+    def test_cacert_manage(self):
+        """Exercise ipa-cacert-manage delete"""
+
+        # deletion without nickname
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete'],
+            raiseonerr=False
+        )
+        assert result.returncode != 0
+
+        # deletion with an unknown nickname
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete', 'unknown'],
+            raiseonerr=False
+        )
+        assert result.returncode != 0
+        assert "Unknown CA 'unknown'" in result.stderr_text
+
+        # deletion of IPA CA
+        ipa_ca_nickname = get_ca_nickname(self.master.domain.realm)
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete', ipa_ca_nickname],
+            raiseonerr=False
+        )
+        assert result.returncode != 0
+        assert 'The IPA CA cannot be removed with this tool' in \
+               result.stderr_text
+
+        # Install 3rd party CA's, Let's Encrypt in this case
+        for cert in (isrgrootx1, letsencryptauthorityx3):
+            certfile = os.path.join(self.master.config.test_dir, 'cert.pem')
+            self.master.put_file_contents(certfile, cert)
+            result = self.master.run_command(
+                ['ipa-cacert-manage', 'install', certfile],
+            )
+
+        # deletion of a root CA needed by a subCA, without -f option
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete', isrgrootx1_nick],
+            raiseonerr=False
+        )
+        assert result.returncode != 0
+        assert "Verifying \'%s\' failed. Removing part of the " \
+               "chain? certutil: certificate is invalid: Peer's " \
+               "Certificate issuer is not recognized." \
+               % isrgrootx1_nick in result.stderr_text
+
+        # deletion of a root CA needed by a subCA, with -f option
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete', isrgrootx1_nick, '-f'],
+            raiseonerr=False
+        )
+        assert result.returncode == 0
+
+        # deletion of a subca
+        result = self.master.run_command(
+            ['ipa-cacert-manage', 'delete', le_x3_nick],
+            raiseonerr=False
+        )
+        assert result.returncode == 0

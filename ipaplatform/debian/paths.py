@@ -59,6 +59,7 @@ class DebianPathNamespace(BasePathNamespace):
     SYSCONFIG_PKI = "/etc/dogtag/"
     SYSCONFIG_PKI_TOMCAT = "/etc/default/pki-tomcat"
     SYSCONFIG_PKI_TOMCAT_PKI_TOMCAT_DIR = "/etc/dogtag/tomcat/pki-tomcat"
+    BIN_TOMCAT = "/usr/share/tomcat9/bin/version.sh"
     SYSTEMD_SYSTEM_HTTPD_D_DIR = "/etc/systemd/system/apache2.service.d/"
     SYSTEMD_SYSTEM_HTTPD_IPA_CONF = "/etc/systemd/system/apache2.service.d/ipa.conf"
     DNSSEC_TRUSTED_KEY = "/etc/bind/trusted-key.key"
@@ -67,8 +68,6 @@ class DebianPathNamespace(BasePathNamespace):
     SBIN_SERVICE = "/usr/sbin/service"
     CERTMONGER_COMMAND_TEMPLATE = "/usr/lib/ipa/certmonger/%s"
     ODS_KSMUTIL = None
-    ODS_ENFORCER = "/usr/sbin/ods-enforcer"
-    ODS_ENFORCER_DB_SETUP = "/usr/sbin/ods-enforcer-db-setup"
     UPDATE_CA_TRUST = "/usr/sbin/update-ca-certificates"
     BIND_LDAP_DNS_IPA_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/"
     BIND_LDAP_DNS_ZONE_WORKDIR = "/var/cache/bind/dyndb-ldap/ipa/master/"

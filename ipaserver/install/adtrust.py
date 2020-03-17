@@ -14,6 +14,7 @@ import os
 import six
 
 from ipalib.constants import MIN_DOMAIN_LEVEL
+from ipalib import create_api, rpc
 from ipalib import errors
 from ipalib.install.service import ServiceAdminInstallInterface
 from ipalib.install.service import replica_install_only
@@ -26,6 +27,8 @@ from ipaserver.install import installutils
 from ipaserver.install import adtrustinstance
 from ipaserver.install import service
 from ipaserver.install.plugins.adtrust import update_host_cifs_keytabs
+from ipaserver.install.bindinstance import dns_zone_exists
+from ipaserver.dns_data_management import IPASystemRecords
 
 
 if six.PY3:
@@ -342,13 +345,68 @@ def add_new_adtrust_agents(api, options):
     if new_agents:
         add_hosts_to_adtrust_agents(api, new_agents)
 
-        print("""
+        # The method trust_enable_agent was added on API version 2.236
+        # Specifically request this version in the remote call
+        kwargs = {u'version': u'2.236',
+                  u'enable_compat': options.enable_compat}
+        failed_agents = []
+        for agent in new_agents:
+            # Try to run the ipa-trust-enable-agent script on the agent
+            # If the agent is too old and does not support this,
+            # print a msg
+            logger.info("Execute trust_enable_agent on remote server %s",
+                        agent)
+            client = None
+            try:
+                xmlrpc_uri = 'https://{}/ipa/xml'.format(
+                    ipautil.format_netloc(agent))
+                remote_api = create_api(mode=None)
+                remote_api.bootstrap(context='installer',
+                                     confdir=paths.ETC_IPA,
+                                     xmlrpc_uri=xmlrpc_uri,
+                                     fallback=False)
+                client = rpc.jsonclient(remote_api)
+                client.finalize()
+                client.connect()
+                result = client.forward(
+                    u'trust_enable_agent',
+                    ipautil.fsdecode(agent),
+                    **kwargs)
+            except errors.CommandError as e:
+                logger.debug(
+                    "Remote server %s does not support agent enablement "
+                    "over RPC: %s", agent, e)
+                failed_agents.append(agent)
+            except (errors.PublicError, ConnectionRefusedError) as e:
+                logger.debug(
+                    "Remote call to trust_enable_agent failed on server %s: "
+                    "%s", agent, e)
+                failed_agents.append(agent)
+            else:
+                for message in result.get('messages'):
+                    logger.debug('%s', message['message'])
+                if not int(result['result']):
+                    logger.debug(
+                        "ipa-trust-enable-agent returned non-zero exit code "
+                        " on server %s", agent)
+                    failed_agents.append(agent)
+            finally:
+                if client and client.isconnected():
+                    client.disconnect()
+
+        # if enablement failed on some agents, print a WARNING:
+        if failed_agents:
+            if options.enable_compat:
+                print("""
+WARNING: you MUST manually enable the Schema compatibility Plugin and """)
+            print("""
 WARNING: you MUST restart (both "ipactl restart" and "systemctl restart sssd")
 the following IPA masters in order to activate them to serve information about
 users from trusted forests:
 """)
-        for x in new_agents:
-            print(x)
+
+            for x in failed_agents:
+                print(x)
 
 
 def install_check(standalone, options, api):
@@ -434,6 +492,41 @@ def install(standalone, options, fstore, api):
         # Find out IPA masters which are not part of the cn=adtrust agents
         # and propose them to be added to the list
         add_new_adtrust_agents(api, options)
+
+
+def generate_dns_service_records_help(api):
+    """
+    Return list of instructions to create DNS service records for Windows
+    if in case DNS is not enabled and the DNS zone is not managed by IPA.
+    In case IPA manages the DNS zone, nothing is returned.
+    """
+
+    zone = api.env.domain
+
+    err_msg = []
+
+    ret = api.Command['dns_is_enabled']()
+    if not ret['result']:
+        err_msg.append("DNS management was not enabled at install time.")
+    else:
+        if not dns_zone_exists(zone):
+            err_msg.append(
+                "DNS zone %s cannot be managed as it is not defined in "
+                "IPA" % zone)
+
+    if err_msg:
+        err_msg.append("Add the following service records to your DNS "
+                       "server for DNS zone %s: " % zone)
+        system_records = IPASystemRecords(api, all_servers=True)
+        adtrust_records = system_records.get_base_records(
+            [api.env.host], ["AD trust controller"],
+            include_master_role=False, include_kerberos_realm=False)
+        for r_name, node in adtrust_records.items():
+            for rec in IPASystemRecords.records_list_from_node(r_name, node):
+                err_msg.append(rec)
+        return err_msg
+
+    return None
 
 
 @group

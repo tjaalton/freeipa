@@ -401,6 +401,7 @@ class CAInstance(DogtagInstance):
             self.step("configuring certificate server instance",
                       self.__spawn_instance)
             self.step("Add ipa-pki-wait-running", self.add_ipa_wait)
+            self.step("secure AJP connector", self.secure_ajp_connector)
             self.step("reindex attributes", self.reindex_task)
             self.step("exporting Dogtag certificate store pin",
                       self.create_certstore_passwdfile)
@@ -424,7 +425,7 @@ class CAInstance(DogtagInstance):
         if self.external != 1:
             if not has_ra_cert:
                 self.step("configure certmonger for renewals",
-                          self.configure_certmonger_renewal)
+                          self.configure_certmonger_renewal_helpers)
                 if not self.clone:
                     self.step("requesting RA certificate from CA", self.__request_ra_certificate)
                 elif promote:
@@ -452,6 +453,7 @@ class CAInstance(DogtagInstance):
                 self.step("configure certificate renewals", self.configure_renewal)
                 self.step("Configure HTTP to proxy connections",
                           self.http_proxy)
+                # This restart is needed for ACL reload in CA, do not remove it
                 self.step("restarting certificate server", self.restart_instance)
                 self.step("updating IPA configuration", update_ipa_conf)
                 self.step("enabling CA instance", self.__enable_instance)
@@ -998,7 +1000,7 @@ class CAInstance(DogtagInstance):
         obj = bus.get_object('org.fedorahosted.certmonger',
                              '/org/fedorahosted/certmonger')
         iface = dbus.Interface(obj, 'org.fedorahosted.certmonger')
-        for suffix in ['', '-reuse']:
+        for suffix in ['', '-reuse', '-selfsigned']:
             name = ipalib.constants.RENEWAL_CA_NAME + suffix
             path = iface.find_ca_by_nickname(name)
             if path:
