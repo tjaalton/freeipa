@@ -1,7 +1,7 @@
 # localization
 extend-diff-ignore = po/*|zanata.xml
 # development files
-extend-diff-ignore = .git-commit-template|autogen.sh|client/version.m4.in|makerpms.sh
+extend-diff-ignore = .copr/Makefile|.git-commit-template|autogen.sh|client/version.m4.in|makerpms.sh
 # javascript cruft
 extend-diff-ignore = install/html/jsl.conf|install/ui/js|install/ui/package.json|install/ui/Gruntfile.js
 # some cruft
