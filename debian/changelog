@@ -12,6 +12,7 @@ freeipa (4.8.5-1) UNRELEASED; urgency=medium
     lines on failure, also from ipaclient log.
   * rules: Import architecture.mk.
   * source: Update extend-diff-ignore.
+  * server.install: Updated.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Thu, 28 Nov 2019 15:07:31 +0200
 
