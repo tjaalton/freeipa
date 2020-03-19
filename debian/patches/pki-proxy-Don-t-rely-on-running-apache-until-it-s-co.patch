@@ -1,0 +1,39 @@
+From 14c9cf99889fec73c46b33f94b0dc483c4542044 Mon Sep 17 00:00:00 2001
+From: Stanislav Levin <slev@altlinux.org>
+Date: Wed, 18 Mar 2020 11:09:01 +0300
+Subject: [PATCH] pki-proxy: Don't rely on running apache until it's configured
+
+This partially restores the pre-ec73de969f state of `http_proxy`,
+which fails to restart the apache service during master
+installation. The failure happens because of apache is not
+configured yet on 'pki-tomcatd' installation phase. The mentioned
+code and proposed one relies on the installer which bootstraps the
+master.
+
+Fixes: https://pagure.io/freeipa/issue/8233
+Signed-off-by: Stanislav Levin <slev@altlinux.org>
+Reviewed-By: Alexander Bokovoy <abokovoy@redhat.com>
+---
+ ipaserver/install/dogtaginstance.py | 6 ------
+ 1 file changed, 6 deletions(-)
+
+diff --git a/ipaserver/install/dogtaginstance.py b/ipaserver/install/dogtaginstance.py
+index efcf81509..650ccfff9 100644
+--- a/ipaserver/install/dogtaginstance.py
++++ b/ipaserver/install/dogtaginstance.py
+@@ -363,12 +363,6 @@ class DogtagInstance(service.Service):
+         with open(paths.HTTPD_IPA_PKI_PROXY_CONF, "w") as fd:
+             fd.write(template)
+             os.fchmod(fd.fileno(), 0o640)
+-        # Restart httpd
+-        http_service = services.knownservices.httpd
+-        logger.debug("Restarting %s to apply AJP changes",
+-                     http_service.service_name)
+-        http_service.restart()
+-        logger.debug("%s successfully restarted", http_service.service_name)
+ 
+     def configure_certmonger_renewal_helpers(self):
+         """
+-- 
+2.25.1
+
