@@ -1,4 +1,4 @@
-freeipa (4.8.5-1) UNRELEASED; urgency=medium
+freeipa (4.8.5-1) unstable; urgency=medium
 
   * New upstream release.
   * control: Drop client from freeipa-tests depends.
@@ -18,7 +18,7 @@ freeipa (4.8.5-1) UNRELEASED; urgency=medium
   * control: Bump dependency on apache2 to where mod_proxy_ajp got fixed.
   * tests: Add sudo to dependencies for dogtag.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Thu, 28 Nov 2019 15:07:31 +0200
+ -- Timo Aaltonen <tjaalton@debian.org>  Wed, 25 Mar 2020 19:42:37 +0200
 
 freeipa (4.8.3-1) unstable; urgency=medium
 
