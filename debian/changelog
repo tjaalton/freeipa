@@ -1,3 +1,11 @@
+freeipa (4.8.6-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+  * pki-proxy-Don-t-rely-on-running-apache-until-it-s-co.patch: Dropped,
+    upstream.
+
+ -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
+
 freeipa (4.8.5-1) unstable; urgency=medium
 
   * New upstream release.
