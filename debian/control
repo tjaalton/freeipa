@@ -221,7 +221,7 @@ Depends:
  fonts-open-sans,
  freeipa-client (= ${binary:Version}),
  freeipa-common (= ${source:Version}),
- gssproxy (>= 0.7.0),
+ gssproxy (>= 0.8.2-2),
  krb5-admin-server,
  krb5-kdc,
  krb5-kdc-ldap,

@@ -5,6 +5,7 @@ freeipa (4.8.6-1) UNRELEASED; urgency=medium
     upstream.
   * migrate-to-gpg.diff: Use gpg instead of gpg2, update dependencies.
     (Closes: #919062)
+  * control: Bump gssproxy depends.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
 
