@@ -3,6 +3,8 @@ freeipa (4.8.6-1) UNRELEASED; urgency=medium
   * New upstream release.
   * pki-proxy-Don-t-rely-on-running-apache-until-it-s-co.patch: Dropped,
     upstream.
+  * migrate-to-gpg.diff: Use gpg instead of gpg2, update dependencies.
+    (Closes: #919062)
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
 

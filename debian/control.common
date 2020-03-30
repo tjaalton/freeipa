@@ -105,8 +105,8 @@ Architecture: all
 Section: python
 Depends:
  freeipa-common (= ${source:Version}),
- gnupg2,
- gnupg-agent,
+ gnupg,
+ gpg-agent,
  keyutils,
  python3-cffi,
  python3-cryptography,
