@@ -101,6 +101,7 @@ DEFAULT_PKI_CA_CERTS = [
     "auditSigningCert cert-pki-ca",
     "Server-Cert cert-pki-ca",
 ]
+
 DEFAULT_PKI_KRA_CERTS = [
     "transportCert cert-pki-kra",
     "storageCert cert-pki-kra",
@@ -108,11 +109,15 @@ DEFAULT_PKI_KRA_CERTS = [
 ]
 
 
-def run_healthcheck(host, source=None, check=None):
+def run_healthcheck(host, source=None, check=None, output_type="json"):
     """
     Run ipa-healthcheck on the remote host and return the result
 
-    Returns: the tuple returncode, json (if any)
+    Returns: the tuple returncode, output
+
+    output is:
+        json data if output_type == "json"
+        stdout if output_type == "human"
     """
     data = None
     cmd = ["ipa-healthcheck"]
@@ -124,10 +129,16 @@ def run_healthcheck(host, source=None, check=None):
             cmd.append("--check")
             cmd.append(check)
 
+    cmd.append("--output-type")
+    cmd.append(output_type)
+
     result = host.run_command(cmd, raiseonerr=False)
 
     if result.stdout_text:
-        data = json.loads(result.stdout_text)
+        if output_type == "json":
+            data = json.loads(result.stdout_text)
+        else:
+            data = result.stdout_text.strip()
 
     return result.returncode, data
 
@@ -166,6 +177,28 @@ class TestIpaHealthCheck(IntegrationTest):
         result = self.master.run_command(["ipa-healthcheck", "--list-sources"])
         for source in sources:
             assert source in result.stdout_text
+
+    def test_human_output(self):
+        """
+        Test that in human output the severity value is correct
+
+        Only the SUCCESS (0) value was being translated, otherwise
+        the numeric value was being shown (BZ 1752849)
+        """
+        self.master.run_command(["systemctl", "stop", "sssd"])
+        try:
+            returncode, output = run_healthcheck(
+                self.master,
+                "ipahealthcheck.meta.services",
+                "sssd",
+                "human",
+            )
+        finally:
+            self.master.run_command(["systemctl", "start", "sssd"])
+
+        assert returncode == 1
+        assert output == \
+            "ERROR: ipahealthcheck.meta.services.sssd: sssd: not running"
 
     def test_dogtag_ca_check_exists(self):
         """
@@ -401,6 +434,28 @@ class TestIpaHealthCheck(IntegrationTest):
         assert returncode == 0
         for check in data:
             assert check["result"] == "SUCCESS"
+
+    def test_ipa_healthcheck_log_rotate_file_exist_issue35(self):
+        """
+        This test checks if log rotation has been added
+        for ipa-healthcheck tool so that logs are rotated
+        in /var/log/ipa/healthcheck folder.
+        The test also checks that the logrotate configuration
+        file is syntactically correct by calling logrotate --debug
+        This is a testcase for below pagure issue
+        https://github.com/freeipa/freeipa-healthcheck/issues/35
+        """
+        msg = "error: {}:".format(HEALTHCHECK_LOG_ROTATE_CONF)
+        tasks.uninstall_packages(self.master, HEALTHCHECK_PKG)
+        assert not self.master.transport.file_exists(
+            HEALTHCHECK_LOG_ROTATE_CONF
+        )
+        tasks.install_packages(self.master, HEALTHCHECK_PKG)
+        assert self.master.transport.file_exists(HEALTHCHECK_LOG_ROTATE_CONF)
+        cmd = self.master.run_command(
+            ['logrotate', '--debug', HEALTHCHECK_LOG_ROTATE_CONF]
+        )
+        assert msg not in cmd.stdout_text
 
     def test_ipa_healthcheck_remove(self):
         """

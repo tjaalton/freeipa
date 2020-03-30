@@ -72,6 +72,7 @@ static struct ipapwd_krbcfg *ipapwd_getConfig(void)
     Slapi_Entry *config_entry = NULL;
     Slapi_Attr *a;
     Slapi_Value *v;
+    Slapi_DN *sdn = NULL;
     BerElement *be = NULL;
     ber_tag_t tag, tvno;
     ber_int_t ttype;
@@ -107,7 +108,9 @@ static struct ipapwd_krbcfg *ipapwd_getConfig(void)
     }
 
     /* get the Realm Container entry */
-    ret = ipapwd_getEntry(ipa_realm_dn, &realm_entry, NULL);
+    sdn = slapi_sdn_new_dn_byval(ipa_realm_dn);
+    ret = ipapwd_getEntry(sdn, &realm_entry, NULL);
+    slapi_sdn_free(&sdn);
     if (ret != LDAP_SUCCESS) {
         LOG_FATAL("No realm Entry?\n");
         goto free_and_error;
@@ -212,7 +215,9 @@ static struct ipapwd_krbcfg *ipapwd_getConfig(void)
     slapi_entry_free(realm_entry);
 
     /* get the Realm Container entry */
-    ret = ipapwd_getEntry(ipa_pwd_config_dn, &config_entry, NULL);
+    sdn = slapi_sdn_new_dn_byval(ipa_pwd_config_dn);
+    ret = ipapwd_getEntry(sdn, &config_entry, NULL);
+    slapi_sdn_free(&sdn);
     if (ret != LDAP_SUCCESS) {
         LOG_FATAL("No config Entry? Impossible!\n");
         goto free_and_error;
@@ -236,7 +241,9 @@ static struct ipapwd_krbcfg *ipapwd_getConfig(void)
     if (ipapwd_fips_enabled()) {
         LOG("FIPS mode is enabled, NT hashes are not allowed.\n");
     } else {
-        ret = ipapwd_getEntry(ipa_etc_config_dn, &config_entry, NULL);
+        sdn = slapi_sdn_new_dn_byval(ipa_etc_config_dn);
+        ret = ipapwd_getEntry(sdn, &config_entry, NULL);
+        slapi_sdn_free(&sdn);
         if (ret != LDAP_SUCCESS) {
             LOG_FATAL("No config Entry?\n");
             goto free_and_error;
@@ -286,8 +293,8 @@ free_and_error:
  * slapi_pblock_destroy(pb)
  */
 static int pwd_get_values(const Slapi_Entry *ent, const char *attrname,
-			  Slapi_ValueSet** results, char** actual_type_name,
-			  int *buffer_flags)
+                          Slapi_ValueSet** results, char** actual_type_name,
+                          int *buffer_flags)
 {
     int flags=0;
     int type_name_disposition = 0;
@@ -415,6 +422,7 @@ done:
 
 int ipapwd_entry_checks(Slapi_PBlock *pb, struct slapi_entry *e,
                         int *is_root, int *is_krb, int *is_smb, int *is_ipant,
+                        int *is_memberof,
                         char *attr, int acc)
 {
     Slapi_Value *sval;
@@ -433,6 +441,10 @@ int ipapwd_entry_checks(Slapi_PBlock *pb, struct slapi_entry *e,
         }
     }
 
+    /* Default to not setting memberof flag: only set it for non-Kerberos principals
+     * when they have krbPrincipalAux but no krbPrincipalName */
+    *is_memberof = 0;
+
     /* Check if this is a krbPrincial and therefore needs us to generate other
      * hashes */
     sval = slapi_value_new_string("krbPrincipalAux");
@@ -442,6 +454,24 @@ int ipapwd_entry_checks(Slapi_PBlock *pb, struct slapi_entry *e,
     }
     *is_krb = slapi_entry_attr_has_syntax_value(e, SLAPI_ATTR_OBJECTCLASS, sval);
     slapi_value_free(&sval);
+
+    /* If entry has krbPrincipalAux object class but lacks krbPrincipalName and
+     * memberOf attributes consider this not a Kerberos principal object. In
+     * FreeIPA krbPrincipalAux allows to store krbPwdPolicyReference attribute
+     * which is added by a CoS plugin configuration based on a memberOf
+     * attribute value.
+     * Note that slapi_entry_attr_find() returns 0 if attr exists, -1 for absence
+     */
+    if (*is_krb) {
+        Slapi_Attr *attr_prname = NULL;
+        Slapi_Attr *attr_memberof = NULL;
+        int has_prname = slapi_entry_attr_find(e, "krbPrincipalName", &attr_prname);
+        int has_memberOf = slapi_entry_attr_find(e, "memberOf", &attr_memberof);
+        if ((has_prname == -1) && (has_memberOf == 0)) {
+            *is_memberof = 1;
+            *is_krb = 0;
+        }
+    }
 
     sval = slapi_value_new_string("sambaSamAccount");
     if (!sval) {
@@ -560,7 +590,7 @@ int ipapwd_CheckPolicy(struct ipapwd_data *data)
                 LOG_TRACE("No password policy, use defaults");
             }
             break;
-	case IPA_CHANGETYPE_ADMIN:
+        case IPA_CHANGETYPE_ADMIN:
             /* The expiration date needs to be older than the current time
              * otherwise the KDC may not immediately register the password
              * as expired. The last password change needs to match the
@@ -636,25 +666,31 @@ int ipapwd_CheckPolicy(struct ipapwd_data *data)
 }
 
 /* Searches the dn in directory,
- *  If found	 : fills in slapi_entry structure and returns 0
+ *  If found     : fills in slapi_entry structure and returns 0
  *  If NOT found : returns the search result as LDAP_NO_SUCH_OBJECT
  */
-int ipapwd_getEntry(const char *dn, Slapi_Entry **e2, char **attrlist)
+int ipapwd_getEntry(Slapi_DN *sdn, Slapi_Entry **e2, char **attrlist)
 {
-    Slapi_DN *sdn;
     int search_result = 0;
+    Slapi_DN *local_sdn = NULL;
 
     LOG_TRACE("=>\n");
 
-    sdn = slapi_sdn_new_dn_byref(dn);
-    search_result = slapi_search_internal_get_entry(sdn, attrlist, e2,
-                                                    ipapwd_plugin_id);
-    if (search_result != LDAP_SUCCESS) {
-        LOG_TRACE("No such entry-(%s), err (%d)\n", dn, search_result);
+    if (sdn == NULL) {
+        LOG_TRACE("No entry to fetch!\n");
+        return LDAP_PARAM_ERROR;
     }
 
-    slapi_sdn_free(&sdn);
+    local_sdn = slapi_sdn_dup(sdn);
+    search_result = slapi_search_internal_get_entry(local_sdn, attrlist, e2,
+                                                    ipapwd_plugin_id);
+    if (search_result != LDAP_SUCCESS) {
+        LOG_TRACE("No such entry-(%s), err (%d)\n",
+                  slapi_sdn_get_dn(sdn), search_result);
+    }
+
     LOG_TRACE("<= result: %d\n", search_result);
+    slapi_sdn_free(&local_sdn);
     return search_result;
 }
 
@@ -795,22 +831,21 @@ int ipapwd_SetPassword(struct ipapwd_krbcfg *krbcfg,
         slapi_mods_add_mod_values(smods, LDAP_MOD_REPLACE,
                                   "krbPrincipalKey", svals);
 
-		/* krbLastPwdChange is used to tell whether a host entry has a
-		 * keytab so don't set it on hosts.
-		 */
+        /* krbLastPwdChange is used to tell whether a host entry has a
+         * keytab so don't set it on hosts. */
         if (!is_host) {
-	    /* change Last Password Change field with the current date */
+            /* change Last Password Change field with the current date */
             ret = ipapwd_setdate(data->target, smods, "krbLastPwdChange",
                                  data->timeNow, false);
             if (ret != LDAP_SUCCESS)
                 goto free_and_return;
 
-	    /* set Password Expiration date */
+            /* set Password Expiration date */
             ret = ipapwd_setdate(data->target, smods, "krbPasswordExpiration",
                                  data->expireTime, (data->expireTime == 0));
             if (ret != LDAP_SUCCESS)
                 goto free_and_return;
-	}
+        }
     }
 
     if (nt && is_smb) {
@@ -853,8 +888,8 @@ int ipapwd_SetPassword(struct ipapwd_krbcfg *krbcfg,
     slapi_mods_add_string(smods, LDAP_MOD_REPLACE,
                           "userPassword", data->password);
 
-    /* set password history */
-    if (data->policy.history_length > 0) {
+    /* set password history if a Kerberos object */
+    if (data->policy.history_length > 0 && is_krb) {
         pwvals = ipapwd_setPasswordHistory(smods, data);
         if (pwvals) {
             slapi_mods_add_mod_values(smods, LDAP_MOD_REPLACE,

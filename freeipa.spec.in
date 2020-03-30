@@ -363,11 +363,6 @@ Requires: oddjob
 # 0.7.0-2: https://pagure.io/gssproxy/pull-request/172
 Requires: gssproxy >= 0.7.0-2
 Requires: sssd-dbus >= %{sssd_version}
-%if 0%{?with_selinux}
-# This ensures that the *-selinux package and all it’s dependencies are not pulled
-# into containers and other systems that do not use SELinux
-Requires:       (%{name}-selinux if selinux-policy-%{selinuxtype})
-%endif
 
 Provides: %{alt_name}-server = %{version}
 Conflicts: %{alt_name}-server
@@ -715,6 +710,13 @@ Obsoletes: %{alt_name}-common < %{version}
 
 Conflicts: %{alt_name}-python < %{version}
 
+%if 0%{?with_selinux}
+# This ensures that the *-selinux package and all it’s dependencies are not
+# pulled into containers and other systems that do not use SELinux. The
+# policy defines types and file contexts for client and server.
+Requires:       (%{name}-selinux if selinux-policy-%{selinuxtype})
+%endif
+
 %description common
 IPA is an integrated solution to provide centrally managed Identity (users,
 hosts, services), Authentication (SSO, 2FA), and Authorization
@@ -743,6 +745,8 @@ Requires: python3-pytest-sourceorder
 Requires: python3-sssdconfig >= %{sssd_version}
 Requires: tar
 Requires: xz
+Requires: openssh-clients
+Requires: sshpass
 
 %description -n python3-ipatests
 IPA is an integrated solution to provide centrally managed Identity (users,
@@ -1030,11 +1034,13 @@ fi
 %selinux_relabel_pre -s %{selinuxtype}
 
 %post selinux
+semodule -d ipa_custodia &> /dev/null || true;
 %selinux_modules_install -s %{selinuxtype} %{_datadir}/selinux/packages/%{selinuxtype}/%{modulename}.pp.bz2
 
 %postun selinux
 if [ $1 -eq 0 ]; then
     %selinux_modules_uninstall -s %{selinuxtype} %{modulename}
+    semodule -e ipa_custodia &> /dev/null || true;
 fi
 
 %posttrans selinux

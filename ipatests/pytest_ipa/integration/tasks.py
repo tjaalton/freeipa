@@ -1746,27 +1746,41 @@ def get_host_ip_with_hostmask(host):
         return None
 
 
-def ldappasswd_user_change(user, oldpw, newpw, master):
+def ldappasswd_user_change(user, oldpw, newpw, master, use_dirman=False):
     container_user = dict(DEFAULT_CONFIG)['container_user']
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_user, basedn)
     master_ldap_uri = "ldap://{}".format(master.hostname)
 
-    args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
-            '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
+    if use_dirman:
+        args = [paths.LDAPPASSWD, '-D',
+                str(master.config.dirman_dn),  # pylint: disable=no-member
+                '-w', master.config.dirman_password,
+                '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri, userdn]
+    else:
+        args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
+                '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
     master.run_command(args)
 
 
-def ldappasswd_sysaccount_change(user, oldpw, newpw, master):
+def ldappasswd_sysaccount_change(user, oldpw, newpw, master, use_dirman=False):
     container_sysaccounts = dict(DEFAULT_CONFIG)['container_sysaccounts']
     basedn = master.domain.basedn
 
     userdn = "uid={},{},{}".format(user, container_sysaccounts, basedn)
     master_ldap_uri = "ldap://{}".format(master.hostname)
 
-    args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
-            '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
+    if use_dirman:
+        args = [paths.LDAPPASSWD, '-D',
+                str(master.config.dirman_dn),  # pylint: disable=no-member
+                '-w', master.config.dirman_password,
+                '-a', oldpw,
+                '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri,
+                userdn]
+    else:
+        args = [paths.LDAPPASSWD, '-D', userdn, '-w', oldpw, '-a', oldpw,
+                '-s', newpw, '-x', '-ZZ', '-H', master_ldap_uri]
     master.run_command(args)
 
 
@@ -2108,3 +2122,27 @@ def wait_for_request(host, request_id, timeout=120):
         raise RuntimeError("request timed out")
 
     return state
+
+
+def wait_for_sssd_domain_status_online(host, timeout=120):
+    """Wait up to timeout (in seconds) for sssd domain status to become Online
+
+    The method is checking the Online Status of the domain as displayed by
+    the command sssctl domain-status <domain> -o and returns successfully
+    when the status is Online.
+    This call is useful for instance when 389-ds has been stopped and restarted
+    as SSSD may need a while before it reconnects and switches from Offline
+    mode to Online.
+    """
+    pattern = re.compile(r'Online status: (?P<state>.*)\n')
+    for _i in range(0, timeout, 5):
+        result = host.run_command(
+            [paths.SSSCTL, "domain-status", host.domain.name, "-o"]
+        )
+        match = pattern.search(result.stdout_text)
+        state = match.group('state')
+        if state == 'Online':
+            break
+        time.sleep(5)
+    else:
+        raise RuntimeError("SSSD still offline")

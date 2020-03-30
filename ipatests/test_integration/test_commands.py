@@ -16,6 +16,7 @@ import textwrap
 import time
 import paramiko
 import pytest
+from subprocess import CalledProcessError
 
 from cryptography.hazmat.backends import default_backend
 from cryptography import x509
@@ -29,6 +30,7 @@ from ipapython.dn import DN
 from ipapython.certdb import get_ca_nickname
 
 from ipatests.test_integration.base import IntegrationTest
+
 from ipatests.pytest_ipa.integration import tasks
 from ipaplatform.tasks import tasks as platform_tasks
 from ipatests.create_external_ca import ExternalCA
@@ -123,6 +125,18 @@ class TestIPACommand(IntegrationTest):
     tested without having to fire up a full server to run one command.
     """
     topology = 'line'
+
+    @pytest.fixture
+    def pwpolicy_global(self):
+        """Fixture to change global password history policy and reset it"""
+        tasks.kinit_admin(self.master)
+        self.master.run_command(
+            ["ipa", "pwpolicy-mod", "--history=5", "--minlife=0"],
+        )
+        yield
+        self.master.run_command(
+            ["ipa", "pwpolicy-mod", "--history=0", "--minlife=1"],
+        )
 
     def get_cert_base64(self, host, path):
         """Retrieve cert and return content as single line, base64 encoded
@@ -229,17 +243,18 @@ class TestIPACommand(IntegrationTest):
 
         base_dn = str(master.domain.basedn)
         entry_ldif = textwrap.dedent("""
-            dn: uid=system,cn=sysaccounts,cn=etc,{base_dn}
+            dn: uid={sysuser},cn=sysaccounts,cn=etc,{base_dn}
             changetype: add
             objectclass: account
             objectclass: simplesecurityobject
-            uid: system
+            uid: {sysuser}
             userPassword: {original_passwd}
             passwordExpirationTime: 20380119031407Z
             nsIdleTimeout: 0
         """).format(
             base_dn=base_dn,
-            original_passwd=original_passwd)
+            original_passwd=original_passwd,
+            sysuser=sysuser)
         tasks.ldapmodify_dm(master, entry_ldif)
 
         tasks.ldappasswd_sysaccount_change(sysuser, original_passwd,
@@ -330,6 +345,105 @@ class TestIPACommand(IntegrationTest):
         newkrblastpwdchange2, newkrbexp2 = self.get_krbinfo(user)
         assert newkrblastpwdchange != newkrblastpwdchange2
         assert newkrbexp != newkrbexp2
+
+    def test_change_sysaccount_pwd_history_issue7181(self, pwpolicy_global):
+        """
+        Test that a sysacount user maintains no password history
+        because they do not have a Kerberos identity.
+        """
+        sysuser = 'sysuser'
+        original_passwd = 'Secret123'
+        new_passwd = 'userPasswd123'
+
+        master = self.master
+
+        # Add a system account and add it to a group managed by the policy
+        base_dn = str(master.domain.basedn)  # pylint: disable=no-member
+        entry_ldif = textwrap.dedent("""
+            dn: uid={account_name},cn=sysaccounts,cn=etc,{base_dn}
+            changetype: add
+            objectclass: account
+            objectclass: simplesecurityobject
+            uid: {account_name}
+            userPassword: {original_passwd}
+            passwordExpirationTime: 20380119031407Z
+            nsIdleTimeout: 0
+        """).format(
+            account_name=sysuser,
+            base_dn=base_dn,
+            original_passwd=original_passwd)
+
+        tasks.ldapmodify_dm(master, entry_ldif)
+
+        # Now change the password. It should succeed since password
+        # policy doesn't apply to non-Kerberos users.
+        tasks.ldappasswd_sysaccount_change(sysuser, original_passwd,
+                                           new_passwd, master)
+        tasks.ldappasswd_sysaccount_change(sysuser, new_passwd,
+                                           original_passwd, master)
+        tasks.ldappasswd_sysaccount_change(sysuser, original_passwd,
+                                           new_passwd, master)
+
+    def test_change_user_pwd_history_issue7181(self, pwpolicy_global):
+        """
+        Test that password history for a normal IPA user is honored.
+        """
+        user = 'user1'
+        original_passwd = 'Secret123'
+        new_passwd = 'userPasswd123'
+
+        master = self.master
+
+        tasks.user_add(master, user, password=original_passwd)
+
+        tasks.ldappasswd_user_change(user, original_passwd,
+                                     new_passwd, master)
+        tasks.ldappasswd_user_change(user, new_passwd,
+                                     original_passwd, master)
+        try:
+            tasks.ldappasswd_user_change(user, original_passwd,
+                                         new_passwd, master)
+        except CalledProcessError as e:
+            if e.returncode != 1:
+                raise
+        else:
+            pytest.fail("Password change violating policy did not fail")
+
+    def test_dm_change_user_pwd_history_issue7181(self, pwpolicy_global):
+        """
+        Test that password policy is not applied with Directory Manager.
+
+        The minimum lifetime of the password is set to 1 hour. Confirm
+        that the user cannot re-change their password immediately but
+        the DM can.
+        """
+        user = 'user1'
+        original_passwd = 'Secret123'
+        new_passwd = 'newPasswd123'
+
+        master = self.master
+
+        # reset minimum life to 1 hour.
+        self.master.run_command(
+            ["ipa", "pwpolicy-mod", "--minlife=1"],
+        )
+
+        try:
+            tasks.ldappasswd_user_change(user, original_passwd,
+                                         new_passwd, master)
+        except CalledProcessError as e:
+            if e.returncode != 1:
+                raise
+        else:
+            pytest.fail("Password change violating policy did not fail")
+
+        # DM should be able to change any password regardless of policy
+        try:
+            tasks.ldappasswd_user_change(user, new_passwd,
+                                         original_passwd, master,
+                                         use_dirman=True)
+        except CalledProcessError:
+            pytest.fail("Password change failed when it should not")
 
     def test_change_selinuxusermaporder(self):
         """
@@ -689,6 +803,9 @@ class TestIPACommand(IntegrationTest):
         3. add an ipa user
         4. ssh from controller to master using the user created in step 3
         """
+        if self.master.is_fips_mode:  # pylint: disable=no-member
+            pytest.skip("paramiko is not compatible with FIPS mode")
+
         sssd_version = ''
         cmd_output = self.master.run_command(['sssd', '--version'])
         sssd_version = platform_tasks.\

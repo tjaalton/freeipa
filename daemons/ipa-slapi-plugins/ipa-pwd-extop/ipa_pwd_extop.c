@@ -222,7 +222,7 @@ static int ipapwd_chpwop(Slapi_PBlock *pb, struct ipapwd_krbcfg *krbcfg)
 	Slapi_Value *objectclass=NULL;
 	char *attrlist[] = {"*", "passwordHistory", NULL };
 	struct ipapwd_data pwdata;
-	int is_krb, is_smb, is_ipant;
+	int is_krb, is_smb, is_ipant, is_memberof;
 	char *principal = NULL;
 	Slapi_PBlock *chpwop_pb = NULL;
 	Slapi_DN     *target_sdn = NULL;
@@ -348,7 +348,7 @@ parse_req_done:
 	/* Determine the target DN for this operation */
 	slapi_pblock_get(pb, SLAPI_TARGET_SDN, &target_sdn);
 	if (target_sdn != NULL) {
-		/* If there is a TARGET_DN we are consuming it */
+		/* If there is a TARGET_SDN we are consuming it */
 		slapi_pblock_set(pb, SLAPI_TARGET_SDN, NULL);
 		target_dn = slapi_sdn_get_ndn(target_sdn);
 	}
@@ -372,11 +372,11 @@ parse_req_done:
 	}
 	slapi_sdn_free(&target_sdn);
 
-	 if (slapi_pblock_set( pb, SLAPI_ORIGINAL_TARGET, dn )) {
-		LOG_FATAL("slapi_pblock_set failed!\n");
-		rc = LDAP_OPERATIONS_ERROR;
-		goto free_and_return;
-	 }
+        if (slapi_pblock_set( pb, SLAPI_ORIGINAL_TARGET, dn )) {
+            LOG_FATAL("slapi_pblock_set failed!\n");
+            rc = LDAP_OPERATIONS_ERROR;
+            goto free_and_return;
+        }
 
 	if (usetxn) {
                 Slapi_DN *sdn = slapi_sdn_new_dn_byref(dn);
@@ -398,15 +398,18 @@ parse_req_done:
 		}
 	}
 
-	 /* Now we have the DN, look for the entry */
-	 ret = ipapwd_getEntry(dn, &targetEntry, attrlist);
-	 /* If we can't find the entry, then that's an error */
-	 if (ret) {
-	 	/* Couldn't find the entry, fail */
-		errMesg = "No such Entry exists.\n" ;
-		rc = LDAP_NO_SUCH_OBJECT;
-		goto free_and_return;
-	 }
+        /* Now we have the DN, look for the entry */
+        target_sdn = slapi_sdn_new_dn_byval(dn);
+        ret = ipapwd_getEntry(target_sdn, &targetEntry, attrlist);
+        slapi_sdn_free(&target_sdn);
+
+        /* If we can't find the entry, then that's an error */
+        if (ret) {
+            /* Couldn't find the entry, fail */
+            errMesg = "No such Entry exists.\n" ;
+            rc = LDAP_NO_SUCH_OBJECT;
+            goto free_and_return;
+        }
 
     if (dn) {
         Slapi_DN *bind_sdn;
@@ -482,6 +485,7 @@ parse_req_done:
 
 	 rc = ipapwd_entry_checks(pb, targetEntry,
 				&is_root, &is_krb, &is_smb, &is_ipant,
+				&is_memberof,
 				SLAPI_USERPWD_ATTR, SLAPI_ACL_WRITE);
 	 if (rc) {
 		goto free_and_return;
@@ -577,16 +581,21 @@ parse_req_done:
 	/* check the policy */
 	ret = ipapwd_CheckPolicy(&pwdata);
 	if (ret) {
-		errMesg = ipapwd_error2string(ret);
 		if (ret == IPAPWD_POLICY_ERROR) {
 			errMesg = "Internal error";
 			rc = ret;
-		} else {
+			goto free_and_return;
+		}
+		/* ipapwd_CheckPolicy happily will try to apply a policy
+		 * even if it doesn't need to be applied for Directory Manager
+		 * or passsync managers, filter that error out */
+		if (pwdata.changetype != IPA_CHANGETYPE_DSMGR) {
+			errMesg = ipapwd_error2string(ret);
 			ret = ipapwd_to_ldap_pwpolicy_error(ret);
 			slapi_pwpolicy_make_response_control(pb, -1, -1, ret);
 			rc = LDAP_CONSTRAINT_VIOLATION;
+			goto free_and_return;
 		}
-		goto free_and_return;
 	}
 
 	/* Now we're ready to set the kerberos key material */
@@ -1848,7 +1857,7 @@ static int ipapwd_start( Slapi_PBlock *pb )
     krb5_context krbctx = NULL;
     krb5_error_code krberr;
     char *realm = NULL;
-    char *config_dn;
+    Slapi_DN *config_sdn = NULL;
     Slapi_Entry *config_entry = NULL;
     int ret;
 
@@ -1861,13 +1870,13 @@ static int ipapwd_start( Slapi_PBlock *pb )
         return LDAP_SUCCESS;
     }
 
-    if (slapi_pblock_get(pb, SLAPI_TARGET_DN, &config_dn) != 0) {
+    if (slapi_pblock_get(pb, SLAPI_TARGET_SDN, &config_sdn) != 0) {
         LOG_FATAL("No config DN?\n");
         ret = LDAP_OPERATIONS_ERROR;
         goto done;
     }
 
-    if (ipapwd_getEntry(config_dn, &config_entry, NULL) != LDAP_SUCCESS) {
+    if (ipapwd_getEntry(config_sdn, &config_entry, NULL) != LDAP_SUCCESS) {
         LOG_FATAL("No config Entry extop?\n");
         ret = LDAP_SUCCESS;
         goto done;
@@ -1896,7 +1905,7 @@ static int ipapwd_start( Slapi_PBlock *pb )
         goto done;
     }
 
-    ipa_pwd_config_dn = slapi_ch_strdup(config_dn);
+    ipa_pwd_config_dn = slapi_ch_strdup(slapi_sdn_get_dn(config_sdn));
     if (!ipa_pwd_config_dn) {
         LOG_OOM();
         ret = LDAP_OPERATIONS_ERROR;
