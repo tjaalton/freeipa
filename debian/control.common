@@ -9,6 +9,7 @@ Package: freeipa-common
 Architecture: all
 Depends:
  ${misc:Depends},
+Multi-Arch: foreign
 Description: FreeIPA centralized identity framework -- common files
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
@@ -70,6 +71,7 @@ Depends:
  winbind,
  ${misc:Depends},
  ${python3:Depends},
+Multi-Arch: same
 Description: FreeIPA centralized identity framework -- Samba client
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy

@@ -89,6 +89,7 @@ Depends:
  ${misc:Depends},
  ${python3:Depends},
  ${shlibs:Depends}
+Multi-Arch: same
 Description: FreeIPA centralized identity framework -- AD trust installer
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
