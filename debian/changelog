@@ -7,6 +7,7 @@ freeipa (4.8.6-1) UNRELEASED; urgency=medium
     (Closes: #919062)
   * control: Bump gssproxy depends.
   * control: Relax apache2 dependency so it works on ubuntu.
+  * control: Bump policy to 4.5.0.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
 
