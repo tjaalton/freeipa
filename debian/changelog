@@ -6,6 +6,7 @@ freeipa (4.8.6-1) UNRELEASED; urgency=medium
   * migrate-to-gpg.diff: Use gpg instead of gpg2, update dependencies.
     (Closes: #919062)
   * control: Bump gssproxy depends.
+  * control: Relax apache2 dependency so it works on ubuntu.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
 
