@@ -306,6 +306,9 @@ class OpenDNSSECInstance(service.Service):
 
     def __start(self):
         self.restart()  # needed to reload conf files
+        import time
+        while not os.path.exists('/run/opendnssec/enforcer.sock'):
+            time.sleep(1)
         tasks.run_ods_policy_import()
         if self.kasp_db_file:
             # regenerate zonelist.xml
