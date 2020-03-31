@@ -11,7 +11,7 @@ extend-diff-ignore = .freeipa-pr-ci.yaml|.test_runner_config*|.travis*
 # files for tox
 extend-diff-ignore = .tox-install.sh|pypi/test_placeholder.py|tox.ini
 # docs
-extend-diff-ignore = CODE_OF_CONDUCT.md|freeipa.doap.rdf
+extend-diff-ignore = CODE_OF_CONDUCT.md|freeipa.doap.rdf|selinux/README.md
 # azure stuff
 extend-diff-ignore = ipatests/azure
 # LGTM
