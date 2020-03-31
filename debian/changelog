@@ -11,6 +11,7 @@ freeipa (4.8.6-1) UNRELEASED; urgency=medium
   * control: Fix some M-A issues.
   * control: Drop the dummy freeipa-admintools package.
   * source: Update diff-ignore.
+  * rules: Don't remove po/ipa.pot on clean.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
 

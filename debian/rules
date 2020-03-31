@@ -55,7 +55,7 @@ endif
 
 override_dh_clean: gencontrol
 	dh_clean
-	rm -f po/*.gmo po/Makefile.hack po/POTFILES.in po/ipa.pot po/stamp-po
+	rm -f po/*.gmo po/Makefile.hack po/POTFILES.in po/stamp-po
 	rm -rf contrib/completion/ipa.bash_completion daemons/ipa-version.h \
 	       install/ui/src/libs/loader.js m4
 	rm -f ipaplatform/override.py ipapython/version.py ipasetup.py
