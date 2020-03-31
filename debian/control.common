@@ -1,10 +1,4 @@
 
-Package: freeipa-admintools
-Architecture: any
-Depends: ${misc:Depends},
-Description: transitional dummy package
- This is a transitional dummy package, it can be safely removed.
-
 Package: freeipa-common
 Architecture: all
 Depends:
@@ -47,9 +41,6 @@ Recommends:
  chrony,
 Suggests:
  libpam-krb5,
-Breaks: freeipa-admintools (<< 4.6.3-2~)
-Replaces: freeipa-admintools (<< 4.6.3-2~)
-Provides: freeipa-admintools
 Description: FreeIPA centralized identity framework -- client
  FreeIPA is an integrated solution to provide centrally managed Identity
  (machine, user, virtual machines, groups, authentication credentials), Policy
