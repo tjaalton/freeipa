@@ -206,4 +206,10 @@ Serial Number (hex): {cert.serial_number:#x}
 
         return True
 
+    def enable_ldap_automount(self, statestore):
+        return BaseTaskNamespace.enable_ldap_automount(self, statestore)
+
+    def disable_ldap_automount(self, statestore):
+        return BaseTaskNamespace.disable_ldap_automount(self, statestore)
+
 tasks = DebianTaskNamespace()
