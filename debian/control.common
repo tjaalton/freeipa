@@ -101,6 +101,7 @@ Depends:
  gnupg,
  gpg-agent,
  keyutils,
+ librpm8,
  python3-cffi,
  python3-cryptography,
  python3-dbus,

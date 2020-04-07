@@ -1,0 +1,24 @@
+--- a/ipaplatform/debian/tasks.py
++++ b/ipaplatform/debian/tasks.py
+@@ -72,10 +72,6 @@ class DebianTaskNamespace(RedHatTaskName
+         # Debian doesn't have authselect
+         return True
+ 
+-    @staticmethod
+-    def parse_ipa_version(version):
+-        return BaseTaskNamespace.parse_ipa_version(version)
+-
+     def configure_httpd_wsgi_conf(self):
+         # Debian doesn't require special mod_wsgi configuration
+         pass
+@@ -206,4 +202,10 @@ Serial Number (hex): {cert.serial_number
+ 
+         return True
+ 
++    def enable_ldap_automount(self, statestore):
++        return BaseTaskNamespace.enable_ldap_automount(self, statestore)
++
++    def disable_ldap_automount(self, statestore):
++        return BaseTaskNamespace.disable_ldap_automount(self, statestore)
++
+ tasks = DebianTaskNamespace()
