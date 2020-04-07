@@ -81,7 +81,7 @@ Description: FreeIPA centralized identity framework -- common files
 Package: freeipa-client
 Architecture: any
 Depends:
- bind9utils,
+ bind9-utils,
  certmonger (>= 0.79.5-2),
  curl,
  dnsutils,
@@ -265,7 +265,7 @@ Depends:
  freeipa-server (>= ${source:Version}),
  bind9 (>= 1:9.11.3),
  bind9-dyndb-ldap (>= 11.1-3),
- opendnssec (>= 1:1.4.9-2),
+ opendnssec (>= 1:2.1.5),
  ${misc:Depends},
  ${python3:Depends},
  ${shlibs:Depends}

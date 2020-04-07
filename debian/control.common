@@ -15,7 +15,7 @@ Description: FreeIPA centralized identity framework -- common files
 Package: freeipa-client
 Architecture: any
 Depends:
- bind9utils,
+ bind9-utils,
  certmonger (>= 0.79.5-2),
  curl,
  dnsutils,

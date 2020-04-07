@@ -16,6 +16,8 @@ freeipa (4.8.6-1) UNRELEASED; urgency=medium
     parse_ipa_version from redhat. Add librpm8 to python3-ipalib Depends.
   * dnssec-race-wa.diff: Work-around racy dnssec setup, the socket isn't
     necessarily ready when doing policy import.
+  * control: Update bind9-utils dependency.
+  * control: Bump depends on opendnssec.
 
  -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
 
