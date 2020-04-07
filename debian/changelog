@@ -1,4 +1,4 @@
-freeipa (4.8.6-1) UNRELEASED; urgency=medium
+freeipa (4.8.6-1) unstable; urgency=medium
 
   * New upstream release.
   * pki-proxy-Don-t-rely-on-running-apache-until-it-s-co.patch: Dropped,
@@ -19,7 +19,7 @@ freeipa (4.8.6-1) UNRELEASED; urgency=medium
   * control: Update bind9-utils dependency.
   * control: Bump depends on opendnssec.
 
- -- Timo Aaltonen <tjaalton@debian.org>  Mon, 30 Mar 2020 16:38:52 +0300
+ -- Timo Aaltonen <tjaalton@debian.org>  Tue, 07 Apr 2020 06:28:03 +0300
 
 freeipa (4.8.5-1) unstable; urgency=medium
 
