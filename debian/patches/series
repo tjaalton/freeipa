@@ -6,3 +6,4 @@
 write-out-only-one-cert-per-file.diff
 migrate-to-gpg.diff
 tasks-fixes.diff
+dnssec-race-wa.diff
