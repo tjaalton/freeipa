@@ -32,6 +32,7 @@ from ipapython.certdb import get_ca_nickname
 from ipatests.test_integration.base import IntegrationTest
 
 from ipatests.pytest_ipa.integration import tasks
+from ipaplatform.osinfo import osinfo
 from ipaplatform.tasks import tasks as platform_tasks
 from ipatests.create_external_ca import ExternalCA
 from ipatests.test_ipalib.test_x509 import good_pkcs7, badcert
@@ -988,6 +989,10 @@ class TestIPACommand(IntegrationTest):
         This is the regression test for issue
         https://pagure.io/freeipa/issue/7995.
         """
+
+        if osinfo.platform in ('debian'):
+            pytest.skip("Crypto policy is not supported on Debian")
+
         def is_tls_version_enabled(tls_version):
             res = self.master.run_command(
                 ['openssl', 's_client',
