@@ -14,6 +14,7 @@ from ipalib.util import (
     get_pager, create_https_connection, get_proper_tls_version_span
 )
 from ipaplatform.constants import constants
+from ipaplatform.osinfo import osinfo
 
 
 @pytest.mark.parametrize('pager,expected_result', [
@@ -60,6 +61,9 @@ OP_NO_TLSv1_3 = getattr(ssl, "OP_NO_TLSv1_3", 0)  # make pylint happy
     ("tls1.3", None, BASE_OPT | TLS_OPT | ssl.OP_NO_TLSv1_2, ["tls1.3"]),
 ])
 def test_tls_version_span(minver, maxver, opt, expected):
+    if osinfo.platform in ('debian'):
+        pytest.skip("Crypto policy is not supported on Debian")
+
     assert get_proper_tls_version_span(minver, maxver) == expected
     # file must exist and contain certs
     cafile = ssl.get_default_verify_paths().cafile
