@@ -19,6 +19,7 @@
 
 import pytest
 
+from ipaplatform.osinfo import osinfo
 from ipaplatform.paths import paths
 
 from ipatests.test_integration.base import IntegrationTest
@@ -159,6 +160,8 @@ class TestSudo(IntegrationTest):
         "any", reason="NISDOMAIN cannot be set in containerized environment"
     )
     def test_nisdomainname(self):
+        if osinfo.platform in ('debian'):
+            pytest.skip("NISDOMAIN has not been set on Debian")
         result = self.client.run_command('nisdomainname')
         assert self.client.domain.name in result.stdout_text
 
