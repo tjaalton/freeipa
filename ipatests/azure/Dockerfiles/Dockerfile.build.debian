@@ -5,9 +5,7 @@ ENV container=docker LANG=en_US.utf8 LANGUAGE=en_US.utf8 LC_ALL=en_US.utf8 DEBIA
 
 ADD dist /root
 RUN \
-    apt-get update \
-    && apt-get dist-upgrade -y \
-    && apt-get install -y sudo gnupg2 firewalld libnss3-tools librpm8 locales iptables openssh-server \
+    apt-get install -y sudo gnupg2 firewalld libnss3-tools librpm8 locales iptables openssh-server \
     && wget https://aaltoset.kapsi.fi/azure/bind9.tar https://aaltoset.kapsi.fi/azure/389.tar \
     && tar xf bind9.tar \
     && tar xf 389.tar \

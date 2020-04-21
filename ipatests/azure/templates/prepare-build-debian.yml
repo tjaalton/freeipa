@@ -1,8 +1,6 @@
 steps:
 - script: |
     set -e
-    sudo apt-get update -y
-    sudo apt-get dist-upgrade -y
     echo "Installing base development environment"
     sudo \
         DEBIAN_FRONTEND=noninteractive \
