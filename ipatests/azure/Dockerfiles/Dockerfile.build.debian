@@ -8,10 +8,12 @@ RUN \
     apt-get update \
     && apt-get dist-upgrade -y \
     && apt-get install -y sudo gnupg2 firewalld libnss3-tools librpm8 locales iptables openssh-server \
-    && wget https://aaltoset.kapsi.fi/azure/bind9.tar \
+    && wget https://aaltoset.kapsi.fi/azure/bind9.tar https://aaltoset.kapsi.fi/azure/389.tar \
     && tar xf bind9.tar \
-    && mv bind9-*-ci/*.deb /root \
-    && rm -f bind9.tar \
+    && tar xf 389.tar \
+    && mv bind9-*-ci/*.deb 389-*/*.deb /root \
+    && rm -f bind9.tar 389.tar \
+    && rm -rf bind9* 389* \
     && ls /root/*.deb | xargs apt-get -y install \
     && rm /etc/opendnssec/prevent-startup \
     && echo 'PermitRootLogin yes' > /etc/ssh/sshd_config.d/root-login.conf
