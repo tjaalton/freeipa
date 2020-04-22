@@ -158,9 +158,12 @@ class Container:
             ]
             self.execute(name=n, args=cmd)
 
+#            cmd = [
+#                "hostnamectl",
+#                "set-hostname", h,
+#            ]
             cmd = [
-                "hostnamectl",
-                "set-hostname", h,
+                "hostname", h,
             ]
             self.execute(name=n, args=cmd)
 
