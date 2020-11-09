@@ -26,6 +26,7 @@ import os
 
 class BasePathNamespace:
     BIN_HOSTNAMECTL = "/bin/hostnamectl"
+    CRYPTO_POLICY_OPENSSLCNF_FILE = None
     ECHO = "/bin/echo"
     FIPS_MODE_SETUP = "/usr/bin/fips-mode-setup"
     GZIP = "/bin/gzip"
@@ -69,6 +70,7 @@ class BasePathNamespace:
     IPA_DEFAULT_CONF = "/etc/ipa/default.conf"
     IPA_DNSKEYSYNCD_KEYTAB = "/etc/ipa/dnssec/ipa-dnskeysyncd.keytab"
     IPA_ODS_EXPORTER_KEYTAB = "/etc/ipa/dnssec/ipa-ods-exporter.keytab"
+    DNSSEC_OPENSSL_CONF = None
     DNSSEC_SOFTHSM2_CONF = "/etc/ipa/dnssec/softhsm2.conf"
     DNSSEC_SOFTHSM_PIN_SO = "/etc/ipa/dnssec/softhsm_pin_so"
     IPA_NSSDB_DIR = "/etc/ipa/nssdb"
@@ -253,8 +255,6 @@ class BasePathNamespace:
     IPA_REPLICA_CONNCHECK = "/usr/sbin/ipa-replica-conncheck"
     IPA_RMKEYTAB = "/usr/sbin/ipa-rmkeytab"
     IPACTL = "/usr/sbin/ipactl"
-    NAMED = "/usr/sbin/named"
-    NAMED_PKCS11 = "/usr/sbin/named-pkcs11"
     CHRONYC = "/usr/bin/chronyc"
     CHRONYD = "/usr/sbin/chronyd"
     PKIDESTROY = "/usr/sbin/pkidestroy"

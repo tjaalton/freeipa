@@ -4,11 +4,12 @@
 
 from __future__ import print_function, absolute_import
 
-import logging
 import errno
+import grp
+import logging
 import os
 import pwd
-import grp
+import re
 import shutil
 import stat
 
@@ -56,10 +57,10 @@ class DNSKeySyncInstance(service.Service):
             keytab=paths.IPA_DNSKEYSYNCD_KEYTAB
         )
         self.extra_config = [u'dnssecVersion 1', ]  # DNSSEC enabled
-        self.named_uid = None
-        self.named_gid = None
-        self.ods_uid = None
-        self.ods_gid = None
+        self.named_uid = self.__get_named_uid()
+        self.named_gid = self.__get_named_gid()
+        self.ods_uid = self.__get_ods_uid()
+        self.ods_gid = self.__get_ods_gid()
 
     suffix = ipautil.dn_attribute_property('_suffix')
 
@@ -67,12 +68,6 @@ class DNSKeySyncInstance(service.Service):
         """
         Setting up correct permissions to allow write/read access for daemons
         """
-        if self.named_uid is None:
-            self.named_uid = self.__get_named_uid()
-
-        if self.named_gid is None:
-            self.named_gid = self.__get_named_gid()
-
         if not os.path.exists(paths.BIND_LDAP_DNS_IPA_WORKDIR):
             os.mkdir(paths.BIND_LDAP_DNS_IPA_WORKDIR, 0o770)
         # dnssec daemons require to have access into the directory
@@ -133,20 +128,19 @@ class DNSKeySyncInstance(service.Service):
         except KeyError:
             raise RuntimeError("Named GID not found")
 
-    def __check_dnssec_status(self):
-        self.named_uid = self.__get_named_uid()
-        self.named_gid = self.__get_named_gid()
-
+    def __get_ods_uid(self):
         try:
-            self.ods_uid = pwd.getpwnam(constants.ODS_USER).pw_uid
+            return pwd.getpwnam(constants.ODS_USER).pw_uid
         except KeyError:
             raise RuntimeError("OpenDNSSEC UID not found")
 
+    def __get_ods_gid(self):
         try:
-            self.ods_gid = grp.getgrnam(constants.ODS_GROUP).gr_gid
+            return grp.getgrnam(constants.ODS_GROUP).gr_gid
         except KeyError:
             raise RuntimeError("OpenDNSSEC GID not found")
 
+    def __check_dnssec_status(self):
         if not dns_container_exists(self.suffix):
             raise RuntimeError("DNS container does not exist")
 
@@ -164,10 +158,94 @@ class DNSKeySyncInstance(service.Service):
 
         self._ldap_mod("dnssec.ldif", {'SUFFIX': self.suffix, })
 
-    def __setup_softhsm(self):
-        assert self.ods_uid is not None
-        assert self.named_gid is not None
+    def _are_named_options_configured(self, options):
+        """Check whether the sysconfig of named is patched
 
+        Additional command line options for named are passed
+        via OPTIONS env variable. Since custom options can be
+        supplied by a vendor, at least, the base parsing of such
+        is required.
+        Current named command line options:
+        NS_MAIN_ARGS "46A:c:C:d:D:E:fFgi:lL:M:m:n:N:p:P:sS:t:T:U:u:vVx:X:"
+        If there are several same options the last passed wins.
+        """
+        if options:
+            pattern = r"[ ]*-[a-zA-Z46]*E[ ]*(.*?)(?: |$)"
+            engines = re.findall(pattern, options)
+            if engines and engines[-1] == constants.NAMED_OPENSSL_ENGINE:
+                return True
+
+        return False
+
+    def setup_named_openssl_conf(self):
+        if constants.NAMED_OPENSSL_ENGINE is not None:
+            logger.debug("Setup OpenSSL config for BIND")
+            # setup OpenSSL config for BIND,
+            # this one is needed because FreeIPA installation
+            # disables p11-kit-proxy PKCS11 module
+            conf_file_dict = {
+                'OPENSSL_ENGINE': constants.NAMED_OPENSSL_ENGINE,
+                'SOFTHSM_MODULE': paths.LIBSOFTHSM2_SO,
+                'CRYPTO_POLICY_FILE': paths.CRYPTO_POLICY_OPENSSLCNF_FILE,
+            }
+            if paths.CRYPTO_POLICY_OPENSSLCNF_FILE is None:
+                opensslcnf_tmpl = "bind.openssl.cnf.template"
+            else:
+                opensslcnf_tmpl = "bind.openssl.cryptopolicy.cnf.template"
+
+            named_openssl_txt = ipautil.template_file(
+                os.path.join(paths.USR_SHARE_IPA_DIR, opensslcnf_tmpl),
+                conf_file_dict
+            )
+            with open(paths.DNSSEC_OPENSSL_CONF, 'w') as f:
+                os.fchmod(f.fileno(), 0o640)
+                os.fchown(f.fileno(), 0, self.named_gid)
+                f.write(named_openssl_txt)
+
+    def setup_named_sysconfig(self):
+        logger.debug("Setup BIND sysconfig")
+        sysconfig = paths.SYSCONFIG_NAMED
+        self.fstore.backup_file(sysconfig)
+
+        directivesetter.set_directive(
+            sysconfig,
+            'SOFTHSM2_CONF', paths.DNSSEC_SOFTHSM2_CONF,
+            quotes=False, separator='=')
+
+        if constants.NAMED_OPENSSL_ENGINE is not None:
+            directivesetter.set_directive(
+                sysconfig,
+                'OPENSSL_CONF', paths.DNSSEC_OPENSSL_CONF,
+                quotes=False, separator='=')
+
+            options = directivesetter.get_directive(
+                paths.SYSCONFIG_NAMED,
+                constants.NAMED_OPTIONS_VAR,
+                separator="="
+            ) or ''
+            if not self._are_named_options_configured(options):
+                engine_cmd = "-E {}".format(constants.NAMED_OPENSSL_ENGINE)
+                new_options = ' '.join([options, engine_cmd])
+                directivesetter.set_directive(
+                    sysconfig,
+                    constants.NAMED_OPTIONS_VAR, new_options,
+                    quotes=True, separator='=')
+
+    def setup_ipa_dnskeysyncd_sysconfig(self):
+        logger.debug("Setup ipa-dnskeysyncd sysconfig")
+        sysconfig = paths.SYSCONFIG_IPA_DNSKEYSYNCD
+        directivesetter.set_directive(
+            sysconfig,
+            'SOFTHSM2_CONF', paths.DNSSEC_SOFTHSM2_CONF,
+            quotes=False, separator='=')
+
+        if constants.NAMED_OPENSSL_ENGINE is not None:
+            directivesetter.set_directive(
+                sysconfig,
+                'OPENSSL_CONF', paths.DNSSEC_OPENSSL_CONF,
+                quotes=False, separator='=')
+
+    def __setup_softhsm(self):
         token_dir_exists = os.path.exists(paths.DNSSEC_TOKENS_DIR)
 
         # create dnssec directory
@@ -186,23 +264,15 @@ class DNSKeySyncInstance(service.Service):
                                'tokens_dir': paths.DNSSEC_TOKENS_DIR
                             }
         logger.debug("Creating new softhsm config file")
-        named_fd = open(paths.DNSSEC_SOFTHSM2_CONF, 'w')
-        named_fd.seek(0)
-        named_fd.truncate(0)
-        named_fd.write(softhsm_conf_txt)
-        named_fd.close()
-        os.chmod(paths.DNSSEC_SOFTHSM2_CONF, 0o644)
+        with open(paths.DNSSEC_SOFTHSM2_CONF, 'w') as f:
+            os.fchmod(f.fileno(), 0o644)
+            f.write(softhsm_conf_txt)
 
-        # setting up named to use softhsm2
-        if not self.fstore.has_file(paths.SYSCONFIG_NAMED):
-            self.fstore.backup_file(paths.SYSCONFIG_NAMED)
-
-        # setting up named and ipa-dnskeysyncd to use our softhsm2 config
-        for sysconfig in [paths.SYSCONFIG_NAMED,
-                          paths.SYSCONFIG_IPA_DNSKEYSYNCD]:
-            directivesetter.set_directive(sysconfig, 'SOFTHSM2_CONF',
-                                          paths.DNSSEC_SOFTHSM2_CONF,
-                                          quotes=False, separator='=')
+        # setting up named and ipa-dnskeysyncd to use our softhsm2 and
+        # openssl configs
+        self.setup_named_openssl_conf()
+        self.setup_named_sysconfig()
+        self.setup_ipa_dnskeysyncd_sysconfig()
 
         if (token_dir_exists and os.path.exists(paths.DNSSEC_SOFTHSM_PIN) and
                 os.path.exists(paths.DNSSEC_SOFTHSM_PIN_SO)):
@@ -231,23 +301,17 @@ class DNSKeySyncInstance(service.Service):
             entropy_bits=0, special=None, min_len=pin_length)
 
         logger.debug("Saving user PIN to %s", paths.DNSSEC_SOFTHSM_PIN)
-        named_fd = open(paths.DNSSEC_SOFTHSM_PIN, 'w')
-        named_fd.seek(0)
-        named_fd.truncate(0)
-        named_fd.write(pin)
-        named_fd.close()
-        os.chmod(paths.DNSSEC_SOFTHSM_PIN, 0o770)
-        # chown to ods:named
-        os.chown(paths.DNSSEC_SOFTHSM_PIN, self.ods_uid, self.named_gid)
+        with open(paths.DNSSEC_SOFTHSM_PIN, 'w') as f:
+            # chown to ods:named
+            os.fchown(f.fileno(), self.ods_uid, self.named_gid)
+            os.fchmod(f.fileno(), 0o660)
+            f.write(pin)
 
         logger.debug("Saving SO PIN to %s", paths.DNSSEC_SOFTHSM_PIN_SO)
-        named_fd = open(paths.DNSSEC_SOFTHSM_PIN_SO, 'w')
-        named_fd.seek(0)
-        named_fd.truncate(0)
-        named_fd.write(pin_so)
-        named_fd.close()
-        # owner must be root
-        os.chmod(paths.DNSSEC_SOFTHSM_PIN_SO, 0o400)
+        with open(paths.DNSSEC_SOFTHSM_PIN_SO, 'w') as f:
+            # owner must be root
+            os.fchmod(f.fileno(), 0o400)
+            f.write(pin_so)
 
         # initialize SoftHSM
 
@@ -377,7 +441,7 @@ class DNSKeySyncInstance(service.Service):
                 os.chown(dir_path, self.ods_uid, self.named_gid)
             for filename in files:
                 file_path = os.path.join(root, filename)
-                os.chmod(file_path, 0o770 | stat.S_ISGID)
+                os.chmod(file_path, 0o660 | stat.S_ISGID)
                 # chown to ods:named
                 os.chown(file_path, self.ods_uid, self.named_gid)
 
@@ -389,7 +453,6 @@ class DNSKeySyncInstance(service.Service):
             logger.error("DNSKeySync service already exists")
 
     def __setup_principal(self):
-        assert self.ods_gid is not None
         ipautil.remove_keytab(self.keytab)
         installutils.kadmin_addprinc(self.principal)
 

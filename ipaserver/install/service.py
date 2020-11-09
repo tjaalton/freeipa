@@ -533,6 +533,9 @@ class Service:
     def get_state(self, key):
         return self.sstore.get_state(self.service_name, key)
 
+    def delete_state(self, key):
+        self.sstore.delete_state(self.service_name, key)
+
     def print_msg(self, message):
         print_msg(message, self.output_fd)
 
@@ -660,6 +663,7 @@ class Service:
         ]
         extra_config_opts.extend(config)
 
+        self.unmask()
         self.disable()
 
         set_service_entry_config(
