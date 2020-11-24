@@ -182,8 +182,7 @@ class DogtagInstance(service.Service):
         subsystem = self.subsystem
         args = [paths.PKISPAWN,
                 "-s", subsystem,
-                "-f", cfg_file,
-                "--debug"]
+                "-f", cfg_file]
 
         with open(cfg_file) as f:
             logger.debug(
