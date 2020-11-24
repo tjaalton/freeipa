@@ -26,6 +26,7 @@ steps:
     tar xf freeipa-master.tar
     mv freeipa-master-debian/debian .
     rm -fr debian/patches freeipa-master-debian
+    sed -i 's/18/16/' debian/control*
 
     echo "Installing FreeIPA development dependencies"
     sudo dpkg-checkbuilddeps 2>&1 \
