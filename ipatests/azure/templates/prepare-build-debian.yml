@@ -20,12 +20,7 @@ steps:
 
     sudo apt-add-repository -y ppa:freeipa/staging
 
-#    echo "Fetching debian packaging from salsa.debian.org"
-#    wget https://salsa.debian.org/freeipa-team/freeipa/-/archive/master/freeipa-master.tar?path=debian \
-#        -O freeipa-master.tar
-#    tar xf freeipa-master.tar
-#    mv freeipa-master-debian/debian .
-#    rm -fr debian/patches freeipa-master-debian
+    rm -fr debian/patches
 
     echo "Installing FreeIPA development dependencies"
     sudo dpkg-checkbuilddeps 2>&1 \
